@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model users {
+  id                              String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  username                        String               @unique
+  password_hash                   String
+  email                           String               @unique
+  github_login                    String?
+  created_at                      DateTime?            @default(now()) @db.Timestamp(6)
+  validated_by                    String?              @db.Uuid
+  role                            String               @default("\"user\"")
+  tasks_tasks_assignee_idTousers  tasks[]              @relation("tasks_assignee_idTousers")
+  tasks_tasks_validated_byTousers tasks[]              @relation("tasks_validated_byTousers")
+  user_organizations              user_organizations[]
+  users                           users?               @relation("usersTousers", fields: [validated_by], references: [id], onUpdate: NoAction)
+  other_users                     users[]              @relation("usersTousers")
+}
+
+model ai_reports {
+  id            String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  task_id       String?        @db.Uuid
+  pr_id         String?        @db.Uuid
+  commit_sha    String?
+  type          String?
+  content       String?
+  created_at    DateTime?      @default(now()) @db.Timestamp(6)
+  commits       commits?       @relation(fields: [commit_sha], references: [sha], onDelete: Cascade, onUpdate: NoAction)
+  pull_requests pull_requests? @relation(fields: [pr_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tasks         tasks?         @relation(fields: [task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model commit_files {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  commit_sha String?
+  path       String?
+  additions  Int?
+  deletions  Int?
+  commits    commits? @relation(fields: [commit_sha], references: [sha], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model commits {
+  sha           String         @id
+  repo_id       String?        @db.Uuid
+  author_login  String?
+  committed_at  DateTime?      @db.Timestamp(6)
+  message       String?
+  added_lines   Int?
+  deleted_lines Int?
+  ai_reports    ai_reports[]
+  commit_files  commit_files[]
+  repos         repos?         @relation(fields: [repo_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pr_commits    pr_commits[]
+}
+
+model organizations {
+  id                 String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name               String
+  created_at         DateTime?            @default(now()) @db.Timestamp(6)
+  repos              repos[]
+  user_organizations user_organizations[]
+}
+
+model pr_commits {
+  pr_id         String        @db.Uuid
+  commit_sha    String
+  commits       commits       @relation(fields: [commit_sha], references: [sha], onDelete: Cascade, onUpdate: NoAction)
+  pull_requests pull_requests @relation(fields: [pr_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([pr_id, commit_sha])
+}
+
+model pull_requests {
+  id           String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  repo_id      String?      @db.Uuid
+  number       Int?
+  title        String
+  state        String?
+  author_login String?
+  merged_at    DateTime?    @db.Timestamp(6)
+  ai_reports   ai_reports[]
+  pr_commits   pr_commits[]
+  repos        repos?       @relation(fields: [repo_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model repos {
+  id              String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  organization_id String?         @db.Uuid
+  name            String
+  provider        String
+  url             String
+  commits         commits[]
+  pull_requests   pull_requests[]
+  organizations   organizations?  @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tasks           tasks[]
+}
+
+model tasks {
+  id                              String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  repo_id                         String?      @db.Uuid
+  title                           String
+  description                     String?
+  status                          String?      @default("pending")
+  assignee_id                     String?      @db.Uuid
+  start_date                      DateTime?    @default(now()) @db.Timestamp(6)
+  due_date                        DateTime?    @db.Timestamp(6)
+  validated_by                    String?      @db.Uuid
+  created_at                      DateTime?    @default(now()) @db.Timestamp(6)
+  comments                        String?
+  ai_reports                      ai_reports[]
+  users_tasks_assignee_idTousers  users?       @relation("tasks_assignee_idTousers", fields: [assignee_id], references: [id], onUpdate: NoAction)
+  repos                           repos?       @relation(fields: [repo_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_tasks_validated_byTousers users?       @relation("tasks_validated_byTousers", fields: [validated_by], references: [id], onUpdate: NoAction)
+}
+
+model user_organizations {
+  user_id         String        @db.Uuid
+  organization_id String        @db.Uuid
+  role_in_org     String?
+  organizations   organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, organization_id])
+}
