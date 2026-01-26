@@ -108,12 +108,104 @@ export class TasksService {
 
 
   async findAllByRole(user: any) {
-    if (user.role === 'manager') {
-      return this.prisma.tasks.findMany();
-    }
+    const where = user.role === 'manager'
+      ? {}
+      : { assignee_id: user.id };
+
     return this.prisma.tasks.findMany({
-      where: { assignee_id: user.id },
+      where,
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+        repos: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
     });
+  }
+
+  // Find tasks by organization
+  async findAllByOrganization(organizationId: string, userId: string) {
+    // Verify user belongs to organization
+    const userOrg = await this.prisma.user_organizations.findUnique({
+      where: {
+        user_id_organization_id: {
+          user_id: userId,
+          organization_id: organizationId,
+        },
+      },
+    });
+
+    if (!userOrg) {
+      throw new ForbiddenException('User does not belong to this organization');
+    }
+
+    // Get all repos in organization
+    const orgRepos = await this.prisma.repos.findMany({
+      where: { organization_id: organizationId },
+      select: { id: true },
+    });
+
+    const repoIds = orgRepos.map((r) => r.id);
+
+    // Get tasks from those repos
+    return this.prisma.tasks.findMany({
+      where: {
+        repo_id: { in: repoIds },
+      },
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+        repos: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+  }
+
+  // Get tasks grouped by status for Kanban
+  async getTasksByStatus(organizationId: string, userId: string) {
+    const allTasks = await this.findAllByOrganization(organizationId, userId);
+
+    const grouped = {
+      pending: allTasks.filter((t) => t.status === 'pending'),
+      in_progress: allTasks.filter((t) => t.status === 'in_progress'),
+      done: allTasks.filter((t) => t.status === 'done'),
+    };
+
+    return {
+      pending: grouped.pending,
+      in_progress: grouped.in_progress,
+      done: grouped.done,
+      totals: {
+        pending: grouped.pending.length,
+        in_progress: grouped.in_progress.length,
+        done: grouped.done.length,
+        all: allTasks.length,
+      },
+    };
   }
   
   async update(id: string, dto: any, user: any) {

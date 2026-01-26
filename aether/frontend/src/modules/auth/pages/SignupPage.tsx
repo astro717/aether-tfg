@@ -1,0 +1,52 @@
+import { SignupForm } from "../components/SignupForm";
+import { SocialButtons } from "../components/SocialButtons";
+
+export const SignupPage = () => (
+  <div 
+    className="min-h-screen flex flex-col items-center justify-center"
+    style={{
+      background: "radial-gradient(ellipse at center, #23282b 0%, #f4f5f7 100%)",
+    }}
+  >
+    {/* Logo outside the card */}
+    <h1 className="text-7xl font-light text-[#e3e3e3] mb-12 tracking-wide">aether.</h1>
+
+    {/* Main card */}
+    <div className="w-[500px] bg-white/40 backdrop-blur-3xl rounded-3xl shadow-xl p-8 flex flex-col">
+      {/* Step indicator */}
+      <p className="text-center text-gray-700 text-xs mb-4">Step 1 of 3</p>
+
+      {/* Title */}
+      <h2 className="text-center text-gray-900 text-2xl font-semibold mb-6">Sign up</h2>
+
+      {/* Form */}
+      <SignupForm />
+
+      {/* Divider with "or" */}
+      <div className="flex items-center gap-4 my-6">
+        <div className="flex-1 border-t border-gray-300"></div>
+        <span className="text-gray-600 text-sm">or</span>
+        <div className="flex-1 border-t border-gray-300"></div>
+      </div>
+
+      {/* Social buttons */}
+      <SocialButtons />
+
+      {/* Bottom navigation */}
+      <div className="flex justify-between mt-6">
+        {/* <button className="text-blue-500 text-sm font-medium px-6 py-2 rounded-lg hover:bg-blue-50 transition-colors">
+          Back
+        </button> */}
+        <button
+          onClick={() => (window.location.href = "/")}
+          className="text-blue-500 text-sm font-medium px-6 py-2 rounded-xl hover:bg-blue-50 transition-colors"
+        >
+          Back
+        </button>
+        {/* <button className="bg-blue-500 text-white text-sm font-medium px-6 py-2 rounded-xl hover:bg-blue-600 transition-colors">
+          Continue
+        </button> */}
+      </div>
+    </div>
+  </div>
+);

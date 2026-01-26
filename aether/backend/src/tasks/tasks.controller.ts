@@ -40,6 +40,14 @@ export class TasksController {
     return this.tasksService.validateTask(id, user.id);
   }
 
+  @Get('organization/:organizationId/kanban')
+  async getKanbanData(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.tasksService.getTasksByStatus(organizationId, user.userId);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get()
   async findAll(@CurrentUser() user: User) {
