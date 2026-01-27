@@ -1,5 +1,5 @@
 
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -11,6 +11,10 @@ export class TasksService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateTaskDto, creator: any) {
+    if (!dto.title || !dto.repo_id) {
+      throw new BadRequestException('title and repo_id are required');
+    }
+
     const data: any = {
       data: {
         title: dto.title,

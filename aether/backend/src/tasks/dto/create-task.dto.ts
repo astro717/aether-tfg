@@ -8,10 +8,8 @@ export class CreateTaskDto {
   @IsString()
   description?: string;
 
-  // opcional: si permites asignar a otro usuario o repo
-  @IsOptional()
   @IsUUID()
-  repo_id?: string;
+  repo_id!: string;
 
   @IsOptional()
   @IsIn(['pending', 'in_progress', 'done'])

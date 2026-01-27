@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { organizationApi } from '../api/organizationApi';
 import type { Organization } from '../api/organizationApi';
+import { useAuth } from '../../auth/context/AuthContext';
 
 interface OrganizationContextType {
   currentOrganization: Organization | null;
@@ -15,12 +16,21 @@ interface OrganizationContextType {
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
 
 export function OrganizationProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchOrganizations = async () => {
+    // Don't fetch if no user is logged in
+    if (!user) {
+      setLoading(false);
+      setOrganizations([]);
+      setCurrentOrganization(null);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -44,9 +54,13 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Fetch organizations when user changes (login/logout)
   useEffect(() => {
-    fetchOrganizations();
-  }, []);
+    // Wait for auth to finish loading before fetching
+    if (!authLoading) {
+      fetchOrganizations();
+    }
+  }, [user, authLoading]);
 
   // Persist current organization
   useEffect(() => {
@@ -63,7 +77,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         currentOrganization,
         setCurrentOrganization,
         organizations,
-        loading,
+        loading: loading || authLoading,
         error,
         refetch: fetchOrganizations,
       }}

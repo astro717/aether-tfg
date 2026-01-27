@@ -23,6 +23,14 @@ export class OrganizationsController {
     return this.organizationsService.findOne(id, user.userId);
   }
 
+  @Post(':id/members')
+  async addMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: { userId: string },
+  ) {
+    return this.organizationsService.addUser(id, body.userId);
+  }
+
   @Post()
   async createOrganization(
     @Body() createDto: { name: string },

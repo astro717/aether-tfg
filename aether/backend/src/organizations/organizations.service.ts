@@ -64,6 +64,17 @@ export class OrganizationsService {
     });
   }
 
+  // Add user to organization
+  async addUser(organizationId: string, userId: string, role: string = 'member') {
+    return this.prisma.user_organizations.create({
+      data: {
+        user_id: userId,
+        organization_id: organizationId,
+        role_in_org: role,
+      },
+    });
+  }
+
   // Create organization
   async create(name: string, creatorId: string) {
     return this.prisma.organizations.create({

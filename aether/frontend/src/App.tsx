@@ -11,9 +11,11 @@ import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { TaskDetailsPage } from "./modules/tasks/pages/TaskDetailsPage";
 import { MainDashboardPage } from "./modules/dashboard/pages/MainDashboardPage";
 import { OrganizationProvider } from "./modules/organization/context/OrganizationContext";
+import { AuthProvider } from "./modules/auth/context/AuthContext";
 
 function App() {
   return (
+    <AuthProvider>
     <OrganizationProvider>
       <BrowserRouter>
         <Routes>
@@ -44,6 +46,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </OrganizationProvider>
+    </AuthProvider>
   );
 }
 

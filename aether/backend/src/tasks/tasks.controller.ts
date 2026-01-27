@@ -26,6 +26,10 @@ export class TasksController {
     return this.tasksService.create(dto, user.id);
   }
 
+  @Get('my-tasks')
+  async getMyTasks(@CurrentUser() user: User) {
+    return this.tasksService.findAllByRole(user);
+  }
 
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: User) {

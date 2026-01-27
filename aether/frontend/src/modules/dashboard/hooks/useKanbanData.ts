@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { tasksApi } from '../api/tasksApi';
 import type { KanbanData } from '../api/tasksApi';
 
@@ -6,7 +6,8 @@ interface UseKanbanDataResult {
   data: KanbanData | null;
   loading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: (silent?: boolean) => Promise<void>;
+  setData: React.Dispatch<React.SetStateAction<KanbanData | null>>;
 }
 
 export function useKanbanData(organizationId: string | undefined): UseKanbanDataResult {
@@ -14,14 +15,14 @@ export function useKanbanData(organizationId: string | undefined): UseKanbanData
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (silent = false) => {
     if (!organizationId) {
       setLoading(false);
       return;
     }
 
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const kanbanData = await tasksApi.getKanbanData(organizationId);
       setData(kanbanData);
@@ -31,16 +32,17 @@ export function useKanbanData(organizationId: string | undefined): UseKanbanData
     } finally {
       setLoading(false);
     }
-  };
+  }, [organizationId]);
 
   useEffect(() => {
     fetchData();
-  }, [organizationId]);
+  }, [fetchData]);
 
   return {
     data,
     loading,
     error,
     refetch: fetchData,
+    setData,
   };
 }

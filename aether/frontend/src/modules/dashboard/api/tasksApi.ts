@@ -69,6 +69,15 @@ class TasksApi {
     if (!response.ok) throw new Error('Failed to update task');
     return response.json();
   }
+
+  async getMyTasks(): Promise<Task[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/my-tasks`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) throw new Error('Failed to fetch my tasks');
+    return response.json();
+  }
 }
 
 export const tasksApi = new TasksApi();

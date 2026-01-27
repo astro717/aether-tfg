@@ -26,3 +26,7 @@ backend/prisma/migrations/
 # IDEs
 .vscode/
 .idea/
+
+# AI & Testing
+*plan*.md
+testsprite_tests/

@@ -6,8 +6,10 @@ import { TasksModule } from './tasks/tasks.module';
 import { ReposModule } from './repos/repos.module';
 import { CommitsModule } from './commits/commits.module';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [PrismaModule, UsersModule, AuthModule, TasksModule, ReposModule, CommitsModule, OrganizationsModule],
+  controllers: [HealthController],
 })
 export class AppModule {}

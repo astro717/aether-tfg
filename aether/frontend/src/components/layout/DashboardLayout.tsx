@@ -1,18 +1,58 @@
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
-import { Search, Sidebar as SidebarIcon, Plus } from "lucide-react";
+import { Search, Sidebar as SidebarIcon, Plus, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../modules/auth/context/AuthContext";
+import { tasksApi, type Task } from "../../modules/dashboard/api/tasksApi";
 
 interface DashboardLayoutProps {
     children: ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
+    const { user } = useAuth();
+    const [myTasks, setMyTasks] = useState<Task[]>([]);
+    const [tasksLoading, setTasksLoading] = useState(true);
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchMyTasks = async () => {
+            if (!user) {
+                setTasksLoading(false);
+                return;
+            }
+
+            try {
+                setTasksLoading(true);
+                const tasks = await tasksApi.getMyTasks();
+                // Filter to show only pending and in_progress tasks (not done)
+                const activeTasks = tasks.filter(t => t.status !== 'done');
+                setMyTasks(activeTasks);
+            } catch (err) {
+                console.error('Error fetching my tasks:', err);
+            } finally {
+                setTasksLoading(false);
+            }
+        };
+
+        fetchMyTasks();
+    }, [user]);
+
+    const userInitials = user?.username
+        ? user.username.substring(0, 1).toUpperCase()
+        : 'U';
+
+    const userName = user?.username || 'User';
+
     return (
         <div className="flex h-screen w-full bg-[#E8E9EC] font-sans text-[#18181B]">
             {/* Sidebar */}
             <aside className="w-[280px] h-full flex flex-col bg-[#FCFCFD] border-r border-gray-100 flex-shrink-0">
                 {/* Header / Logo */}
                 <div className="px-6 py-6 flex items-center justify-between">
-                    <h1 className="text-xl font-semibold tracking-tight">aether.</h1>
+                    <Link to="/dashboard" className="cursor-pointer hover:opacity-80 transition-opacity block">
+                        <h1 className="text-xl font-semibold tracking-tight">aether.</h1>
+                    </Link>
                     <button className="text-gray-400 hover:text-gray-600 transition-colors">
                         <SidebarIcon size={18} />
                     </button>
@@ -36,65 +76,79 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 {/* User Profile */}
                 <div className="px-6 mb-8 flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-[#E5E7EB] flex items-center justify-center text-gray-500 font-medium text-sm">
-                        A
+                        {userInitials}
                     </div>
-                    <span className="font-medium text-gray-700 text-sm">Alejandro Rouco</span>
+                    <span className="font-medium text-gray-700 text-sm">{userName}</span>
                 </div>
 
-                {/* Tasks Section */}
-                <div className="px-6 mb-6">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-gray-500 font-medium text-xs uppercase tracking-wide">Tasks</h3>
-                        <button className="text-gray-400 hover:text-gray-600">
-                            <Plus size={16} />
-                        </button>
+                {/* Scrollable Tasks + Messages */}
+                <div className="flex-1 overflow-y-auto px-6 space-y-6 min-h-0">
+                    {/* Tasks Section */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-gray-500 font-medium text-xs uppercase tracking-wide">Tasks</h3>
+                            <button className="text-gray-400 hover:text-gray-600">
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                        <div className="space-y-0.5">
+                            {tasksLoading ? (
+                                <div className="flex items-center justify-center py-4">
+                                    <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                                </div>
+                            ) : myTasks.length === 0 ? (
+                                <p className="text-gray-400 text-sm py-2 px-4">No tasks assigned</p>
+                            ) : (
+                                myTasks.map((task) => (
+                                    <TaskItem
+                                        key={task.id}
+                                        taskId={task.id}
+                                        label={task.title}
+                                        active={selectedTaskId === task.id}
+                                        hasDot
+                                        dotColor={getPriorityDotColor(task.due_date)}
+                                        onClick={() => setSelectedTaskId(task.id)}
+                                    />
+                                ))
+                            )}
+                        </div>
                     </div>
-                    <div className="space-y-0.5">
-                        <TaskItem label="Build API" active hasDot dotColor="bg-red-400" />
-                        <TaskItem label="UI for checkout page" hasDot dotColor="bg-yellow-400" />
-                        <TaskItem label="Add docker support" hasDot dotColor="bg-yellow-400" />
-                        <TaskItem
-                            label="Improve deployment script"
-                            hasDot
-                            dotColor="bg-green-500"
-                        />
-                    </div>
-                </div>
 
-                {/* Messages Section */}
-                <div className="px-6 flex-1 overflow-y-auto">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-gray-500 font-medium text-xs uppercase tracking-wide">Messages</h3>
-                        <button className="text-gray-400 hover:text-gray-600">
-                            <Plus size={16} />
-                        </button>
-                    </div>
-                    <div className="space-y-1">
-                        <MessageItem
-                            name="Steve Jobs"
-                            preview="Commented on your task"
-                            active={false}
-                        />
-                        <MessageItem
-                            name="Tim Cook..."
-                            preview="I found a bug in your code ..."
-                            active={false}
-                        />
-                        <MessageItem
-                            name="Lisa Brennan"
-                            preview="Hey, quick question. Do ..."
-                            active={false}
-                        />
-                        <MessageItem
-                            name="Mike Markkula"
-                            preview="Can we pair on this later?"
-                            active={false}
-                        />
-                        <MessageItem
-                            name="Ron Wayne"
-                            preview="Your ok"
-                            active={false}
-                        />
+                    {/* Messages Section */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-gray-500 font-medium text-xs uppercase tracking-wide">Messages</h3>
+                            <button className="text-gray-400 hover:text-gray-600">
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                        <div className="space-y-1">
+                            <MessageItem
+                                name="Steve Jobs"
+                                preview="Commented on your task"
+                                active={false}
+                            />
+                            <MessageItem
+                                name="Tim Cook..."
+                                preview="I found a bug in your code ..."
+                                active={false}
+                            />
+                            <MessageItem
+                                name="Lisa Brennan"
+                                preview="Hey, quick question. Do ..."
+                                active={false}
+                            />
+                            <MessageItem
+                                name="Mike Markkula"
+                                preview="Can we pair on this later?"
+                                active={false}
+                            />
+                            <MessageItem
+                                name="Ron Wayne"
+                                preview="Your ok"
+                                active={false}
+                            />
+                        </div>
                     </div>
                 </div>
             </aside>
@@ -107,27 +161,47 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     );
 }
 
+function getPriorityDotColor(dueDate: string | null): string {
+    if (!dueDate) return 'bg-green-500';
+
+    const now = new Date();
+    const deadline = new Date(dueDate);
+    const diffTime = deadline.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'bg-red-400'; // Overdue
+    if (diffDays <= 3) return 'bg-red-400'; // High priority
+    if (diffDays <= 7) return 'bg-yellow-400'; // Medium priority
+    return 'bg-green-500'; // Low priority
+}
+
 function TaskItem({
+    taskId,
     label,
     active = false,
     hasDot = false,
     dotColor = "",
+    onClick,
 }: {
+    taskId: string;
     label: string;
     active?: boolean;
     hasDot?: boolean;
     dotColor?: string;
+    onClick?: () => void;
 }) {
     return (
-        <button
+        <Link
+            to={`/tasks/${taskId}`}
+            onClick={onClick}
             className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${active
                 ? "bg-[#E6E8EB] text-gray-900 shadow-sm"
                 : "text-gray-600 hover:bg-gray-50"
                 }`}
         >
-            <span>{label}</span>
-            {hasDot && <div className={`w-2 h-2 rounded-full ${dotColor}`} />}
-        </button>
+            <span className="truncate max-w-[180px]">{label}</span>
+            {hasDot && <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />}
+        </Link>
     );
 }
 
