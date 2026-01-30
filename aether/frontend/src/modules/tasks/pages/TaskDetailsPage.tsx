@@ -1,210 +1,279 @@
+import { useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
 import {
     Plus,
-    Maximize2,
     Bot,
+    Loader2,
+    AlertCircle,
+    ArrowLeft
 } from "lucide-react";
+import { tasksApi, type Task, type TaskComment } from "../../dashboard/api/tasksApi";
+import { useAuth } from "../../auth/context/AuthContext";
+import { CommentModal } from "../components/CommentModal";
 
 export function TaskDetailsPage() {
+    const { user } = useAuth();
+    const { taskId } = useParams<{ taskId: string }>();
+    const [task, setTask] = useState<Task | null>(null);
+    const [comments, setComments] = useState<TaskComment[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
+
+    useEffect(() => {
+        async function fetchTaskAndComments() {
+            if (!taskId) return;
+            try {
+                setLoading(true);
+                const [taskData, commentsData] = await Promise.all([
+                    tasksApi.getTask(taskId),
+                    tasksApi.getComments(taskId),
+                ]);
+                setTask(taskData);
+                setComments(commentsData);
+            } catch (err) {
+                console.error("Failed to fetch task:", err);
+                setError("Task not found or failed to load");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchTaskAndComments();
+    }, [taskId]);
+
+    const handleAddComment = async (content: string) => {
+        if (!taskId) return;
+        const newComment = await tasksApi.addComment(taskId, content);
+        setComments((prev) => [...prev, newComment]);
+    };
+
+    if (loading) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            </div>
+        );
+    }
+
+    if (error || !task) {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-4">
+                <AlertCircle className="w-10 h-10 text-red-400" />
+                <p className="text-gray-500 font-medium">{error || "Task not found"}</p>
+                <Link to="/dashboard" className="text-blue-500 hover:underline">
+                    Back to Dashboard
+                </Link>
+            </div>
+        );
+    }
+
+    // Helper for formatting dates
+    const formatDate = (dateString: string | null) => {
+        if (!dateString) return "No date";
+        return new Date(dateString).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+        });
+    };
+
+    // Format deadline for header (e.g., "13 October 12AM")
+    const formatDeadline = (dateString: string | null) => {
+        if (!dateString) return "No deadline";
+        const date = new Date(dateString);
+        const day = date.getDate();
+        const month = date.toLocaleDateString("en-US", { month: "long" });
+        const hours = date.getHours();
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const hour12 = hours % 12 || 12;
+        return `${day} ${month} ${hour12}${ampm}`;
+    };
+
+    // Apple-like priority colors
+    const APPLE_COLORS = {
+        green: '#28C840',   // Safe
+        yellow: '#FEBC2E',  // Warning
+        red: '#FF3B30',     // Urgent
+        gray: '#A1A1AA',    // No date
+    };
+
+    // Get urgency color for deadline
+    const getDeadlineColor = (dateString: string | null) => {
+        if (!dateString) return APPLE_COLORS.gray;
+        const now = new Date();
+        const due = new Date(dateString);
+        const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) return APPLE_COLORS.red; // Overdue
+        if (diffDays <= 3) return APPLE_COLORS.red; // < 3 days
+        if (diffDays <= 7) return APPLE_COLORS.yellow; // < 7 days
+        return APPLE_COLORS.green; // Safe
+    };
+
+    const calculateTimeLeft = (dateString: string | null) => {
+        if (!dateString) return "No deadline";
+        const now = new Date();
+        const due = new Date(dateString);
+        const diffMs = due.getTime() - now.getTime();
+
+        if (diffMs < 0) return "Overdue";
+
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+        if (days > 0) return `${days} days ${hours} hours`;
+        return `${hours} hours`;
+    };
+
     return (
-        <div className="p-8 max-w-[1600px] mx-auto">
-            <div className="grid grid-cols-12 gap-8">
+        <div className="h-full overflow-y-auto p-8">
+            <div className="max-w-[1600px] mx-auto grid grid-cols-12 gap-8 h-full">
                 {/* LEFT COLUMN (Main Content) */}
-                <div className="col-span-8 space-y-8">
+                <div className="col-span-8 flex flex-col gap-8 h-full">
                     {/* Header */}
                     <div>
+                        <Link to="/dashboard" className="inline-flex items-center text-gray-400 hover:text-gray-600 mb-4 transition-colors">
+                            <ArrowLeft size={16} className="mr-1" /> Back
+                        </Link>
                         <h1 className="text-4xl font-semibold text-gray-900 mb-2">
-                            Build API
+                            {task.title}
                         </h1>
+                        <div className="flex items-center gap-2 mt-2">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${task.status === 'done' ? 'bg-green-100 text-green-700' :
+                                task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-gray-100 text-gray-700'
+                                }`}>
+                                {task.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Description */}
                     <div>
                         <h3 className="text-gray-500 font-medium mb-3">Description</h3>
-                        <div className="bg-[#EAEBED] rounded-[24px] p-6 text-gray-600 leading-relaxed shadow-sm">
-                            Build a new REST API to handle product data and expose it to the
-                            frontend. The API should support basic CRUD operations (create,
-                            read, update, delete) for product information, including name,
-                            description, price and stock quant...
+                        <div className="bg-[#EAEBED] rounded-[24px] p-6 text-gray-600 leading-relaxed shadow-sm min-h-[100px]">
+                            {task.description || "No description provided for this task."}
                         </div>
                     </div>
 
-                    {/* Stats & Commits Grid */}
+                    {/* Stats & Commit List (2 Columns) */}
                     <div className="grid grid-cols-12 gap-6">
-                        {/* Stats */}
+                        {/* Left: Stats */}
                         <div className="col-span-5 space-y-4 py-2">
                             <StatRow label="Commit number" value="12" />
-                            <StatRow label="Duration" value="1 week 2 days" />
-                            <StatRow label="Due date" value="13 Oct" />
-                            <StatRow label="Time left" value="2 days 19 hours" />
+                            <StatRow label="Duration" value="1 week" />
+                            <StatRow label="Due date" value={formatDate(task.due_date)} />
+                            <StatRow label="Time left" value={calculateTimeLeft(task.due_date)} />
                         </div>
 
-                        {/* Commit List */}
+                        {/* Right: Commit List */}
                         <div className="col-span-7">
                             <h3 className="text-gray-500 font-medium mb-3">Commit list</h3>
-                            <div className="bg-[#F4F4F5] rounded-[24px] p-5 space-y-4">
+                            <div className="bg-[#EAEBED] rounded-[24px] p-4 space-y-3">
                                 <CommitItem
-                                    hash="astro717"
-                                    date="Sat, Oct 10, 2025, 9:42 AM +0200"
-                                    message="committed on Oct 10, 2025"
+                                    hash="a1b2c3d"
+                                    date="Jan 15"
+                                    message="Fix authentication bug in login flow"
                                 />
                                 <CommitItem
-                                    hash="astro717"
-                                    date="Sat, Oct 10, 2025, 7:58 AM +0200"
-                                    message="committed on Oct 10, 2025"
+                                    hash="e4f5g6h"
+                                    date="Jan 14"
+                                    message="Add validation for user input fields"
                                 />
                                 <CommitItem
-                                    hash="astro717"
-                                    date="Mon, Oct 6, 2025, 8:23 AM +0200"
-                                    message="committed on Oct 6, 2025"
+                                    hash="i7j8k9l"
+                                    date="Jan 13"
+                                    message="Initial task implementation"
                                 />
                             </div>
                         </div>
                     </div>
 
-                    {/* Last Commit / Diff */}
-                    <div>
+                    {/* Last Commit (Diff View) */}
+                    <div className="flex-1 flex flex-col min-h-[200px]">
                         <h3 className="text-gray-500 font-medium mb-3">Last commit</h3>
-                        <div className="bg-[#F4F4F5] rounded-[32px] p-6 relative overflow-hidden">
-                            {/* Header inside diff */}
-                            <div className="flex items-center justify-between mb-6">
-                                <span className="text-gray-500 font-medium">diff: 12/12</span>
-                                <button className="text-gray-400 hover:text-gray-600">
-                                    <Maximize2 size={18} />
-                                </button>
+                        <div className="bg-[#1e1e1e] rounded-[24px] p-6 font-mono text-sm overflow-auto flex-1">
+                            <div className="text-gray-400 mb-4">
+                                <span className="text-gray-500">// src/auth/login.ts</span>
                             </div>
-
-                            {/* Code Diff Content */}
-                            <div className="font-mono text-sm leading-6">
-                                <div className="text-red-400 opacity-60">
-                                    - from flask import Flask
+                            <div className="space-y-1">
+                                <div className="text-red-400 bg-red-950/30 px-2 py-0.5 rounded">
+                                    {"- const token = generateToken(user);"}
                                 </div>
-                                <div className="text-green-500 font-medium">
-                                    + from flask import Flask, jsonify, request
+                                <div className="text-red-400 bg-red-950/30 px-2 py-0.5 rounded">
+                                    {"- return { token };"}
                                 </div>
-                                <br />
-                                <div className="text-gray-700 font-semibold">
-                                    app = Flask(__name__)
+                                <div className="text-green-400 bg-green-950/30 px-2 py-0.5 rounded">
+                                    {"+ const token = generateSecureToken(user, options);"}
                                 </div>
-                                <br />
-                                <div className="text-red-400 opacity-60">
-                                    - @app.route("/")
+                                <div className="text-green-400 bg-green-950/30 px-2 py-0.5 rounded">
+                                    {"+ const refreshToken = generateRefreshToken(user);"}
                                 </div>
-                                <div className="text-red-400 opacity-60">- def hello():</div>
-                                <div className="text-red-400 opacity-60">
-                                    - return "Hello World!"
+                                <div className="text-green-400 bg-green-950/30 px-2 py-0.5 rounded">
+                                    {"+ return { token, refreshToken, expiresIn: 3600 };"}
                                 </div>
-                                <div className="text-green-500 font-medium">
-                                    + @app.route("/api/products", methods=["GET"])
-                                </div>
-                                <div className="text-green-500 font-medium">
-                                    + def get_products():
-                                </div>
-                                <div className="text-green-500">
-                                    + # TODO: replace mock data with DB query
-                                </div>
-                                <div className="text-green-500">+ products = [</div>
-                                <div className="text-green-500">
-                                    + {"    "}{`{"id": 1, "name": "Laptop", "price": 1200},`}
-                                </div>
-                                <div className="text-green-500">
-                                    + {"    "}{`{"id": 2, "name": "Phone", "price": 800}`}
-                                </div>
-                                <div className="text-green-500">+ ]</div>
-                                <div className="text-green-500">
-                                    + return jsonify(products)
-                                </div>
-                                <br />
-                                <div className="text-gray-500">@app.route("/status")</div>
-                                <div className="text-gray-700">def status():</div>
-                                <div className="text-gray-700 pl-4">return "OK"</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* RIGHT COLUMN (Sidebar Details) */}
-                <div className="col-span-4 flex flex-col space-y-8">
-                    {/* Top Date */}
-                    <div className="text-right">
-                        <span className="text-red-400 font-medium">13 October 12AM</span>
+                {/* RIGHT COLUMN (Sidebar) */}
+                <div className="col-span-4 flex flex-col h-full gap-4">
+                    {/* Deadline (New Location) */}
+                    <div className="flex justify-end">
+                        <span className="text-sm font-medium" style={{ color: getDeadlineColor(task.due_date) }}>
+                            Due date {formatDeadline(task.due_date)}
+                        </span>
                     </div>
 
-                    {/* Comments */}
-                    <div className="flex-1 flex flex-col min-h-0">
-                        <div className="bg-[#EAEBED] rounded-[24px] p-4 space-y-4 flex-1 overflow-y-auto max-h-[420px]">
-                            {/* Header migrated inside */}
-                            <div className="flex items-center justify-between mb-2 px-1">
-                                <h3 className="text-gray-500 font-medium text-sm">Comments</h3>
-                                <button className="text-gray-400 hover:text-gray-600 transition-colors">
-                                    <Plus size={18} />
-                                </button>
-                            </div>
-
-                            <CommentCard
-                                author="Steve Jobs"
-                                role="S"
-                                content="It's a good start, but it still feels like a tool, not a product. The API should be invisible — effortless, elegant, and obvious in how it works. Keep polishing it until it feels simple, not just functional."
-                            />
-                            <CommentCard
-                                author="Lisa Brennan"
-                                role="L"
-                                content='"Looks solid, but have you thought about what happens if the request fails? The best design anticipates mistakes."'
-                            />
-                            <CommentCard
-                                author="Tim Cook"
-                                role=""
-                                content="Can you have it ready a day earlier? I'd like to review it before the deadline — details make the difference."
-                            />
-                        </div>
-                    </div>
-
-                    {/* AI Cards */}
-                    <div className="space-y-4">
-                        {/* Generate Commit Explanation */}
-                        <div className="bg-[#F4F4F5] rounded-[24px] p-6 relative group cursor-pointer hover:bg-white hover:shadow-sm transition-all">
-                            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                                <Maximize2 size={16} />
+                    {/* Comments (Fixed height) */}
+                    <div className="h-[562px] bg-[#EAEBED] rounded-[24px] p-4 flex flex-col overflow-hidden">
+                        <div className="flex items-center justify-between mb-3 px-1">
+                            <h3 className="text-gray-500 font-medium text-sm">Comments</h3>
+                            <button
+                                onClick={() => setIsCommentModalOpen(true)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <Plus size={18} />
                             </button>
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
-                                    <Bot size={18} className="text-gray-600" />
-                                </div>
-                                <h4 className="text-gray-400 font-medium text-sm">Generate commit explanation</h4>
-                            </div>
-                            <p className="text-gray-500 text-sm leading-relaxed">
-                                This commit introduces a new API endpoint to provide product information through a REST interface.<br /><br />
-                                The previous "Hello World" route was removed, and a structured /api/products route was added. This route currently serves mock product data and will likely be connected to a real database later.<br />
-                                The change also imports new Flask utilities (jsonif...
-                            </p>
                         </div>
 
-                        {/* Bottom Grid */}
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* Analyze Code */}
-                            <div className="bg-[#F4F4F5] rounded-[24px] p-6 flex flex-col items-center justify-center text-center gap-3 min-h-[160px] cursor-pointer hover:bg-white hover:shadow-sm transition-all">
-                                <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center mb-1">
-                                    <Bot size={18} className="text-gray-600" />
+                        <div className="flex-1 overflow-y-auto space-y-3">
+                            {comments.length > 0 ? (
+                                comments.map((comment) => (
+                                    <CommentCard
+                                        key={comment.id}
+                                        author={comment.users.username}
+                                        role={comment.users.username.charAt(0).toUpperCase()}
+                                        content={comment.content}
+                                        createdAt={comment.created_at}
+                                        isMe={user?.id === comment.user_id}
+                                    />
+                                ))
+                            ) : (
+                                <div className="flex-1 flex items-center justify-center text-gray-400 text-sm italic h-full">
+                                    No comments yet
                                 </div>
-                                <h4 className="text-gray-700 font-medium text-sm leading-tight">
-                                    Analyze code and vulnerabilities
-                                </h4>
-                                <p className="text-gray-300 text-xs mt-2">
-                                    The code has not been analyzed yet
-                                </p>
-                            </div>
+                            )}
+                        </div>
+                    </div>
 
-                            {/* Generate Report */}
-                            <div className="bg-[#F4F4F5] rounded-[24px] p-6 flex flex-col items-center justify-center text-center gap-3 min-h-[160px] cursor-pointer hover:bg-white hover:shadow-sm transition-all">
-                                <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center mb-1">
-                                    <Bot size={18} className="text-gray-600" />
-                                </div>
-                                <h4 className="text-gray-700 font-medium text-sm leading-tight">
-                                    Generate task report
-                                </h4>
-                                <p className="text-gray-300 text-xs mt-2">
-                                    The task has to be done to generate a report
-                                </p>
-                            </div>
+                    {/* Comment Modal */}
+                    <CommentModal
+                        isOpen={isCommentModalOpen}
+                        onClose={() => setIsCommentModalOpen(false)}
+                        onSubmit={handleAddComment}
+                    />
+
+                    {/* AI Actions (Grows to fill space) */}
+                    <div className="flex-1 flex flex-col gap-4 min-h-[200px]">
+                        {/* Card 1: Expands */}
+                        <AICard title="Generate commit explanation" className="flex-1" />
+
+                        {/* Row with 2 cards: Expands */}
+                        <div className="flex-1 grid grid-cols-2 gap-4">
+                            <AICard title="Analyze code and vulnerabilities" className="h-full" />
+                            <AICard title="Generate task report" className="h-full" />
                         </div>
                     </div>
                 </div>
@@ -225,23 +294,14 @@ function StatRow({ label, value }: { label: string; value: string }) {
     );
 }
 
-function CommitItem({
-    hash,
-    date,
-    message,
-}: {
-    hash: string;
-    date: string;
-    message: string;
-}) {
+function CommitItem({ hash, date, message }: { hash: string; date: string; message: string }) {
     return (
-        <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-gray-800">{date}</span>
-                <span className="text-[11px] text-gray-400">—</span>
-                <span className="text-[11px] text-gray-500 font-medium">{hash}</span>
-            </div>
-            <div className="text-[11px] text-gray-500">{message}</div>
+        <div className="bg-white rounded-[16px] p-3 flex items-center gap-3">
+            <code className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded font-mono">
+                {hash}
+            </code>
+            <span className="text-xs text-gray-400">{date}</span>
+            <span className="text-sm text-gray-700 truncate flex-1">{message}</span>
         </div>
     );
 }
@@ -250,26 +310,57 @@ function CommentCard({
     author,
     role,
     content,
+    createdAt,
+    isMe = false,
 }: {
     author: string;
     role: string;
     content: string;
+    createdAt?: string;
+    isMe?: boolean;
 }) {
+    const formatTime = (dateString?: string) => {
+        if (!dateString) return "";
+        const date = new Date(dateString);
+        return date.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+        });
+    };
+
     return (
         <div className="bg-[#FCFCFD] rounded-[24px] p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-                {role ? (
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
                     <div className="w-5 h-5 rounded-full bg-gray-500 flex items-center justify-center text-[10px] text-white font-bold">
                         {role}
                     </div>
-                ) : (
-                    <div className="w-5 h-5 rounded-full bg-gray-200" />
+                    <span className="font-bold text-sm text-gray-900">
+                        {author} {isMe && <span className="text-gray-400 font-normal ml-1">(You)</span>}
+                    </span>
+                </div>
+                {createdAt && (
+                    <span className="text-[10px] text-gray-400">{formatTime(createdAt)}</span>
                 )}
-                <span className="font-bold text-sm text-gray-900">{author}</span>
             </div>
-            <p className="text-[11px] text-gray-500 leading-relaxed font-medium line-clamp-3">
+            <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
                 {content}
             </p>
+        </div>
+    );
+}
+
+function AICard({ title, className = "" }: { title: string; className?: string }) {
+    return (
+        <div className={`bg-[#F4F4F5] rounded-[24px] p-5 flex flex-col items-center justify-center text-center gap-2 cursor-pointer hover:bg-white hover:shadow-sm transition-all min-h-[120px] ${className}`}>
+            <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
+                <Bot size={18} className="text-gray-600" />
+            </div>
+            <h4 className="text-gray-700 font-medium text-sm leading-tight">
+                {title}
+            </h4>
         </div>
     );
 }

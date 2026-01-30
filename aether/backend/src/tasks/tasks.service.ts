@@ -230,10 +230,67 @@ export class TasksService {
   async remove(id: string) {
     const task = await this.prisma.tasks.findUnique({ where: { id } });
     if (!task) throw new Error('Task not found');
-  
+
     return this.prisma.tasks.delete({ where: { id } });
   }
-  
-  
+
+  // Comment methods
+  async addComment(taskId: string, userId: string, content: string) {
+    // Verify task exists
+    const task = await this.prisma.tasks.findUnique({ where: { id: taskId } });
+    if (!task) throw new NotFoundException('Task not found');
+
+    return this.prisma.task_comments.create({
+      data: {
+        task_id: taskId,
+        user_id: userId,
+        content,
+      },
+      include: {
+        users: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
+
+  async getComments(taskId: string) {
+    // Verify task exists
+    const task = await this.prisma.tasks.findUnique({ where: { id: taskId } });
+    if (!task) throw new NotFoundException('Task not found');
+
+    return this.prisma.task_comments.findMany({
+      where: { task_id: taskId },
+      include: {
+        users: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+  }
+
+  async deleteComment(commentId: string, userId: string, userRole: string) {
+    const comment = await this.prisma.task_comments.findUnique({
+      where: { id: commentId },
+    });
+
+    if (!comment) throw new NotFoundException('Comment not found');
+
+    // Only comment author or manager can delete
+    if (comment.user_id !== userId && userRole !== 'manager') {
+      throw new ForbiddenException('Not authorized to delete this comment');
+    }
+
+    return this.prisma.task_comments.delete({ where: { id: commentId } });
+  }
 }
 

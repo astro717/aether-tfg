@@ -4,6 +4,7 @@ export interface AuthUser {
   id: string;
   username: string;
   email: string;
+  role: string;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';

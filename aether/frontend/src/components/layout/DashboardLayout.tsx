@@ -161,18 +161,25 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     );
 }
 
+// Apple-like priority colors
+const APPLE_COLORS = {
+    green: '#28C840',   // Safe
+    yellow: '#FEBC2E',  // Warning
+    red: '#FF3B30',     // Urgent
+};
+
 function getPriorityDotColor(dueDate: string | null): string {
-    if (!dueDate) return 'bg-green-500';
+    if (!dueDate) return APPLE_COLORS.green;
 
     const now = new Date();
     const deadline = new Date(dueDate);
     const diffTime = deadline.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 0) return 'bg-red-400'; // Overdue
-    if (diffDays <= 3) return 'bg-red-400'; // High priority
-    if (diffDays <= 7) return 'bg-yellow-400'; // Medium priority
-    return 'bg-green-500'; // Low priority
+    if (diffDays < 0) return APPLE_COLORS.red; // Overdue
+    if (diffDays <= 3) return APPLE_COLORS.red; // High priority
+    if (diffDays <= 7) return APPLE_COLORS.yellow; // Medium priority
+    return APPLE_COLORS.green; // Low priority
 }
 
 function TaskItem({
@@ -200,7 +207,7 @@ function TaskItem({
                 }`}
         >
             <span className="truncate max-w-[180px]">{label}</span>
-            {hasDot && <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />}
+            {hasDot && <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />}
         </Link>
     );
 }

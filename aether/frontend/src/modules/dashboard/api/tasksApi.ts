@@ -39,6 +39,19 @@ export interface KanbanData {
   };
 }
 
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  users: {
+    id: string;
+    username: string;
+    email: string;
+  };
+}
+
 class TasksApi {
   private getAuthHeaders() {
     const token = localStorage.getItem('token'); // Note: 'token' not 'authToken'
@@ -77,6 +90,48 @@ class TasksApi {
     );
     if (!response.ok) throw new Error('Failed to fetch my tasks');
     return response.json();
+  }
+
+  async getTask(id: string): Promise<Task> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/${id}`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) throw new Error('Failed to fetch task');
+    return response.json();
+  }
+
+  async getComments(taskId: string): Promise<TaskComment[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/${taskId}/comments`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) throw new Error('Failed to fetch comments');
+    return response.json();
+  }
+
+  async addComment(taskId: string, content: string): Promise<TaskComment> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/${taskId}/comments`,
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ content }),
+      }
+    );
+    if (!response.ok) throw new Error('Failed to add comment');
+    return response.json();
+  }
+
+  async deleteComment(commentId: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/comments/${commentId}`,
+      {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      }
+    );
+    if (!response.ok) throw new Error('Failed to delete comment');
   }
 }
 

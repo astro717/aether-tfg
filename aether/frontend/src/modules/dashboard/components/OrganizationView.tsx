@@ -65,7 +65,23 @@ export function OrganizationView() {
     if (!over || !data || !user) return;
 
     const taskId = active.id as string;
-    const targetColumn = over.id as ColumnId;
+
+    // CRITICAL FIX: Determine target column safely
+    const overId = over.id as string;
+    let targetColumn: ColumnId | undefined;
+
+    // 1. Is 'over' a Column?
+    if (['pending', 'in_progress', 'done'].includes(overId)) {
+      targetColumn = overId as ColumnId;
+    } else {
+      // 2. Is 'over' a Task? Find its column
+      if (data.pending.some(t => t.id === overId)) targetColumn = 'pending';
+      else if (data.in_progress.some(t => t.id === overId)) targetColumn = 'in_progress';
+      else if (data.done.some(t => t.id === overId)) targetColumn = 'done';
+    }
+
+    // If we still don't know the column, abort
+    if (!targetColumn) return;
 
     // Find the task
     const allTasks = [...data.pending, ...data.in_progress, ...data.done];
@@ -81,9 +97,10 @@ export function OrganizationView() {
     // If dropped in the same column, do nothing
     if (currentColumn === targetColumn) return;
 
-    // Permission check: only assignee can move the task
-    if (task.assignee_id !== user.id) {
-      setPermissionError(`You can only move tasks assigned to you.`);
+    // Permission check: allow move if user is manager OR user is the assignee
+    const canMove = user.role === 'manager' || task.assignee_id === user.id;
+    if (!canMove) {
+      setPermissionError("You can only move tasks assigned to you.");
       setTimeout(() => setPermissionError(null), 3000);
       return;
     }
@@ -106,7 +123,27 @@ export function OrganizationView() {
     // Sync with backend, revert on failure
     try {
       await tasksApi.updateTask(taskId, { status: targetColumn });
-      await refetch(true);
+      const newData = await tasksApi.getKanbanData(currentOrganization!.id);
+
+      // Safety net: Check if the moved task is still present in the refetched data
+      const allNewTasks = [...newData.pending, ...newData.in_progress, ...newData.done];
+      const taskStillExists = allNewTasks.some(t => t.id === taskId);
+
+      if (!taskStillExists) {
+        // Task disappeared after refetch - this is a bug, log it and keep optimistic state
+        console.error('[OrganizationView] Task disappeared after move!', {
+          taskId,
+          taskTitle: task.title,
+          targetColumn,
+          refetchedData: newData
+        });
+        setPermissionError('Task may not have been saved correctly. Click refresh to reload.');
+        setTimeout(() => setPermissionError(null), 5000);
+        // Keep the optimistic state since the backend might have actually saved it
+        return;
+      }
+
+      setData(newData);
     } catch (err) {
       console.error('Failed to update task:', err);
       setData(previousData);
