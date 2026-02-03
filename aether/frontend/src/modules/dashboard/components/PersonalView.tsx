@@ -7,6 +7,7 @@ import {
     MessageCircle
 } from "lucide-react";
 import { tasksApi, type Task } from '../api/tasksApi';
+import { useAuth } from '../../auth/context/AuthContext';
 
 // --- Helper Utilities ---
 
@@ -262,9 +263,12 @@ function InProgressCard({ task, isLast }: { task: Task; isLast?: boolean }) {
 }
 
 function AssignedCard({ task }: { task: Task }) {
+    const { user } = useAuth();
     const date = formatDate(task.due_date);
     const name = task.users_tasks_assignee_idTousers?.username || 'Me';
     const initial = name.charAt(0).toUpperCase();
+    const isAssignedToMe = user && task.assignee_id === user.id;
+    const displayName = isAssignedToMe ? `${name} (You)` : name;
 
     return (
         <div className="bg-white/60 backdrop-blur-lg rounded-[28px] p-4 px-5 shadow-sm border border-white/50 hover:scale-[1.02] transition-all duration-200">
@@ -273,7 +277,7 @@ function AssignedCard({ task }: { task: Task }) {
                     {initial}
                 </div>
                 <span className="text-xs text-gray-500">
-                    by <span className="text-gray-800 font-bold">{name}</span>
+                    by <span className="text-gray-800 font-bold">{displayName}</span>
                 </span>
             </div>
 

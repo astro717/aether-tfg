@@ -357,6 +357,7 @@ function SortableTaskCard({ task }: { task: Task }) {
 
 // Task Card component
 function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boolean }) {
+  const { user } = useAuth();
   const priority = calculatePriority(task.due_date);
 
   const formattedDate = task.due_date
@@ -368,6 +369,8 @@ function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boole
     : '?';
 
   const userName = task.users_tasks_assignee_idTousers?.username || 'Unassigned';
+  const isAssignedToMe = user && task.assignee_id === user.id;
+  const displayName = isAssignedToMe ? `${userName} (You)` : userName;
 
   return (
     <div className={`bg-white/70 backdrop-blur-md border border-white/50 rounded-[24px] p-3 shadow-sm hover:scale-[1.02] hover:shadow-lg transition-all duration-200 cursor-pointer hover:bg-white/95 w-full ${
@@ -379,7 +382,7 @@ function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boole
             {userInitials}
           </div>
           <span className="text-xs font-bold text-gray-800 tracking-tight">
-            {userName}
+            {displayName}
           </span>
         </div>
 

@@ -216,6 +216,8 @@ import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { organizationApi } from "@/modules/organization/api/organizationApi";
+import { useOrganization } from "@/modules/organization/context/OrganizationContext";
 
 type Mode = "create" | "join";
 
@@ -227,8 +229,9 @@ export const OrganizationSetupPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigate = useNavigate();
+  const { refetch: refetchOrganizations } = useOrganization();
 
-  const handleCreateSubmit = (e: FormEvent) => {
+  const handleCreateSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -239,16 +242,21 @@ export const OrganizationSetupPage = () => {
 
     setIsSubmitting(true);
 
-    // TODO: call backend endpoint to create organization
-    setTimeout(() => {
-      console.log("Create organization:", { name: orgName.trim() });
+    try {
+      const org = await organizationApi.createOrganization(orgName.trim());
+      // Store the organization ID for later use
+      localStorage.setItem("currentOrganizationId", org.id);
+      // Refetch organizations so the context picks up the new org
+      await refetchOrganizations();
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create organization");
+    } finally {
       setIsSubmitting(false);
-      // TODO: navigate to dashboard when it exists
-      // navigate("/dashboard");
-    }, 500);
+    }
   };
 
-  const handleJoinSubmit = (e: FormEvent) => {
+  const handleJoinSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -259,13 +267,18 @@ export const OrganizationSetupPage = () => {
 
     setIsSubmitting(true);
 
-    // TODO: call backend endpoint to join organization
-    setTimeout(() => {
-      console.log("Join organization:", { organizationId: orgId.trim() });
+    try {
+      const result = await organizationApi.joinOrganization(orgId.trim());
+      // Store the organization ID for later use
+      localStorage.setItem("currentOrganizationId", result.organization.id);
+      // Refetch organizations so the context picks up the joined org
+      await refetchOrganizations();
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to join organization");
+    } finally {
       setIsSubmitting(false);
-      // TODO: navigate to dashboard when it exists
-      // navigate("/dashboard");
-    }, 500);
+    }
   };
 
   const renderForm = () => {

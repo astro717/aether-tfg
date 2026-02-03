@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
@@ -57,13 +57,95 @@ export class AuthService {
           role: 'user',
         },
       });
-      const { password_hash, ...result } = user;
-      return result;
+
+      // Generate JWT token for immediate login after registration
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      };
+
+      return {
+        access_token: this.jwtService.sign(payload),
+      };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Username or email already exists');
       }
       throw error;
     }
+  }
+
+  async connectGithub(userId: string, code: string) {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException('GitHub OAuth is not configured');
+    }
+
+    // Exchange authorization code for access token
+    const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (tokenData.error) {
+      throw new BadRequestException(`GitHub OAuth error: ${tokenData.error_description || tokenData.error}`);
+    }
+
+    const { access_token, refresh_token } = tokenData;
+
+    if (!access_token) {
+      throw new BadRequestException('Failed to obtain access token from GitHub');
+    }
+
+    // Fetch GitHub user profile
+    const userResponse = await fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (!userResponse.ok) {
+      throw new BadRequestException('Failed to fetch GitHub user profile');
+    }
+
+    const githubUser = await userResponse.json();
+
+    // Update user record with GitHub data
+    const updatedUser = await this.prisma.users.update({
+      where: { id: userId },
+      data: {
+        github_id: String(githubUser.id),
+        github_login: githubUser.login,
+        github_access_token: access_token,
+        github_refresh_token: refresh_token || null,
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        github_id: true,
+        github_login: true,
+      },
+    });
+
+    return {
+      success: true,
+      user: updatedUser,
+      github_login: githubUser.login,
+    };
   }
 }

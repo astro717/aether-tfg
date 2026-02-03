@@ -13,6 +13,9 @@ model users {
   password_hash                   String
   email                           String               @unique
   github_login                    String?
+  github_id                       String?              @unique
+  github_access_token             String?
+  github_refresh_token            String?
   created_at                      DateTime?            @default(now()) @db.Timestamp(6)
   validated_by                    String?              @db.Uuid
   role                            String               @default("\"user\"")

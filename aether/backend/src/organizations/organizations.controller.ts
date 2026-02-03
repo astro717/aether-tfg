@@ -38,4 +38,12 @@ export class OrganizationsController {
   ) {
     return this.organizationsService.create(createDto.name, user.userId);
   }
+
+  @Post('join')
+  async joinOrganization(
+    @Body() joinDto: { organizationId: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.organizationsService.joinOrganization(user.userId, joinDto.organizationId);
+  }
 }

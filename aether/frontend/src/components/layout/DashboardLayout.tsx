@@ -117,37 +117,42 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     {/* Messages Section */}
                     <div>
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-gray-500 font-medium text-xs uppercase tracking-wide">Messages</h3>
-                            <button className="text-gray-400 hover:text-gray-600">
+                            <Link to="/messages" className="text-gray-500 font-medium text-xs uppercase tracking-wide hover:text-gray-700 transition-colors">
+                                Messages
+                            </Link>
+                            <Link to="/messages" className="text-gray-400 hover:text-gray-600">
                                 <Plus size={16} />
-                            </button>
+                            </Link>
                         </div>
                         <div className="space-y-1">
-                            <MessageItem
-                                name="Steve Jobs"
-                                preview="Commented on your task"
-                                active={false}
-                            />
-                            <MessageItem
-                                name="Tim Cook..."
-                                preview="I found a bug in your code ..."
-                                active={false}
-                            />
-                            <MessageItem
-                                name="Lisa Brennan"
-                                preview="Hey, quick question. Do ..."
-                                active={false}
-                            />
-                            <MessageItem
-                                name="Mike Markkula"
-                                preview="Can we pair on this later?"
-                                active={false}
-                            />
-                            <MessageItem
-                                name="Ron Wayne"
-                                preview="Your ok"
-                                active={false}
-                            />
+                            <Link to="/messages">
+                                <MessageItem
+                                    name="Steve Jobs"
+                                    preview="One more thing..."
+                                    active={false}
+                                />
+                            </Link>
+                            <Link to="/messages">
+                                <MessageItem
+                                    name="Tim Cook"
+                                    preview="The quarterly reports look great"
+                                    active={false}
+                                />
+                            </Link>
+                            <Link to="/messages">
+                                <MessageItem
+                                    name="Jony Ive"
+                                    preview="The new design is absolutely beautiful"
+                                    active={false}
+                                />
+                            </Link>
+                            <Link to="/messages">
+                                <MessageItem
+                                    name="Craig Federighi"
+                                    preview="Hair Force One is ready for WWDC!"
+                                    active={false}
+                                />
+                            </Link>
                         </div>
                     </div>
                 </div>

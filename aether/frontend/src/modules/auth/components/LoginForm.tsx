@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { loginUser } from "../api/authApi"; // usa el mismo archivo que el registro
+import { loginUser } from "../api/authApi";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export const LoginForm = () => {
   const [form, setForm] = useState({ email: "", password: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
+  const { refetch } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -15,9 +19,16 @@ export const LoginForm = () => {
     setIsSubmitting(true);
     setError("");
     try {
-      const token = await loginUser(form);
+      const token = await loginUser({
+        email: form.email.trim(),
+        password: form.password,
+      });
       localStorage.setItem("token", token);
-      window.location.href = "/dashboard";
+
+      // Refetch user data to update AuthContext before navigating
+      await refetch();
+
+      navigate("/dashboard");
     } catch {
       setError("Invalid email or password");
     } finally {

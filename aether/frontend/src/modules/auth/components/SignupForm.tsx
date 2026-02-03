@@ -68,12 +68,14 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { registerUser } from "../api/authApi";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export const SignupForm = () => {
   const [form, setForm] = useState({ username: "", email: "", password: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { refetch } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -83,11 +85,14 @@ export const SignupForm = () => {
     setIsSubmitting(true);
     setError("");
     try {
-      // Intentamos registrar al usuario en el backend
+      // Register the user and get JWT token
       const token = await registerUser(form);
       localStorage.setItem("token", token);
 
-      // 🚀 Nueva redirección al paso siguiente (GitHub connect)
+      // Refetch user data to update AuthContext before navigating
+      await refetch();
+
+      // Navigate to Step 2 (GitHub connect)
       navigate("/connect-github");
     } catch {
       setError("Error al registrar usuario");

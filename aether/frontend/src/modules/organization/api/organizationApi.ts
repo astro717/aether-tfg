@@ -45,6 +45,22 @@ class OrganizationApi {
     if (!response.ok) throw new Error('Failed to create organization');
     return response.json();
   }
+
+  async joinOrganization(organizationId: string): Promise<{ success: boolean; organization: Organization }> {
+    const response = await fetch(
+      `${API_BASE_URL}/organizations/join`,
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ organizationId })
+      }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to join organization');
+    }
+    return response.json();
+  }
 }
 
 export const organizationApi = new OrganizationApi();

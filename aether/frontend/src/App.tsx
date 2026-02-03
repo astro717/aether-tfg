@@ -5,11 +5,13 @@ import { HomePage } from "./modules/auth/pages/HomePage";
 import { SignupPage } from "./modules/auth/pages/SignupPage";
 import { LoginPage } from "./modules/auth/pages/LoginPage";
 import { ConnectGithubPage } from "./modules/auth/pages/ConnectGithubPage";
+import { GithubCallbackPage } from "./modules/auth/pages/GithubCallbackPage";
 import { OrganizationSetupPage } from "./modules/auth/pages/OrganizationSetupPage";
 
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { TaskDetailsPage } from "./modules/tasks/pages/TaskDetailsPage";
 import { MainDashboardPage } from "./modules/dashboard/pages/MainDashboardPage";
+import { MessagingPage } from "./modules/messaging/pages/MessagingPage";
 import { OrganizationProvider } from "./modules/organization/context/OrganizationContext";
 import { AuthProvider } from "./modules/auth/context/AuthContext";
 
@@ -23,6 +25,7 @@ function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/connect-github" element={<ConnectGithubPage />} />
+          <Route path="/connect/github/callback" element={<GithubCallbackPage />} />
           <Route path="/organization-setup" element={<OrganizationSetupPage />} />
 
           {/* Dashboard Routes */}
@@ -40,6 +43,16 @@ function App() {
             element={
               <DashboardLayout>
                 <MainDashboardPage />
+              </DashboardLayout>
+            }
+          />
+
+          {/* Messaging Route */}
+          <Route
+            path="/messages"
+            element={
+              <DashboardLayout>
+                <MessagingPage />
               </DashboardLayout>
             }
           />

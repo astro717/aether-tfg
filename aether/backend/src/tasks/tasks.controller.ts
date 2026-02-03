@@ -24,17 +24,19 @@ export class TasksController {
 
   @Post()
   create(@Body() dto: CreateTaskDto, @CurrentUser() user: User) {
-    return this.tasksService.create(dto, user.id);
+    return this.tasksService.create(dto, user);
   }
 
   @Get('my-tasks')
   async getMyTasks(@CurrentUser() user: User) {
-    return this.tasksService.findAllByRole(user);
+    // Always returns only tasks assigned to this user (for sidebar)
+    return this.tasksService.findMyTasks(user.id);
   }
 
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: User) {
-    return this.tasksService.findOneOwned(id, user.id);
+    // Managers can view any task, regular users only their own
+    return this.tasksService.findOneOwned(id, user.id, user.role);
   }
 
 

@@ -16,19 +16,18 @@ export class TasksService {
     }
 
     const data: any = {
-      data: {
-        title: dto.title,
-        description: dto.description,
-        status: dto.status ?? 'pending',
-        due_date: dto.due_date ? new Date(dto.due_date) : undefined,
-        repo_id: dto.repo_id,
-        assignee_id: creator.id, //  el usuario autenticado
-      }};
-      // si creador es manager -> tarea ya validada
-      if (creator.role === 'manager') {
-        data.validated_by = creator.id;
-      }
-      return this.prisma.tasks.create({ data });
+      title: dto.title,
+      description: dto.description,
+      status: dto.status ?? 'pending',
+      due_date: dto.due_date ? new Date(dto.due_date) : undefined,
+      repo_id: dto.repo_id,
+      assignee_id: creator.id, // el usuario autenticado
+    };
+    // si creador es manager -> tarea ya validada
+    if (creator.role === 'manager') {
+      data.validated_by = creator.id;
+    }
+    return this.prisma.tasks.create({ data });
   }
 
 
@@ -61,10 +60,23 @@ export class TasksService {
     return { items, total, page, pageSize };
   }
 
-  async findOneOwned(id: string, userId: string) {
-    const task = await this.prisma.tasks.findUnique({ where: { id } });
+  async findOneOwned(id: string, userId: string, userRole?: string) {
+    const task = await this.prisma.tasks.findUnique({
+      where: { id },
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: { id: true, username: true, email: true },
+        },
+        repos: {
+          select: { id: true, name: true },
+        },
+      },
+    });
     if (!task) throw new NotFoundException('Task not found');
-    if (task.assignee_id !== userId) throw new ForbiddenException('Not your task');
+    // Managers can view any task, regular users can only view their own
+    if (userRole !== 'manager' && task.assignee_id !== userId) {
+      throw new ForbiddenException('Not your task');
+    }
     return task;
   }
 
@@ -118,6 +130,31 @@ export class TasksService {
 
     return this.prisma.tasks.findMany({
       where,
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+        repos: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+  }
+
+  // Returns only tasks assigned to the user (for sidebar) - regardless of role
+  async findMyTasks(userId: string) {
+    return this.prisma.tasks.findMany({
+      where: { assignee_id: userId },
       include: {
         users_tasks_assignee_idTousers: {
           select: {

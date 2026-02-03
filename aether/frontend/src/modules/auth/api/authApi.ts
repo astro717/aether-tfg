@@ -58,3 +58,18 @@ export async function loginUser(data: { email: string; password: string }) {
   return json.access_token;
 }
 
+export async function connectGithub(code: string) {
+  const res = await fetch(`${API_BASE_URL}/auth/github/connect`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ code }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`GitHub connection failed: ${errText}`);
+  }
+
+  return res.json();
+}
+

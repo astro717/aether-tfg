@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 
 @Injectable()
@@ -90,5 +90,54 @@ export class OrganizationsService {
         },
       },
     });
+  }
+
+  // Join an existing organization
+  async joinOrganization(userId: string, organizationId: string) {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(organizationId)) {
+      throw new BadRequestException('Invalid organization ID format');
+    }
+
+    // Check if organization exists
+    const organization = await this.prisma.organizations.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    // Check if user is already a member
+    const existingMembership = await this.prisma.user_organizations.findUnique({
+      where: {
+        user_id_organization_id: {
+          user_id: userId,
+          organization_id: organizationId,
+        },
+      },
+    });
+
+    if (existingMembership) {
+      throw new ConflictException('You are already a member of this organization');
+    }
+
+    // Add user to organization as member
+    await this.prisma.user_organizations.create({
+      data: {
+        user_id: userId,
+        organization_id: organizationId,
+        role_in_org: 'member',
+      },
+    });
+
+    return {
+      success: true,
+      organization: {
+        id: organization.id,
+        name: organization.name,
+      },
+    };
   }
 }

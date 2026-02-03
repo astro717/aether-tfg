@@ -2,8 +2,23 @@ import { useNavigate } from "react-router-dom";
 import { Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
+const REDIRECT_URI = `${window.location.origin}/connect/github/callback`;
+
 export const ConnectGithubPage = () => {
   const navigate = useNavigate();
+
+  const handleGithubConnect = () => {
+    if (!GITHUB_CLIENT_ID) {
+      console.error("GitHub Client ID is not configured");
+      return;
+    }
+
+    const scope = "read:user user:email repo read:org";
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
+
+    window.location.href = githubAuthUrl;
+  };
 
   return (
     <div
@@ -36,7 +51,7 @@ export const ConnectGithubPage = () => {
 
         {/* Connect Link */}
         <button
-          onClick={() => console.log("GitHub connect clicked")}
+          onClick={handleGithubConnect}
           className="text-[#3b82f6] hover:text-[#2563eb] text-[15px] underline underline-offset-4 decoration-1 font-medium mb-12 transition-colors"
         >
           Connect GitHub

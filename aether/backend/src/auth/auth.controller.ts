@@ -41,4 +41,16 @@ export class AuthController {
     });
     return dbUser;
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('github/connect')
+  async connectGithub(
+    @CurrentUser() user: any,
+    @Body() body: { code: string },
+  ) {
+    if (!body.code) {
+      throw new BadRequestException('Authorization code is required');
+    }
+    return this.authService.connectGithub(user.id, body.code);
+  }
 }
