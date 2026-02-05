@@ -1,30 +1,32 @@
 import { useState } from "react";
-import { Search, PenSquare } from "lucide-react";
-import {
-  mockThreads,
-  getOtherParticipant,
-  formatTimestamp,
-  type Thread,
-  type User
-} from "../data/mockData";
+import { Search, PenSquare, Loader2 } from "lucide-react";
+import { type Conversation, type MessageUser } from "../api/messagingApi";
+import { formatTimestamp } from "../data/mockData";
 
 interface ThreadsListProps {
-  selectedThreadId: string | null;
-  onSelectThread: (threadId: string) => void;
+  conversations: Conversation[];
+  loading: boolean;
+  error: Error | null;
+  selectedUserId: string | null;
+  onSelectUser: (userId: string) => void;
+  onNewMessage: () => void;
 }
 
 export function ThreadsList({
-  selectedThreadId,
-  onSelectThread
+  conversations,
+  loading,
+  error,
+  selectedUserId,
+  onSelectUser,
+  onNewMessage,
 }: ThreadsListProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredThreads = mockThreads.filter(thread => {
+  const filteredConversations = conversations.filter(conv => {
     if (!searchQuery.trim()) return true;
 
-    const participant = getOtherParticipant(thread);
-    const nameMatch = participant?.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const messageMatch = thread.lastMessage.toLowerCase().includes(searchQuery.toLowerCase());
+    const nameMatch = conv.user.username.toLowerCase().includes(searchQuery.toLowerCase());
+    const messageMatch = conv.lastMessage.content.toLowerCase().includes(searchQuery.toLowerCase());
 
     return nameMatch || messageMatch;
   });
@@ -38,6 +40,7 @@ export function ThreadsList({
             Messages
           </h2>
           <button
+            onClick={onNewMessage}
             className="
               w-8 h-8 rounded-full
               flex items-center justify-center
@@ -79,37 +82,53 @@ export function ThreadsList({
 
       {/* Thread List */}
       <div className="flex-1 overflow-y-auto px-3 pb-4">
-        <div className="space-y-1">
-          {filteredThreads.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-gray-400 text-sm">No conversations found</p>
-            </div>
-          ) : (
-            filteredThreads.map((thread) => (
-              <ThreadItem
-                key={thread.id}
-                thread={thread}
-                isSelected={selectedThreadId === thread.id}
-                onClick={() => onSelectThread(thread.id)}
-              />
-            ))
-          )}
-        </div>
+        {loading ? (
+          <div className="py-8 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          </div>
+        ) : error ? (
+          <div className="py-8 text-center">
+            <p className="text-red-500 text-sm">Failed to load conversations</p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {filteredConversations.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-gray-400 text-sm">
+                  {searchQuery ? "No conversations found" : "No conversations yet"}
+                </p>
+              </div>
+            ) : (
+              filteredConversations.map((conv) => (
+                <ConversationItem
+                  key={conv.user.id}
+                  conversation={conv}
+                  isSelected={selectedUserId === conv.user.id}
+                  onClick={() => onSelectUser(conv.user.id)}
+                />
+              ))
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-interface ThreadItemProps {
-  thread: Thread;
+interface ConversationItemProps {
+  conversation: Conversation;
   isSelected: boolean;
   onClick: () => void;
 }
 
-function ThreadItem({ thread, isSelected, onClick }: ThreadItemProps) {
-  const participant = getOtherParticipant(thread);
+function ConversationItem({ conversation, isSelected, onClick }: ConversationItemProps) {
+  const { user, lastMessage, unreadCount } = conversation;
 
-  if (!participant) return null;
+  // Format preview text - show comment prefix for comment notifications
+  const isCommentNotification = lastMessage.type === 'comment_notification';
+  const previewText = isCommentNotification
+    ? `Commented on your task: ${lastMessage.content}`
+    : lastMessage.content;
 
   return (
     <button
@@ -125,7 +144,7 @@ function ThreadItem({ thread, isSelected, onClick }: ThreadItemProps) {
       `}
     >
       {/* Avatar */}
-      <ThreadAvatar user={participant} />
+      <UserAvatar user={user} />
 
       {/* Content */}
       <div className="flex-1 min-w-0">
@@ -136,10 +155,10 @@ function ThreadItem({ thread, isSelected, onClick }: ThreadItemProps) {
               ${isSelected ? "text-gray-900" : "text-gray-800"}
             `}
           >
-            {participant.name}
+            {user.username}
           </span>
           <span className="text-[11px] text-gray-400 flex-shrink-0 ml-2">
-            {formatTimestamp(thread.lastMessageTime)}
+            {formatTimestamp(new Date(lastMessage.created_at))}
           </span>
         </div>
 
@@ -147,14 +166,14 @@ function ThreadItem({ thread, isSelected, onClick }: ThreadItemProps) {
           <p
             className={`
               text-[13px] truncate pr-2
-              ${thread.unreadCount > 0 ? "text-gray-700 font-medium" : "text-gray-500"}
+              ${unreadCount > 0 ? "text-gray-700 font-medium" : "text-gray-500"}
             `}
           >
-            {thread.lastMessage}
+            {previewText}
           </p>
 
           {/* Unread badge - Dark Gray per design spec */}
-          {thread.unreadCount > 0 && (
+          {unreadCount > 0 && (
             <span
               className="
                 flex-shrink-0
@@ -165,7 +184,7 @@ function ThreadItem({ thread, isSelected, onClick }: ThreadItemProps) {
                 flex items-center justify-center
               "
             >
-              {thread.unreadCount}
+              {unreadCount}
             </span>
           )}
         </div>
@@ -174,58 +193,31 @@ function ThreadItem({ thread, isSelected, onClick }: ThreadItemProps) {
   );
 }
 
-interface ThreadAvatarProps {
-  user: User;
+interface UserAvatarProps {
+  user: MessageUser;
 }
 
-function ThreadAvatar({ user }: ThreadAvatarProps) {
-  const initials = user.name
+function UserAvatar({ user }: UserAvatarProps) {
+  const initials = user.username
     .split(' ')
     .map(n => n[0])
     .join('')
     .toUpperCase()
-    .slice(0, 2);
-
-  const statusColors = {
-    online: "bg-green-500",
-    away: "bg-yellow-500",
-    offline: "bg-gray-400"
-  };
+    .slice(0, 2) || user.username.slice(0, 2).toUpperCase();
 
   return (
     <div className="relative flex-shrink-0">
-      {user.avatar ? (
-        <img
-          src={user.avatar}
-          alt={user.name}
-          className="w-12 h-12 rounded-full object-cover"
-        />
-      ) : (
-        <div
-          className="
-            w-12 h-12
-            rounded-full
-            bg-gradient-to-br from-gray-200 to-gray-300
-            flex items-center justify-center
-            font-semibold text-gray-600 text-sm
-          "
-        >
-          {initials}
-        </div>
-      )}
-
-      {/* Online status indicator */}
-      {user.status && user.status !== 'offline' && (
-        <div
-          className={`
-            absolute bottom-0 right-0
-            w-3 h-3
-            ${statusColors[user.status]}
-            rounded-full
-            border-2 border-white
-          `}
-        />
-      )}
+      <div
+        className="
+          w-12 h-12
+          rounded-full
+          bg-gradient-to-br from-gray-200 to-gray-300
+          flex items-center justify-center
+          font-semibold text-gray-600 text-sm
+        "
+      >
+        {initials}
+      </div>
     </div>
   );
 }

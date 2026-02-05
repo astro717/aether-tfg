@@ -26,7 +26,6 @@ function getCurrentWeekDays() {
 function isDateInCurrentWeek(dateStr: string | null): boolean {
     if (!dateStr) return false;
     const date = new Date(dateStr);
-    const now = new Date();
     const weekDays = getCurrentWeekDays();
     const start = weekDays[0];
     const end = weekDays[4];

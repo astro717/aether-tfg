@@ -4,11 +4,15 @@ import { PrismaService } from '../prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { Prisma } from '@prisma/client';
+import { MessagesService } from '../messages/messages.service';
 
 
 @Injectable()
 export class TasksService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private messagesService: MessagesService,
+  ) {}
 
   async create(dto: CreateTaskDto, creator: any) {
     if (!dto.title || !dto.repo_id) {
@@ -273,11 +277,12 @@ export class TasksService {
 
   // Comment methods
   async addComment(taskId: string, userId: string, content: string) {
-    // Verify task exists
+    // Verify task exists and get assignee info
     const task = await this.prisma.tasks.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundException('Task not found');
 
-    return this.prisma.task_comments.create({
+    // Create the comment
+    const comment = await this.prisma.task_comments.create({
       data: {
         task_id: taskId,
         user_id: userId,
@@ -293,6 +298,19 @@ export class TasksService {
         },
       },
     });
+
+    // If task has an assignee and commenter is NOT the assignee, send notification
+    if (task.assignee_id && task.assignee_id !== userId) {
+      await this.messagesService.createCommentNotification(
+        userId,
+        task.assignee_id,
+        content,
+        taskId,
+        task.title,
+      );
+    }
+
+    return comment;
   }
 
   async getComments(taskId: string) {

@@ -6,6 +6,18 @@ export interface Organization {
   created_at: string;
 }
 
+export interface OrganizationMember {
+  id: string;
+  username: string;
+  email: string;
+}
+
+export interface OrganizationWithMembers extends Organization {
+  user_organizations: Array<{
+    users: OrganizationMember;
+  }>;
+}
+
 class OrganizationApi {
   private getAuthHeaders() {
     const token = localStorage.getItem('token'); // Note: 'token' not 'authToken'
@@ -24,13 +36,18 @@ class OrganizationApi {
     return response.json();
   }
 
-  async getOrganizationById(id: string): Promise<Organization> {
+  async getOrganizationById(id: string): Promise<OrganizationWithMembers> {
     const response = await fetch(
       `${API_BASE_URL}/organizations/${id}`,
       { headers: this.getAuthHeaders() }
     );
     if (!response.ok) throw new Error('Failed to fetch organization');
     return response.json();
+  }
+
+  async getOrganizationMembers(organizationId: string): Promise<OrganizationMember[]> {
+    const org = await this.getOrganizationById(organizationId);
+    return org.user_organizations.map(uo => uo.users);
   }
 
   async createOrganization(name: string): Promise<Organization> {
