@@ -8,8 +8,15 @@ export class CreateTaskDto {
   @IsString()
   description?: string;
 
+  @IsOptional()
   @IsUUID()
-  repo_id!: string;
+  repo_id?: string;
+
+  @IsUUID()
+  organization_id!: string;
+
+  @IsUUID()
+  assignee_id!: string;
 
   @IsOptional()
   @IsIn(['pending', 'in_progress', 'done'])

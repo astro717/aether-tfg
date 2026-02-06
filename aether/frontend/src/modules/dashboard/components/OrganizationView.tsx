@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, Flame, AlertTriangle, MessageCircle, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -23,6 +23,7 @@ import { useKanbanData } from "../hooks/useKanbanData";
 import { useOrganization } from "../../organization/context/OrganizationContext";
 import { useAuth } from "../../auth/context/AuthContext";
 import { tasksApi, type Task } from "../api/tasksApi";
+import { taskEvents } from "../../../lib/taskEvents";
 
 type ColumnId = 'pending' | 'in_progress' | 'done';
 
@@ -43,6 +44,14 @@ export function OrganizationView() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Listen for task creation events to refresh Kanban
+  useEffect(() => {
+    const unsubscribe = taskEvents.onTaskCreated(() => {
+      refetch(true); // Silent refetch
+    });
+    return unsubscribe;
+  }, [refetch]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -355,7 +364,7 @@ function SortableTaskCard({ task }: { task: Task }) {
   );
 }
 
-// Task Card component
+// Task Card component - Clean design: Title, Avatar, Date, Priority only
 function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boolean }) {
   const { user } = useAuth();
   const priority = calculatePriority(task.due_date);
@@ -386,11 +395,14 @@ function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boole
           </span>
         </div>
 
-        <div className="text-gray-400">
-          {task.status === 'done' && <Check size={14} className="text-gray-400" />}
-          {task.status !== 'done' && priority === 'high' && <AlertTriangle size={14} className="text-red-400 fill-red-400/10" />}
-          {task.status !== 'done' && priority === 'medium' && <Flame size={14} className="text-yellow-400 fill-yellow-400" />}
-          {task.status !== 'done' && priority === 'low' && <MessageCircle size={14} className="text-green-500 fill-green-500" />}
+        <div className="flex items-center gap-2">
+          {/* Priority/Status indicator only - Task ID removed for cleaner Kanban view */}
+          <div className="text-gray-400">
+            {task.status === 'done' && <Check size={14} className="text-gray-400" />}
+            {task.status !== 'done' && priority === 'high' && <AlertTriangle size={14} className="text-red-400 fill-red-400/10" />}
+            {task.status !== 'done' && priority === 'medium' && <Flame size={14} className="text-yellow-400 fill-yellow-400" />}
+            {task.status !== 'done' && priority === 'low' && <MessageCircle size={14} className="text-green-500 fill-green-500" />}
+          </div>
         </div>
       </div>
 

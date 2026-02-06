@@ -63,6 +63,7 @@ model commits {
   commit_files  commit_files[]
   repos         repos?         @relation(fields: [repo_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   pr_commits    pr_commits[]
+  task_commits  task_commits[]
 }
 
 model organizations {
@@ -70,6 +71,7 @@ model organizations {
   name               String
   created_at         DateTime?            @default(now()) @db.Timestamp(6)
   repos              repos[]
+  tasks              tasks[]
   user_organizations user_organizations[]
 }
 
@@ -109,7 +111,9 @@ model repos {
 
 model tasks {
   id                              String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  readable_id                     Int             @unique @default(autoincrement())
   repo_id                         String?         @db.Uuid
+  organization_id                 String?         @db.Uuid
   title                           String
   description                     String?
   status                          String?         @default("pending")
@@ -121,9 +125,11 @@ model tasks {
   comments                        String?
   ai_reports                      ai_reports[]
   task_comments                   task_comments[]
+  task_commits                    task_commits[]
   users_tasks_assignee_idTousers  users?          @relation("tasks_assignee_idTousers", fields: [assignee_id], references: [id], onUpdate: NoAction)
   repos                           repos?          @relation(fields: [repo_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   users_tasks_validated_byTousers users?          @relation("tasks_validated_byTousers", fields: [validated_by], references: [id], onUpdate: NoAction)
+  organizations                   organizations?  @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model task_comments {
@@ -135,6 +141,17 @@ model task_comments {
 
   tasks tasks @relation(fields: [task_id], references: [id], onDelete: Cascade)
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model task_commits {
+  task_id    String   @db.Uuid
+  commit_sha String
+  linked_at  DateTime @default(now()) @db.Timestamp(6)
+
+  tasks   tasks   @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  commits commits @relation(fields: [commit_sha], references: [sha], onDelete: Cascade)
+
+  @@id([task_id, commit_sha])
 }
 
 model user_organizations {

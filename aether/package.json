@@ -4,15 +4,17 @@
     "private": true,
     "description": "Monorepo for Aether app (frontend, backend, AI)",
     "scripts": {
-      "dev:front": "npm --prefix frontend run dev",
-      "dev:back": "npm --prefix backend run start:dev",
-      "dev:ai": "python ai/app/main.py",
-      "dev:all": "concurrently \"npm run dev:back\" \"npm run dev:front\"",
-      "lint": "npm --prefix frontend run lint && npm --prefix backend run lint",
-      "setup": "npm install --prefix frontend && npm install --prefix backend"
+        "dev:front": "npm --prefix frontend run dev",
+        "dev:back": "npm --prefix backend run start:dev",
+        "dev:ai": "python ai/app/main.py",
+        "dev:all": "concurrently \"npm run dev:back\" \"npm run dev:front\"",
+        "lint": "npm --prefix frontend run lint && npm --prefix backend run lint",
+        "setup": "npm install --prefix frontend && npm install --prefix backend"
     },
     "devDependencies": {
-      "concurrently": "^8.0.1"
+        "concurrently": "^8.0.1"
+    },
+    "dependencies": {
+        "@octokit/rest": "^22.0.1"
     }
-  }
-  
+}

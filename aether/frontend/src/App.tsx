@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { HomePage } from "./modules/auth/pages/HomePage";
@@ -14,11 +13,13 @@ import { MainDashboardPage } from "./modules/dashboard/pages/MainDashboardPage";
 import { MessagingPage } from "./modules/messaging/pages/MessagingPage";
 import { OrganizationProvider } from "./modules/organization/context/OrganizationContext";
 import { AuthProvider } from "./modules/auth/context/AuthContext";
+import { ToastProvider } from "./components/ui/Toast";
 
 function App() {
   return (
     <AuthProvider>
     <OrganizationProvider>
+    <ToastProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -58,6 +59,7 @@ function App() {
           />
         </Routes>
       </BrowserRouter>
+    </ToastProvider>
     </OrganizationProvider>
     </AuthProvider>
   );

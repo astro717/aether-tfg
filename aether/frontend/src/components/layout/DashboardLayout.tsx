@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../modules/auth/context/AuthContext";
 import { tasksApi, type Task } from "../../modules/dashboard/api/tasksApi";
 import { messagingApi, type Conversation } from "../../modules/messaging/api/messagingApi";
+import { CreateTaskModal } from "../../modules/tasks/components/CreateTaskModal";
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -26,28 +27,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const [messagesLoading, setMessagesLoading] = useState(true);
     const hasLoadedMessagesRef = useRef(false);
 
-    useEffect(() => {
-        const fetchMyTasks = async () => {
-            if (!user) {
-                setTasksLoading(false);
-                return;
-            }
+    // Create task modal state
+    const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
 
-            try {
-                setTasksLoading(true);
-                const tasks = await tasksApi.getMyTasks();
-                // Filter to show only pending and in_progress tasks (not done)
-                const activeTasks = tasks.filter(t => t.status !== 'done');
-                setMyTasks(activeTasks);
-            } catch (err) {
-                console.error('Error fetching my tasks:', err);
-            } finally {
-                setTasksLoading(false);
-            }
-        };
+    const fetchMyTasks = useCallback(async (silent = false) => {
+        if (!user) {
+            setTasksLoading(false);
+            return;
+        }
 
-        fetchMyTasks();
+        try {
+            if (!silent) setTasksLoading(true);
+            const tasks = await tasksApi.getMyTasks();
+            // Filter to show only pending and in_progress tasks (not done)
+            const activeTasks = tasks.filter(t => t.status !== 'done');
+            setMyTasks(activeTasks);
+        } catch (err) {
+            console.error('Error fetching my tasks:', err);
+        } finally {
+            if (!silent) setTasksLoading(false);
+        }
     }, [user]);
+
+    useEffect(() => {
+        fetchMyTasks();
+    }, [fetchMyTasks]);
 
     // Fetch conversations (initial + polling)
     const fetchConversations = useCallback(async (silent = false) => {
@@ -163,7 +167,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                             {!isCollapsed && (
                                 <h3 className="text-gray-500 font-medium text-xs uppercase tracking-wide">Tasks</h3>
                             )}
-                            <button className="text-gray-400 hover:text-gray-600">
+                            <button
+                                onClick={() => setIsCreateTaskModalOpen(true)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                                title="Create new task"
+                            >
                                 <Plus size={16} />
                             </button>
                         </div>
@@ -238,6 +246,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <main className="flex-1 overflow-hidden flex flex-col relative h-full">
                 {children}
             </main>
+
+            {/* Create Task Modal */}
+            <CreateTaskModal
+                isOpen={isCreateTaskModalOpen}
+                onClose={() => setIsCreateTaskModalOpen(false)}
+                onSuccess={() => fetchMyTasks(true)}
+            />
         </div>
     );
 }

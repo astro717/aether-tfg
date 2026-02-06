@@ -11,8 +11,22 @@ export interface Repo {
   name: string;
 }
 
+export interface LinkedCommit {
+  sha: string;
+  message: string;
+  author_login: string | null;
+  committed_at: string;
+}
+
+export interface TaskCommit {
+  commit_sha: string;
+  linked_at: string;
+  commits: LinkedCommit;
+}
+
 export interface Task {
   id: string;
+  readable_id: number;
   repo_id: string | null;
   title: string;
   description: string | null;
@@ -25,6 +39,7 @@ export interface Task {
   comments: string | null;
   users_tasks_assignee_idTousers?: User;
   repos?: Repo;
+  task_commits?: TaskCommit[];
 }
 
 export interface KanbanData {
@@ -50,6 +65,34 @@ export interface TaskComment {
     username: string;
     email: string;
   };
+}
+
+export interface CommitFile {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch?: string;
+}
+
+export interface CommitDiff {
+  sha: string;
+  message: string;
+  files: CommitFile[];
+  stats: {
+    additions: number;
+    deletions: number;
+    total: number;
+  };
+}
+
+export interface CommitExplanation {
+  sha: string;
+  summary: string;
+  filesChanged: string[];
+  impact: string;
+  codeQuality: string;
+  cached: boolean;
 }
 
 class TasksApi {
@@ -132,6 +175,48 @@ class TasksApi {
       }
     );
     if (!response.ok) throw new Error('Failed to delete comment');
+  }
+
+  async createTask(data: {
+    title: string;
+    description?: string;
+    due_date?: string;
+    assignee_id: string;
+    organization_id: string;
+    repo_id?: string;
+  }): Promise<Task> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks`,
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(data),
+      }
+    );
+    if (!response.ok) throw new Error('Failed to create task');
+    return response.json();
+  }
+
+  async getCommitDiff(sha: string): Promise<CommitDiff> {
+    const response = await fetch(
+      `${API_BASE_URL}/commits/${sha}/diff`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) throw new Error('Failed to fetch commit diff');
+    return response.json();
+  }
+
+  async getCommitExplanation(sha: string): Promise<CommitExplanation> {
+    const response = await fetch(
+      `${API_BASE_URL}/ai/commits/${sha}/explain`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || `HTTP ${response.status}`;
+      throw new Error(`Failed to fetch commit explanation: ${message}`);
+    }
+    return response.json();
   }
 }
 

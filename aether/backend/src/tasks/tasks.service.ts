@@ -15,8 +15,35 @@ export class TasksService {
   ) {}
 
   async create(dto: CreateTaskDto, creator: any) {
-    if (!dto.title || !dto.repo_id) {
-      throw new BadRequestException('title and repo_id are required');
+    if (!dto.title) {
+      throw new BadRequestException('title is required');
+    }
+
+    if (!dto.organization_id) {
+      throw new BadRequestException('organization_id is required');
+    }
+
+    if (!dto.assignee_id) {
+      throw new BadRequestException('assignee_id is required');
+    }
+
+    // Verify creator belongs to the organization
+    const userOrg = await this.prisma.user_organizations.findUnique({
+      where: {
+        user_id_organization_id: {
+          user_id: creator.id,
+          organization_id: dto.organization_id,
+        },
+      },
+    });
+
+    if (!userOrg) {
+      throw new ForbiddenException('You do not belong to this organization');
+    }
+
+    // Non-managers can only assign tasks to themselves
+    if (creator.role !== 'manager' && dto.assignee_id !== creator.id) {
+      throw new ForbiddenException('You can only assign tasks to yourself');
     }
 
     const data: any = {
@@ -24,13 +51,16 @@ export class TasksService {
       description: dto.description,
       status: dto.status ?? 'pending',
       due_date: dto.due_date ? new Date(dto.due_date) : undefined,
-      repo_id: dto.repo_id,
-      assignee_id: creator.id, // el usuario autenticado
+      repo_id: dto.repo_id || null,
+      organization_id: dto.organization_id,
+      assignee_id: dto.assignee_id,
     };
-    // si creador es manager -> tarea ya validada
+
+    // If creator is manager -> task is already validated
     if (creator.role === 'manager') {
       data.validated_by = creator.id;
     }
+
     return this.prisma.tasks.create({ data });
   }
 
@@ -74,6 +104,13 @@ export class TasksService {
         repos: {
           select: { id: true, name: true },
         },
+        task_commits: {
+          include: {
+            commits: {
+              select: { sha: true, message: true, author_login: true, committed_at: true },
+            },
+          },
+        },
       },
     });
     if (!task) throw new NotFoundException('Task not found');
@@ -82,6 +119,15 @@ export class TasksService {
       throw new ForbiddenException('Not your task');
     }
     return task;
+  }
+
+  /**
+   * Find task by readable_id (for commit linking)
+   */
+  async findByReadableId(readableId: number) {
+    return this.prisma.tasks.findUnique({
+      where: { readable_id: readableId },
+    });
   }
 
   async updateOwned(id: string, userId: string, dto: UpdateTaskDto) {
@@ -204,10 +250,15 @@ export class TasksService {
 
     const repoIds = orgRepos.map((r) => r.id);
 
-    // Get tasks from those repos
+    // Get tasks that either:
+    // 1. Have organization_id matching directly, OR
+    // 2. Have a repo that belongs to this organization
     return this.prisma.tasks.findMany({
       where: {
-        repo_id: { in: repoIds },
+        OR: [
+          { organization_id: organizationId },
+          { repo_id: { in: repoIds } },
+        ],
       },
       include: {
         users_tasks_assignee_idTousers: {
