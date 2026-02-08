@@ -1,10 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { SendMessageDto } from './dto/send-message.dto';
+import { SendMessageDto, AttachmentDto } from './dto/send-message.dto';
+import { SupabaseService } from '../supabase/supabase.service';
+import { UploadUrlDto, UploadUrlResponse } from './dto/upload-url.dto';
+
+const BUCKET_NAME = 'chat-uploads';
 
 @Injectable()
 export class MessagesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private supabase: SupabaseService,
+  ) {}
 
   /**
    * Get all conversations for a user, grouped by the other participant.
@@ -34,6 +41,7 @@ export class MessagesService {
             email: true,
           },
         },
+        attachments: true,
       },
       orderBy: {
         created_at: 'desc',
@@ -112,6 +120,7 @@ export class MessagesService {
             email: true,
           },
         },
+        attachments: true,
       },
       orderBy: {
         created_at: 'asc',
@@ -142,11 +151,27 @@ export class MessagesService {
       throw new BadRequestException('Cannot send messages to yourself');
     }
 
+    // Must have either content or attachments
+    if (!dto.content && (!dto.attachments || dto.attachments.length === 0)) {
+      throw new BadRequestException('Message must have content or attachments');
+    }
+
     const message = await this.prisma.messages.create({
       data: {
         sender_id: senderId,
         receiver_id: dto.receiverId,
-        content: dto.content,
+        content: dto.content || null,
+        attachments: dto.attachments && dto.attachments.length > 0
+          ? {
+              create: dto.attachments.map((att: AttachmentDto) => ({
+                file_path: att.filePath,
+                file_url: att.fileUrl,
+                file_name: att.fileName,
+                file_size: att.fileSize,
+                file_type: att.fileType,
+              })),
+            }
+          : undefined,
       },
       include: {
         sender: {
@@ -163,6 +188,7 @@ export class MessagesService {
             email: true,
           },
         },
+        attachments: true,
       },
     });
 
@@ -246,5 +272,36 @@ export class MessagesService {
     });
 
     return { unreadCount: count };
+  }
+
+  /**
+   * Generate a signed upload URL for file uploads.
+   * This allows authenticated app users to upload directly to Supabase Storage.
+   */
+  async createUploadUrl(dto: UploadUrlDto): Promise<UploadUrlResponse> {
+    // Sanitize filename
+    const sanitizedFilename = dto.filename
+      .replace(/[^a-zA-Z0-9.-]/g, '_')
+      .toLowerCase();
+
+    // Create unique path with timestamp
+    const timestamp = Date.now();
+    const filePath = `messages/${timestamp}_${sanitizedFilename}`;
+
+    // Generate signed upload URL
+    const { signedUrl, token, path } = await this.supabase.createSignedUploadUrl(
+      BUCKET_NAME,
+      filePath,
+    );
+
+    // Get the public URL for the file
+    const publicUrl = this.supabase.getPublicUrl(BUCKET_NAME, path);
+
+    return {
+      uploadUrl: signedUrl,
+      publicUrl,
+      filePath: path,
+      token,
+    };
   }
 }

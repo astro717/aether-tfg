@@ -3,6 +3,7 @@ import { Injectable, ForbiddenException, NotFoundException, BadRequestException 
 import { PrismaService } from '../prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { CreateCommentDto } from './dto/create-comment.dto';
 import { Prisma } from '@prisma/client';
 import { MessagesService } from '../messages/messages.service';
 

@@ -227,7 +227,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                     return (
                                         <Link key={conv.user.id} to={`/messages?user=${conv.user.id}`}>
                                             <MessageItem
-                                                name={conv.user.username}
+                                                name={conv.user.username || 'User'}
                                                 preview={preview}
                                                 unreadCount={conv.unreadCount}
                                                 active={false}
@@ -402,10 +402,8 @@ function MessageItem({
                 </span>
             </div>
             {/* Unread dot indicator - aligned */}
-            {unreadCount > 0 ? (
+            {unreadCount > 0 && (
                 <div className="w-2 h-2 rounded-full flex-shrink-0 mr-0.5" style={{ backgroundColor: '#B4B4B4' }} />
-            ) : (
-                <div className="w-2 h-2 rounded-full bg-gray-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mr-0.5" />
             )}
         </div>
     );

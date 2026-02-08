@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Maximize2, X, Sparkles, CheckCircle2 } from "lucide-react";
+import { Bot, Maximize2, X, Sparkles, CheckCircle2, Clock } from "lucide-react";
 import { tasksApi, type CommitExplanation } from "../../dashboard/api/tasksApi";
+import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
+import { formatTimeAgo } from "../../../lib/utils";
 
 interface AICommitExplanationCardProps {
   commitSha: string | null;
@@ -24,6 +26,7 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
   const [error, setError] = useState<string | null>(null);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
   // Cycle through loading messages
   useEffect(() => {
@@ -35,6 +38,27 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
 
     return () => clearInterval(interval);
   }, [state]);
+
+  // Check for cached explanation on mount or commit change
+  useEffect(() => {
+    async function checkCache() {
+      if (!commitSha) return;
+
+      try {
+        // Try to get cached explanation without generating new one
+        const result = await tasksApi.getCommitExplanation(commitSha, { onlyCached: true });
+        setExplanation(result);
+        setState("completed");
+      } catch (err) {
+        // Silence is golden: any error (404) means no cache, so we stay in idle state
+      }
+    }
+
+    // Only run this check if we are in the initial state
+    if (state === "idle") {
+      checkCache();
+    }
+  }, [commitSha]);
 
   const handleGenerate = useCallback(async () => {
     if (!commitSha) return;
@@ -55,10 +79,16 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
     }
   }, [commitSha]);
 
-  const handleReset = () => {
+  const handleRegenerateClick = () => {
+    setIsConfirmDialogOpen(true);
+  };
+
+  const handleConfirmRegenerate = () => {
     setState("idle");
     setExplanation(null);
     setError(null);
+    // Immediately trigger regeneration
+    handleGenerate();
   };
 
   // No commit available
@@ -234,13 +264,19 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
               {explanation.summary}
             </p>
 
-            {/* Regenerate hint */}
-            <button
-              onClick={handleReset}
-              className="mt-2 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              Click to regenerate
-            </button>
+            {/* Footer with timestamp and regenerate */}
+            <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
+              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                <Clock size={10} className="text-gray-400" />
+                Generated {formatTimeAgo(explanation.timestamp)}
+              </span>
+              <button
+                onClick={handleRegenerateClick}
+                className="text-[10px] text-gray-400 hover:text-purple-600 transition-colors"
+              >
+                Regenerate
+              </button>
+            </div>
           </motion.div>
         )}
 
@@ -273,6 +309,18 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
         onClose={() => setIsModalOpen(false)}
         explanation={explanation}
         commitSha={commitSha}
+      />
+
+      {/* REGENERATE CONFIRMATION DIALOG */}
+      <ConfirmationDialog
+        isOpen={isConfirmDialogOpen}
+        onClose={() => setIsConfirmDialogOpen(false)}
+        onConfirm={handleConfirmRegenerate}
+        title="Regenerate AI Response?"
+        message="Are you sure you want to regenerate this explanation? The current analysis will be permanently overwritten. This action consumes AI credits and cannot be undone."
+        confirmLabel="Regenerate"
+        cancelLabel="Cancel"
+        variant="warning"
       />
     </>
   );
@@ -370,17 +418,11 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
 
             {/* Footer */}
             <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between flex-shrink-0">
-              <span className="text-xs text-gray-400 flex items-center gap-1">
-                {explanation.cached ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                    Retrieved from cache
-                  </>
-                ) : (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-                    Generated just now
-                  </>
+              <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                <Clock size={12} className="text-gray-400" />
+                Generated {formatTimeAgo(explanation.timestamp)}
+                {explanation.cached && (
+                  <span className="ml-1 text-[10px] text-blue-500">(cached)</span>
                 )}
               </span>
               <button

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Query } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -7,7 +7,7 @@ import { users } from '@prisma/client';
 @Controller('ai')
 @UseGuards(JwtAuthGuard)
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(private readonly aiService: AiService) { }
 
   /**
    * Validate if a task's linked commits fulfill the task requirements
@@ -28,9 +28,10 @@ export class AiController {
   @Get('commits/:sha/explain')
   async explainCommit(
     @Param('sha') sha: string,
+    @Query('onlyCached') onlyCached: string,
     @CurrentUser() user: users,
   ) {
-    return this.aiService.explainCommit(sha, user);
+    return this.aiService.explainCommit(sha, user, onlyCached === 'true');
   }
 
   /**

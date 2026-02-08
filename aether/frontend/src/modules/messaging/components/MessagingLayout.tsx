@@ -7,6 +7,7 @@ import { useMessages } from "../hooks/useMessages";
 import { useAuth } from "@/modules/auth/context/AuthContext";
 import { messagingApi, type MessageUser } from "../api/messagingApi";
 import type { OrganizationMember } from "@/modules/organization/api/organizationApi";
+import { type UploadedFile } from "../../../hooks/useFileUpload";
 
 // Draft recipient state for new conversations
 interface DraftRecipient {
@@ -77,14 +78,21 @@ export function MessagingLayout() {
   }, [conversations]);
 
   // Handle sending a message (both for existing and draft conversations)
-  const handleSendMessage = useCallback(async (content: string) => {
+  const handleSendMessage = useCallback(async (content: string, attachments?: UploadedFile[]) => {
     if (!user?.id) return;
 
     if (draftRecipient) {
       // Sending first message to a new recipient
       await messagingApi.sendMessage({
         receiverId: draftRecipient.id,
-        content: content.trim(),
+        content: content.trim() || undefined,
+        attachments: attachments?.map(att => ({
+          filePath: att.filePath,
+          fileName: att.fileName,
+          fileSize: att.fileSize,
+          fileType: att.fileType,
+          fileUrl: att.fileUrl,
+        })),
       });
 
       // Clear draft and select the new conversation
@@ -96,7 +104,7 @@ export function MessagingLayout() {
       refetchConversations();
     } else {
       // Sending to existing conversation
-      await sendMessage(content, user.id);
+      await sendMessage(content, user.id, attachments);
       refetchConversations();
     }
   }, [user?.id, draftRecipient, sendMessage, refetchConversations]);

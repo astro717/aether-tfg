@@ -10,6 +10,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { MessagesModule } from './messages/messages.module';
 import { GithubModule } from './github/github.module';
 import { AiModule } from './ai/ai.module';
+import { SupabaseModule } from './supabase/supabase.module';
 import { HealthController } from './health.controller';
 import configuration, { configurationSchema } from './config/configuration';
 
@@ -24,6 +25,7 @@ import configuration, { configurationSchema } from './config/configuration';
       },
     }),
     PrismaModule,
+    SupabaseModule,
     UsersModule,
     AuthModule,
     TasksModule,

@@ -17,6 +17,10 @@ export const configurationSchema = Joi.object({
 
   // AI Integration
   GEMINI_API_KEY: Joi.string().required().description('Google Gemini API Key'),
+
+  // Supabase Storage
+  SUPABASE_URL: Joi.string().required().description('Supabase Project URL'),
+  SUPABASE_SERVICE_ROLE_KEY: Joi.string().required().description('Supabase Service Role Key (admin)'),
 });
 
 export default () => ({
@@ -34,5 +38,9 @@ export default () => ({
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
+  },
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   },
 });

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { messagingApi, type Message, type MessageUser } from '../api/messagingApi';
 import { useInterval } from './useInterval';
+import { type UploadedFile } from '../../../hooks/useFileUpload';
 
 const POLLING_INTERVAL = 3000; // 3 seconds
 
@@ -9,7 +10,7 @@ export interface UseMessagesResult {
   otherUser: MessageUser | null;
   loading: boolean;
   error: Error | null;
-  sendMessage: (content: string, currentUserId: string) => Promise<void>;
+  sendMessage: (content: string, currentUserId: string, attachments?: UploadedFile[]) => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -80,8 +81,13 @@ export function useMessages(userId: string | null): UseMessagesResult {
     userId && hasLoadedRef.current ? POLLING_INTERVAL : null
   );
 
-  const sendMessage = useCallback(async (content: string, currentUserId: string) => {
-    if (!userId || !content.trim()) return;
+  const sendMessage = useCallback(async (content: string, currentUserId: string, attachments?: UploadedFile[]) => {
+    if (!userId) return;
+
+    // Must have either content or attachments
+    const hasContent = content.trim().length > 0;
+    const hasAttachments = attachments && attachments.length > 0;
+    if (!hasContent && !hasAttachments) return;
 
     // Create optimistic message
     const optimisticId = `optimistic-${Date.now()}`;
@@ -89,7 +95,7 @@ export function useMessages(userId: string | null): UseMessagesResult {
       id: optimisticId,
       sender_id: currentUserId,
       receiver_id: userId,
-      content: content.trim(),
+      content: hasContent ? content.trim() : null,
       created_at: new Date().toISOString(),
       read_at: null,
       sender: {
@@ -97,6 +103,16 @@ export function useMessages(userId: string | null): UseMessagesResult {
         username: '',
         email: '',
       },
+      attachments: attachments?.map((att, index) => ({
+        id: `optimistic-att-${index}`,
+        message_id: optimisticId,
+        file_path: att.filePath,
+        file_url: att.fileUrl,
+        file_name: att.fileName,
+        file_size: att.fileSize,
+        file_type: att.fileType,
+        created_at: new Date().toISOString(),
+      })),
     };
 
     // Optimistically add message to the list
@@ -106,7 +122,14 @@ export function useMessages(userId: string | null): UseMessagesResult {
       // Send to server
       const serverMessage = await messagingApi.sendMessage({
         receiverId: userId,
-        content: content.trim(),
+        content: hasContent ? content.trim() : undefined,
+        attachments: attachments?.map(att => ({
+          filePath: att.filePath,
+          fileName: att.fileName,
+          fileSize: att.fileSize,
+          fileType: att.fileType,
+          fileUrl: att.fileUrl,
+        })),
       });
 
       // Replace optimistic message with server response

@@ -240,16 +240,17 @@ Respond in this exact JSON format (no markdown, just raw JSON):
    * Generate an explanation for a specific commit
    * Implements caching strategy: Check DB first, generate if cache miss
    */
-  async explainCommit(sha: string, user: any): Promise<CommitExplanation & { cached: boolean }> {
-    // Step 1: Check cache in ai_reports table
+  async explainCommit(sha: string, user: any, onlyCached: boolean = false): Promise<CommitExplanation & { cached: boolean; timestamp: Date }> {
+    // Step 1: Check cache in ai_reports table (get the latest one)
     const cachedReport = await this.prisma.ai_reports.findFirst({
       where: {
         commit_sha: sha,
         type: 'commit_explanation',
       },
+      orderBy: { created_at: 'desc' }, // Get the most recent cache entry
     });
 
-    // Cache Hit - Return cached result
+    // Cache Hit - Return cached result with timestamp
     if (cachedReport && cachedReport.content) {
       this.logger.log(`Cache HIT for commit ${sha.substring(0, 7)}`);
       try {
@@ -261,11 +262,17 @@ Respond in this exact JSON format (no markdown, just raw JSON):
           impact: parsed.impact || 'Unknown',
           codeQuality: parsed.codeQuality || 'Not assessed',
           cached: true,
+          timestamp: cachedReport.created_at || new Date(),
         };
       } catch {
         // If cached content is not valid JSON, regenerate
         this.logger.warn(`Cached content for ${sha} is not valid JSON, regenerating...`);
       }
+    }
+
+    // If we only want cached results and it's a miss, return null or throw
+    if (onlyCached) {
+      throw new NotFoundException('No cached explanation found for this commit');
     }
 
     // Cache Miss - Generate new explanation
@@ -373,7 +380,7 @@ Respond in this exact JSON format (no markdown, just raw JSON):
       this.logger.warn(`Failed to cache explanation for ${sha}:`, cacheError);
     }
 
-    return { ...result, cached: false };
+    return { ...result, cached: false, timestamp: new Date() };
   }
 
   /**

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { SendMessageDto } from './dto/send-message.dto';
+import { UploadUrlDto } from './dto/upload-url.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { users as User } from '@prisma/client';
@@ -47,6 +48,15 @@ export class MessagesController {
     @CurrentUser() user: User,
   ) {
     return this.messagesService.getMessages(user.id, userId);
+  }
+
+  /**
+   * POST /messages/upload-url
+   * Generate a signed upload URL for file uploads.
+   */
+  @Post('upload-url')
+  async getUploadUrl(@Body() dto: UploadUrlDto) {
+    return this.messagesService.createUploadUrl(dto);
   }
 
   /**

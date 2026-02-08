@@ -93,6 +93,7 @@ export interface CommitExplanation {
   impact: string;
   codeQuality: string;
   cached: boolean;
+  timestamp?: string; // ISO date string of when the explanation was generated
 }
 
 class TasksApi {
@@ -206,9 +207,14 @@ class TasksApi {
     return response.json();
   }
 
-  async getCommitExplanation(sha: string): Promise<CommitExplanation> {
+  async getCommitExplanation(sha: string, options?: { onlyCached?: boolean }): Promise<CommitExplanation> {
+    const url = new URL(`${API_BASE_URL}/ai/commits/${sha}/explain`);
+    if (options?.onlyCached) {
+      url.searchParams.append('onlyCached', 'true');
+    }
+
     const response = await fetch(
-      `${API_BASE_URL}/ai/commits/${sha}/explain`,
+      url.toString(),
       { headers: this.getAuthHeaders() }
     );
     if (!response.ok) {

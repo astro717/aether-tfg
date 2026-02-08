@@ -250,23 +250,6 @@ export function TaskDetailsPage() {
                                         No commits linked yet. Use <code className="bg-gray-200 px-1 rounded">#{task.readable_id}</code> in your commit messages to link them.
                                     </div>
                                 )}
-                                {/* Mock data - kept for reference
-                                <CommitItem
-                                    hash="a1b2c3d"
-                                    date="Jan 15"
-                                    message="Fix authentication bug in login flow"
-                                />
-                                <CommitItem
-                                    hash="e4f5g6h"
-                                    date="Jan 14"
-                                    message="Add validation for user input fields"
-                                />
-                                <CommitItem
-                                    hash="i7j8k9l"
-                                    date="Jan 13"
-                                    message="Initial task implementation"
-                                />
-                                */}
                             </div>
                         </div>
                     </div>
@@ -398,7 +381,7 @@ function CommentCard({
 }: {
     author: string;
     role: string;
-    content: string;
+    content: string | null;
     createdAt?: string;
     isMe?: boolean;
 }) {

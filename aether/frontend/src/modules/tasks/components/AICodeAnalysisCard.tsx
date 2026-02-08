@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock } from "lucide-react";
+import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
+import { formatTimeAgo } from "../../../lib/utils";
 
 interface AICodeAnalysisCardProps {
     taskId?: string;
@@ -20,6 +22,8 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
     const [state, setState] = useState<CardState>("idle");
     const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+    const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
     // Mock data
     const analysis = {
@@ -44,11 +48,19 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
         setLoadingMessageIndex(0);
         setTimeout(() => {
             setState("completed");
+            setGeneratedAt(new Date());
         }, 4000); // Slightly longer for "scanning" effect
     }, [taskId]);
 
-    const handleReset = () => {
+    const handleRegenerateClick = () => {
+        setIsConfirmDialogOpen(true);
+    };
+
+    const handleConfirmRegenerate = () => {
         setState("idle");
+        setGeneratedAt(null);
+        // Immediately trigger regeneration
+        handleGenerate();
     };
 
     return (
@@ -158,12 +170,19 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
                             {analysis.summary}
                         </p>
 
-                        <button
-                            onClick={handleReset}
-                            className="mt-2 text-[10px] text-amber-500 hover:text-amber-700 transition-colors"
-                        >
-                            Click to re-scan
-                        </button>
+                        {/* Footer with timestamp and regenerate */}
+                        <div className="mt-3 pt-2 border-t border-amber-100 flex items-center justify-between">
+                            <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <Clock size={10} className="text-gray-400" />
+                                Scanned {formatTimeAgo(generatedAt)}
+                            </span>
+                            <button
+                                onClick={handleRegenerateClick}
+                                className="text-[10px] text-gray-400 hover:text-amber-600 transition-colors"
+                            >
+                                Re-scan
+                            </button>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -172,12 +191,25 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 analysis={analysis}
+                generatedAt={generatedAt}
+            />
+
+            {/* REGENERATE CONFIRMATION DIALOG */}
+            <ConfirmationDialog
+                isOpen={isConfirmDialogOpen}
+                onClose={() => setIsConfirmDialogOpen(false)}
+                onConfirm={handleConfirmRegenerate}
+                title="Re-scan Code Analysis?"
+                message="Are you sure you want to re-scan this code? The current security analysis will be permanently overwritten. This action consumes AI credits and cannot be undone."
+                confirmLabel="Re-scan"
+                cancelLabel="Cancel"
+                variant="warning"
             />
         </>
     );
 }
 
-function AnalysisModal({ isOpen, onClose, analysis }: { isOpen: boolean; onClose: () => void; analysis: any }) {
+function AnalysisModal({ isOpen, onClose, analysis, generatedAt }: { isOpen: boolean; onClose: () => void; analysis: any; generatedAt: Date | null }) {
     return (
         <AnimatePresence>
             {isOpen && (
@@ -243,7 +275,10 @@ function AnalysisModal({ isOpen, onClose, analysis }: { isOpen: boolean; onClose
                         </div>
 
                         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between flex-shrink-0">
-                            <span className="text-xs text-gray-400">Scanned just now</span>
+                            <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                                <Clock size={12} className="text-gray-400" />
+                                Scanned {formatTimeAgo(generatedAt)}
+                            </span>
                             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
                                 Close
                             </button>

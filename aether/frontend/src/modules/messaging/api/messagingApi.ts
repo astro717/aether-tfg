@@ -14,16 +14,28 @@ export interface CommentNotificationMetadata {
   taskTitle: string;
 }
 
+export interface MessageAttachment {
+  id: string;
+  message_id: string;
+  file_path: string;
+  file_url: string;
+  file_name: string;
+  file_size: number;
+  file_type: string;
+  created_at: string;
+}
+
 export interface Message {
   id: string;
   sender_id: string;
   receiver_id: string;
-  content: string;
+  content: string | null;
   type?: MessageType;
   metadata?: CommentNotificationMetadata | null;
   created_at: string;
   read_at: string | null;
   sender: MessageUser;
+  attachments?: MessageAttachment[];
 }
 
 export interface Conversation {
@@ -39,7 +51,14 @@ export interface MessagesResponse {
 
 export interface SendMessagePayload {
   receiverId: string;
-  content: string;
+  content?: string;
+  attachments?: {
+    filePath: string;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    fileUrl: string;
+  }[];
 }
 
 export interface MarkAsReadResponse {
@@ -48,6 +67,18 @@ export interface MarkAsReadResponse {
 
 export interface UnreadCountResponse {
   unreadCount: number;
+}
+
+export interface UploadUrlRequest {
+  filename: string;
+  fileType: string;
+}
+
+export interface UploadUrlResponse {
+  uploadUrl: string;
+  publicUrl: string;
+  filePath: string;
+  token: string;
 }
 
 class MessagingApi {
@@ -128,6 +159,23 @@ class MessagingApi {
       { headers: this.getAuthHeaders() }
     );
     if (!response.ok) throw new Error('Failed to fetch unread count');
+    return response.json();
+  }
+
+  /**
+   * POST /messages/upload-url
+   * Get a signed upload URL for file uploads.
+   */
+  async getUploadUrl(filename: string, fileType: string): Promise<UploadUrlResponse> {
+    const response = await fetch(
+      `${API_BASE_URL}/messages/upload-url`,
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ filename, fileType }),
+      }
+    );
+    if (!response.ok) throw new Error('Failed to get upload URL');
     return response.json();
   }
 }

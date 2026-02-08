@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Send, Loader2 } from "lucide-react";
+import { MessageCircle, Loader2 } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
+import { MessageChatInput } from "./MessageChatInput";
 import { type Message, type MessageUser } from "../api/messagingApi";
+import { type UploadedFile } from "../../../hooks/useFileUpload";
 
 interface ChatViewProps {
   userId: string | null;
@@ -10,7 +12,7 @@ interface ChatViewProps {
   loading: boolean;
   error: Error | null;
   currentUserId: string;
-  onSendMessage: (content: string) => Promise<void>;
+  onSendMessage: (content: string, attachments?: UploadedFile[]) => Promise<void>;
   isDraft?: boolean;
 }
 
@@ -24,10 +26,7 @@ export function ChatView({
   onSendMessage,
   isDraft = false,
 }: ChatViewProps) {
-  const [inputValue, setInputValue] = useState("");
-  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Track the first unread message ID for this session (persists after mark-as-read)
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
@@ -62,44 +61,50 @@ export function ChatView({
     setFirstUnreadId(null);
   };
 
-  // Scroll to bottom when messages change
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom helper
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // 1. Initial scroll to bottom on mount / load
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (!loading && messages.length > 0) {
+      scrollToBottom("auto"); // Instant scroll on load
+    }
+  }, [loading, userId]); // Only on user switch or done loading
+
+  // 2. Smart auto-scroll on new messages
+  useEffect(() => {
+    // Basic check: if we are close to bottom, or if *we* sent the last message, scroll down.
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150; // 150px threshold
+
+    // Always scroll if we just sent a message (optimistic or real)
+    const lastMessage = messages[messages.length - 1];
+    const isOurMessage = lastMessage?.sender_id === currentUserId;
+
+    if (isNearBottom || isOurMessage) {
+      scrollToBottom("smooth");
+    }
+  }, [messages, currentUserId]);
 
   // Handle sending a new message
-  const handleSend = async () => {
+  const handleSend = async (content: string, attachments?: UploadedFile[]) => {
     // Allow sending if in draft mode (userId comes from draft recipient) or normal mode
-    if (!inputValue.trim() || (!userId && !isDraft) || sending) return;
-
-    const content = inputValue.trim();
-    setInputValue("");
-    setSending(true);
-
-    // Immediately refocus the input to maintain flawless flow
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
+    if (!userId && !isDraft) return;
 
     try {
-      await onSendMessage(content);
+      await onSendMessage(content, attachments);
       // User has responded - clear the "New Messages" separator
       clearUnreadSeparator();
     } catch (err) {
-      // Restore input on error
-      setInputValue(content);
       console.error('Failed to send message:', err);
-    } finally {
-      setSending(false);
-      // Ensure focus is maintained after the send completes
-      inputRef.current?.focus();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+      throw err; // Re-throw so MessageChatInput can handle it
     }
   };
 
@@ -149,11 +154,8 @@ export function ChatView({
     );
   }
 
-  // Group messages by sender, tracking which group contains the first unread
-  const { groupedMessages, firstUnreadGroupIndex } = groupMessagesBySenderWithUnread(
-    messages,
-    firstUnreadId
-  );
+  // Group messages for rendering (Date headers -> Unread Separator -> Message Groups)
+  const renderItems = getRenderItems(messages, firstUnreadId);
 
   return (
     <div className="h-full flex flex-col">
@@ -161,7 +163,10 @@ export function ChatView({
       {otherUser && <ChatHeader user={otherUser} />}
 
       {/* Messages Area - Transparent background */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-5 py-4 premium-scrollbar cursor-default"
+      >
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <p className="text-gray-400 text-sm">
@@ -172,80 +177,39 @@ export function ChatView({
           </div>
         ) : (
           <div className="space-y-1">
-            {groupedMessages.map((group, groupIndex) => (
-              <div key={groupIndex}>
-                {/* Unread Messages Separator */}
-                {groupIndex === firstUnreadGroupIndex && (
-                  <UnreadSeparator />
-                )}
-                <div className="space-y-0.5">
-                  {group.map((message, msgIndex) => (
-                    <MessageBubble
-                      key={message.id}
-                      message={message}
-                      isSent={message.sender_id === currentUserId}
-                      isFirstInGroup={msgIndex === 0}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+            {renderItems.map((item, index) => {
+              if (item.type === 'date') {
+                return <DateSeparator key={`date-${item.date}`} date={item.date} />;
+              }
+              if (item.type === 'unread') {
+                return <UnreadSeparator key="unread-separator" />;
+              }
+              if (item.type === 'group') {
+                return (
+                  <div key={`group-${index}`} className="space-y-0.5">
+                    {item.messages.map((message, msgIndex) => (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        isSent={message.sender_id === currentUserId}
+                        isFirstInGroup={msgIndex === 0}
+                      />
+                    ))}
+                  </div>
+                );
+              }
+              return null;
+            })}
             <div ref={messagesEndRef} />
           </div>
         )}
       </div>
 
       {/* Input Area - Pinned to bottom */}
-      <div className="px-5 py-4 border-t border-white/20">
-        <div className="flex items-end gap-3">
-          {/* Input field - pill shaped */}
-          <div className="flex-1 relative">
-            <textarea
-              ref={inputRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Message"
-              rows={1}
-              className="
-                w-full px-4 py-2.5
-                bg-white/50 backdrop-blur-sm
-                rounded-full
-                text-[15px] text-gray-800
-                placeholder:text-gray-400
-                outline-none
-                border border-white/30
-                focus:bg-white/70 focus:border-white/50
-                resize-none
-                transition-all duration-200
-              "
-              style={{ minHeight: '44px', maxHeight: '120px' }}
-            />
-          </div>
-
-          {/* Send Button - Dark Gray circle with white arrow */}
-          <button
-            onClick={handleSend}
-            disabled={!inputValue.trim() || sending}
-            className={`
-              w-11 h-11 rounded-full flex-shrink-0
-              flex items-center justify-center
-              transition-all duration-200
-              ${inputValue.trim() && !sending
-                ? "bg-gray-800 text-white shadow-md hover:bg-gray-700"
-                : "bg-white/40 text-gray-400"
-              }
-              disabled:cursor-not-allowed
-            `}
-          >
-            {sending ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <Send size={18} className={inputValue.trim() ? "translate-x-[1px]" : ""} />
-            )}
-          </button>
-        </div>
-      </div>
+      <MessageChatInput
+        onSend={handleSend}
+        disabled={!userId && !isDraft}
+      />
     </div>
   );
 }
@@ -290,7 +254,7 @@ function ChatHeader({ user }: ChatHeaderProps) {
   );
 }
 
-// Unread Messages Separator - Subtle red divider per Aether spec
+// Unread Messages Separator
 function UnreadSeparator() {
   return (
     <div className="flex items-center gap-3 py-3 my-2">
@@ -303,42 +267,98 @@ function UnreadSeparator() {
   );
 }
 
-// Helper: Group consecutive messages from the same sender, tracking first unread group
-function groupMessagesBySenderWithUnread(
-  messages: Message[],
-  firstUnreadId: string | null
-): { groupedMessages: Message[][]; firstUnreadGroupIndex: number | null } {
-  const groups: Message[][] = [];
+// Date Separator
+function DateSeparator({ date }: { date: string }) {
+  return (
+    <div className="flex items-center justify-center py-4">
+      <div className="bg-gray-200/50 backdrop-blur-sm px-3 py-1 rounded-full border border-white/20">
+        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+          {date}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+type RenderItem =
+  | { type: 'date'; date: string }
+  | { type: 'unread' }
+  | { type: 'group'; messages: Message[] };
+
+// Helper: Format date for headers
+function getDateLabel(date: Date): string {
+  const d = new Date(date);
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  // Reset hours for comparison
+  const dStr = d.toDateString();
+  const nowStr = now.toDateString();
+  const yesterdayStr = yesterday.toDateString();
+
+  if (dStr === nowStr) return "Today";
+  if (dStr === yesterdayStr) return "Yesterday";
+
+  // Format: "Monday, 14/03"
+  // const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  // return `${days[d.getDay()]}, ${d.getDate()}/${d.getMonth() + 1}`;
+
+  // Per spec "Monday, 14/3"
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return `${days[d.getDay()]}, ${d.getDate()}/${d.getMonth() + 1}`;
+}
+
+// Helper: Group messages for rendering
+function getRenderItems(messages: Message[], firstUnreadId: string | null): RenderItem[] {
+  const items: RenderItem[] = [];
   let currentGroup: Message[] = [];
   let currentSenderId: string | null = null;
-  let firstUnreadGroupIndex: number | null = null;
+  let lastDateLabel: string | null = null;
+  let hasAddedUnreadSeparator = false;
 
   for (const message of messages) {
+    // 1. Check for Unread Separator BEFORE processing message
+    if (firstUnreadId === message.id && !hasAddedUnreadSeparator) {
+      if (currentGroup.length > 0) {
+        items.push({ type: 'group', messages: currentGroup });
+        currentGroup = [];
+        currentSenderId = null;
+      }
+      items.push({ type: 'unread' });
+      hasAddedUnreadSeparator = true;
+    }
+
+    // 2. Check for Date Change
+    const messageDate = new Date(message.created_at);
+    const dateLabel = getDateLabel(messageDate);
+
+    if (dateLabel !== lastDateLabel) {
+      if (currentGroup.length > 0) {
+        items.push({ type: 'group', messages: currentGroup });
+        currentGroup = [];
+        currentSenderId = null;
+      }
+      items.push({ type: 'date', date: dateLabel });
+      lastDateLabel = dateLabel;
+    }
+
+    // 3. Group by Sender
     if (message.sender_id !== currentSenderId) {
       if (currentGroup.length > 0) {
-        groups.push(currentGroup);
+        items.push({ type: 'group', messages: currentGroup });
       }
       currentGroup = [message];
       currentSenderId = message.sender_id;
-
-      // Check if this new group starts with the first unread message
-      if (firstUnreadId && message.id === firstUnreadId && firstUnreadGroupIndex === null) {
-        firstUnreadGroupIndex = groups.length; // The group we're about to add
-      }
     } else {
       currentGroup.push(message);
-
-      // Check if this message is the first unread (in case it's not the first of a group)
-      if (firstUnreadId && message.id === firstUnreadId && firstUnreadGroupIndex === null) {
-        // The unread starts mid-group, so mark the current group
-        firstUnreadGroupIndex = groups.length;
-      }
     }
   }
 
+  // Push remaining group
   if (currentGroup.length > 0) {
-    groups.push(currentGroup);
+    items.push({ type: 'group', messages: currentGroup });
   }
 
-  return { groupedMessages: groups, firstUnreadGroupIndex };
+  return items;
 }
