@@ -96,6 +96,29 @@ export interface CommitExplanation {
   timestamp?: string; // ISO date string of when the explanation was generated
 }
 
+export interface CodeAnalysisResult {
+  summary: string;
+  score: string;
+  issues: {
+    severity: 'high' | 'medium' | 'low';
+    title: string;
+    file: string;
+    line: number;
+  }[];
+  cached: boolean;
+  timestamp?: string;
+}
+
+export interface TaskReportResult {
+  summary: string;
+  sections: {
+    title: string;
+    content: string;
+  }[];
+  cached: boolean;
+  timestamp?: string;
+}
+
 class TasksApi {
   private getAuthHeaders() {
     const token = localStorage.getItem('token'); // Note: 'token' not 'authToken'
@@ -221,6 +244,85 @@ class TasksApi {
       const errorData = await response.json().catch(() => ({}));
       const message = errorData.message || `HTTP ${response.status}`;
       throw new Error(`Failed to fetch commit explanation: ${message}`);
+    }
+    return response.json();
+  }
+
+  async getCommitCodeAnalysis(sha: string, options?: { onlyCached?: boolean }): Promise<CodeAnalysisResult> {
+    const url = new URL(`${API_BASE_URL}/ai/commits/${sha}/analyze`);
+    if (options?.onlyCached) {
+      url.searchParams.append('onlyCached', 'true');
+    }
+
+    const response = await fetch(
+      url.toString(),
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || `HTTP ${response.status}`;
+      throw new Error(`Failed to fetch code analysis: ${message}`);
+    }
+    return response.json();
+  }
+
+  async getTaskReport(taskId: string, commitSha: string, options?: { onlyCached?: boolean }): Promise<TaskReportResult> {
+    const url = new URL(`${API_BASE_URL}/ai/tasks/${taskId}/report`);
+    url.searchParams.append('commitSha', commitSha);
+    if (options?.onlyCached) {
+      url.searchParams.append('onlyCached', 'true');
+    }
+
+    const response = await fetch(
+      url.toString(),
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || `HTTP ${response.status}`;
+      throw new Error(`Failed to fetch task report: ${message}`);
+    }
+    return response.json();
+  }
+
+  async getCommitsByRepo(repoId: string): Promise<LinkedCommit[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/commits/repo/${repoId}`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) throw new Error('Failed to fetch commits');
+    return response.json();
+  }
+
+  async linkCommitToTask(taskId: string, commitSha: string): Promise<Task> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/${taskId}/commits`,
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ commit_sha: commitSha }),
+      }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || 'Failed to link commit';
+      throw new Error(message);
+    }
+    return response.json();
+  }
+
+  async syncCommitsFromGithub(repoId: string, maxCommits: number = 50): Promise<{ synced: number; linked: number; total: number }> {
+    const response = await fetch(
+      `${API_BASE_URL}/commits/sync/${repoId}?maxCommits=${maxCommits}`,
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || 'Failed to sync commits';
+      throw new Error(message);
     }
     return response.json();
   }

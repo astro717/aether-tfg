@@ -399,5 +399,47 @@ export class TasksService {
 
     return this.prisma.task_comments.delete({ where: { id: commentId } });
   }
+
+  /**
+   * Manually link a commit to a task
+   */
+  async linkCommit(taskId: string, commitSha: string, userId: string, userRole: string) {
+    // Verify task exists and user has permissions
+    await this.findOneOwned(taskId, userId, userRole);
+
+    // Verify commit exists in database
+    const commit = await this.prisma.commits.findUnique({
+      where: { sha: commitSha },
+    });
+
+    if (!commit) {
+      throw new NotFoundException('Commit not found in database. Please sync commits from GitHub first.');
+    }
+
+    // Check if link already exists
+    const existingLink = await this.prisma.task_commits.findUnique({
+      where: {
+        task_id_commit_sha: {
+          task_id: taskId,
+          commit_sha: commitSha,
+        },
+      },
+    });
+
+    if (existingLink) {
+      throw new BadRequestException('Commit is already linked to this task');
+    }
+
+    // Create the link
+    await this.prisma.task_commits.create({
+      data: {
+        task_id: taskId,
+        commit_sha: commitSha,
+      },
+    });
+
+    // Return updated task with all linked commits
+    return this.findOneOwned(taskId, userId, userRole);
+  }
 }
 

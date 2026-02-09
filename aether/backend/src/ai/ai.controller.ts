@@ -50,4 +50,31 @@ export class AiController {
   ) {
     return this.aiService.explainCommitInTaskContext(sha, taskId, user);
   }
+
+  /**
+   * Analyze code quality and security vulnerabilities for a commit
+   * GET /ai/commits/:sha/analyze
+   */
+  @Get('commits/:sha/analyze')
+  async analyzeCommit(
+    @Param('sha') sha: string,
+    @Query('onlyCached') onlyCached: string,
+    @CurrentUser() user: users,
+  ) {
+    return this.aiService.analyzeCode(sha, user, onlyCached === 'true');
+  }
+
+  /**
+   * Generate a comprehensive task report
+   * GET /ai/tasks/:taskId/report
+   */
+  @Get('tasks/:taskId/report')
+  async generateTaskReport(
+    @Param('taskId') taskId: string,
+    @Query('commitSha') commitSha: string,
+    @Query('onlyCached') onlyCached: string,
+    @CurrentUser() user: users,
+  ) {
+    return this.aiService.generateTaskReport(taskId, commitSha, user, onlyCached === 'true');
+  }
 }

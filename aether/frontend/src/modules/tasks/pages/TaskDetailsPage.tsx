@@ -7,11 +7,17 @@ import {
     AlertCircle,
     ArrowLeft,
     Copy,
-    CheckCheck
+    CheckCheck,
+    RefreshCw,
+    Clock,
+    GitCommit
 } from "lucide-react";
 import { tasksApi, type Task, type TaskComment, type CommitDiff } from "../../dashboard/api/tasksApi";
 import { useAuth } from "../../auth/context/AuthContext";
+import { formatTimeAgo } from "../../../lib/utils";
 import { CommentModal } from "../components/CommentModal";
+import { LinkCommitModal } from "../components/LinkCommitModal";
+import { CommitSelectionModal } from "../components/CommitSelectionModal";
 import { CommitCodeViewer } from "../components/CommitCodeViewer";
 import { AICommitExplanationCard } from "../components/AICommitExplanationCard";
 import { AICodeAnalysisCard } from "../components/AICodeAnalysisCard";
@@ -27,7 +33,27 @@ export function TaskDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
+    const [isLinkCommitModalOpen, setIsLinkCommitModalOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [isRefreshingCommits, setIsRefreshingCommits] = useState(false);
+
+    // Commit selection state
+    const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
+    const [isCommitSelectionModalOpen, setIsCommitSelectionModalOpen] = useState(false);
+    const [pendingCommitSha, setPendingCommitSha] = useState<string | null>(null);
+
+    const refreshCommits = async () => {
+        if (!taskId) return;
+        setIsRefreshingCommits(true);
+        try {
+            const taskData = await tasksApi.getTask(taskId);
+            setTask(taskData);
+        } catch (err) {
+            console.error("Failed to refresh task:", err);
+        } finally {
+            setIsRefreshingCommits(false);
+        }
+    };
 
     const handleCopyTaskId = () => {
         if (task) {
@@ -59,21 +85,27 @@ export function TaskDetailsPage() {
         fetchTaskAndComments();
     }, [taskId]);
 
-    // Fetch commit diff when task has linked commits
+    // Initialize selectedCommitSha to the latest commit when task loads
+    useEffect(() => {
+        if (task?.task_commits?.length) {
+            const latestCommit = task.task_commits[task.task_commits.length - 1];
+            if (latestCommit?.commit_sha && !selectedCommitSha) {
+                setSelectedCommitSha(latestCommit.commit_sha);
+            }
+        }
+    }, [task?.task_commits, selectedCommitSha]);
+
+    // Fetch commit diff based on selected commit
     useEffect(() => {
         async function fetchCommitDiff() {
-            if (!task?.task_commits?.length) {
+            if (!selectedCommitSha) {
                 setCommitDiff(null);
                 return;
             }
 
-            // Get the most recent commit (last in array or first by date)
-            const latestCommit = task.task_commits[task.task_commits.length - 1];
-            if (!latestCommit?.commit_sha) return;
-
             try {
                 setDiffLoading(true);
-                const diff = await tasksApi.getCommitDiff(latestCommit.commit_sha);
+                const diff = await tasksApi.getCommitDiff(selectedCommitSha);
                 setCommitDiff(diff);
             } catch (err) {
                 console.error("Failed to fetch commit diff:", err);
@@ -84,12 +116,42 @@ export function TaskDetailsPage() {
         }
 
         fetchCommitDiff();
-    }, [task?.task_commits]);
+    }, [selectedCommitSha]);
 
     const handleAddComment = async (content: string) => {
         if (!taskId) return;
         const newComment = await tasksApi.addComment(taskId, content);
         setComments((prev) => [...prev, newComment]);
+    };
+
+    const handleLinkSuccess = async () => {
+        // Refetch task data to show the newly linked commit
+        if (!taskId) return;
+        try {
+            const updatedTask = await tasksApi.getTask(taskId);
+            setTask(updatedTask);
+        } catch (err) {
+            console.error("Failed to refresh task:", err);
+        }
+    };
+
+    const handleCommitClick = (commitSha: string) => {
+        if (commitSha === selectedCommitSha) return; // Already selected
+        setPendingCommitSha(commitSha);
+        setIsCommitSelectionModalOpen(true);
+    };
+
+    const handleConfirmCommitSwitch = () => {
+        if (pendingCommitSha) {
+            setSelectedCommitSha(pendingCommitSha);
+            setPendingCommitSha(null);
+        }
+        setIsCommitSelectionModalOpen(false);
+    };
+
+    const handleCancelCommitSwitch = () => {
+        setPendingCommitSha(null);
+        setIsCommitSelectionModalOpen(false);
     };
 
     if (loading) {
@@ -170,8 +232,8 @@ export function TaskDetailsPage() {
     };
 
     return (
-        <div className="h-full overflow-y-auto p-8 pb-12">
-            <div className="max-w-[1600px] mx-auto grid grid-cols-12 gap-8 h-full items-stretch">
+        <div className="h-full overflow-y-auto p-4 pb-12">
+            <div className="max-w-[1600px] mx-auto grid grid-cols-12 gap-4 h-full items-stretch">
                 {/* LEFT COLUMN (Main Content) */}
                 <div className="col-span-8 flex flex-col gap-8 h-full">
                     {/* Header */}
@@ -228,26 +290,46 @@ export function TaskDetailsPage() {
 
                         {/* Right: Commit List */}
                         <div className="col-span-7">
-                            <h3 className="text-gray-500 font-medium mb-3">
-                                Linked commits
-                                <span className="text-gray-400 text-sm ml-2">
-                                    (use #{task.readable_id} in commit messages)
-                                </span>
-                            </h3>
-                            <div className="bg-white/30 rounded-xl p-4 space-y-3 max-h-[300px] overflow-y-auto border border-gray-200">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-gray-500 font-medium">
+                                    Linked commits
+                                </h3>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={refreshCommits}
+                                        disabled={isRefreshingCommits}
+                                        className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                                        title="Refresh commits"
+                                    >
+                                        <RefreshCw size={16} className={isRefreshingCommits ? "animate-spin" : ""} />
+                                    </button>
+                                    <button
+                                        onClick={() => setIsLinkCommitModalOpen(true)}
+                                        className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+                                        title="Link commit manually"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="bg-white/30 rounded-xl p-4 space-y-3 max-h-[195px] overflow-y-auto border border-gray-200 premium-scrollbar">
                                 {task.task_commits && task.task_commits.length > 0 ? (
-                                    task.task_commits.map((tc) => (
-                                        <CommitItem
-                                            key={tc.commit_sha}
-                                            hash={tc.commits.sha.substring(0, 7)}
-                                            date={new Date(tc.commits.committed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                            message={tc.commits.message || 'No message'}
-                                            author={tc.commits.author_login || 'Unknown'}
-                                        />
-                                    ))
+                                    [...task.task_commits]
+                                        .sort((a, b) => new Date(b.commits.committed_at).getTime() - new Date(a.commits.committed_at).getTime())
+                                        .map((tc) => (
+                                            <CommitItem
+                                                key={tc.commit_sha}
+                                                hash={tc.commits.sha.substring(0, 7)}
+                                                date={new Date(tc.commits.committed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                message={tc.commits.message || 'No message'}
+                                                author={tc.commits.author_login || 'Unknown'}
+                                                isSelected={tc.commit_sha === selectedCommitSha}
+                                                onClick={() => handleCommitClick(tc.commit_sha)}
+                                            />
+                                        ))
                                 ) : (
                                     <div className="text-center text-gray-400 text-sm py-4">
-                                        No commits linked yet. Use <code className="bg-gray-200 px-1 rounded">#{task.readable_id}</code> in your commit messages to link them.
+                                        No commits linked yet.
                                     </div>
                                 )}
                             </div>
@@ -257,7 +339,33 @@ export function TaskDetailsPage() {
                     {/* Last Commit (Diff View) - Premium Code Viewer */}
                     <div className="flex-1 flex flex-col min-h-[200px]">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-gray-500 font-medium">Last commit</h3>
+                            <div className="flex items-center gap-3">
+                                {selectedCommitSha ? (
+                                    <>
+                                        <h3 className="text-gray-500 font-medium">Viewing snapshot:</h3>
+                                        <code className="text-xs font-mono text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                                            {selectedCommitSha.substring(0, 7)}
+                                        </code>
+                                        {(() => {
+                                            const selectedCommit = task?.task_commits?.find(
+                                                tc => tc.commit_sha === selectedCommitSha
+                                            );
+                                            if (selectedCommit) {
+                                                const timeAgo = formatTimeAgo(selectedCommit.commits.committed_at);
+                                                return (
+                                                    <span className="text-xs text-gray-400 flex items-center gap-1">
+                                                        <Clock size={12} />
+                                                        {timeAgo}
+                                                    </span>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                    </>
+                                ) : (
+                                    <h3 className="text-gray-500 font-medium">Last commit</h3>
+                                )}
+                            </div>
                             {commitDiff && (
                                 <div className="flex items-center gap-3 text-xs">
                                     <span className="text-green-500 font-mono">+{commitDiff.stats.additions}</span>
@@ -327,18 +435,47 @@ export function TaskDetailsPage() {
                         onSubmit={handleAddComment}
                     />
 
+                    {/* Link Commit Modal */}
+                    <LinkCommitModal
+                        isOpen={isLinkCommitModalOpen}
+                        onClose={() => setIsLinkCommitModalOpen(false)}
+                        taskId={task.id}
+                        repoId={task.repo_id}
+                        linkedCommitShas={task.task_commits?.map((tc) => tc.commit_sha) || []}
+                        onLinkSuccess={handleLinkSuccess}
+                    />
+
+                    {/* Commit Selection Modal */}
+                    <CommitSelectionModal
+                        isOpen={isCommitSelectionModalOpen}
+                        onClose={handleCancelCommitSwitch}
+                        onConfirm={handleConfirmCommitSwitch}
+                        commitHash={pendingCommitSha}
+                        commitMessage={
+                            task?.task_commits?.find(tc => tc.commit_sha === pendingCommitSha)?.commits.message || undefined
+                        }
+                    />
+
                     {/* AI Actions (Grows to fill space) */}
                     <div className="flex-1 flex flex-col gap-4 min-h-[200px]">
                         {/* Card 1: AI Commit Explanation - Premium Component */}
                         <AICommitExplanationCard
-                            commitSha={task.task_commits?.[task.task_commits.length - 1]?.commit_sha || null}
+                            commitSha={selectedCommitSha}
                             className="flex-1"
                         />
 
                         {/* Row with 2 cards: Expands */}
                         <div className="flex-1 grid grid-cols-2 gap-4">
-                            <AICodeAnalysisCard className="h-full" />
-                            <AITaskReportCard className="h-full" />
+                            <AICodeAnalysisCard
+                                taskId={task.id}
+                                commitSha={selectedCommitSha}
+                                className="h-full"
+                            />
+                            <AITaskReportCard
+                                taskId={task.id}
+                                commitSha={selectedCommitSha}
+                                className="h-full"
+                            />
                         </div>
                     </div>
                 </div>
@@ -359,15 +496,41 @@ function StatRow({ label, value }: { label: string; value: string }) {
     );
 }
 
-function CommitItem({ hash, date, message, author }: { hash: string; date: string; message: string; author?: string }) {
+function CommitItem({
+    hash,
+    date,
+    message,
+    author,
+    isSelected = false,
+    onClick
+}: {
+    hash: string;
+    date: string;
+    message: string;
+    author?: string;
+    isSelected?: boolean;
+    onClick?: () => void;
+}) {
     return (
-        <div className="bg-white rounded-[16px] p-3 flex items-center gap-3">
-            <code className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded font-mono">
+        <div
+            onClick={onClick}
+            className={`rounded-[16px] p-3 flex items-center gap-3 transition-all ${
+                isSelected
+                    ? 'bg-blue-50 border-2 border-blue-200'
+                    : 'bg-white border-2 border-transparent hover:bg-gray-50'
+            } ${onClick ? 'cursor-pointer' : ''}`}
+        >
+            <code className={`text-xs px-2 py-1 rounded font-mono ${
+                isSelected ? 'text-blue-600 bg-blue-100' : 'text-gray-500 bg-gray-100'
+            }`}>
                 {hash}
             </code>
             <span className="text-xs text-gray-400">{date}</span>
             {author && <span className="text-xs text-gray-500 font-medium">{author}</span>}
             <span className="text-sm text-gray-700 truncate flex-1">{message}</span>
+            {isSelected && (
+                <GitCommit size={14} className="text-blue-500 shrink-0" />
+            )}
         </div>
     );
 }

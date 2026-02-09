@@ -5,6 +5,7 @@ import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { LinkCommitDto } from './dto/link-commit.dto';
 //import type { Request } from 'express';
 import type { users as User } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
@@ -93,5 +94,15 @@ export class TasksController {
     @CurrentUser() user: User,
   ) {
     return this.tasksService.deleteComment(commentId, user.id, user.role);
+  }
+
+  // Link commit to task
+  @Post(':id/commits')
+  async linkCommit(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: LinkCommitDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.linkCommit(id, dto.commit_sha, user.id, user.role);
   }
 }

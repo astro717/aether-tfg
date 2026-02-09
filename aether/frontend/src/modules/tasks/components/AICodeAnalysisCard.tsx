@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock } from "lucide-react";
+import { tasksApi, type CodeAnalysisResult } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
 
 interface AICodeAnalysisCardProps {
     taskId?: string;
+    commitSha: string | null;
     className?: string;
 }
 
@@ -18,23 +20,15 @@ const LOADING_MESSAGES = [
     "Validating inputs...",
 ];
 
-export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCardProps) {
+export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICodeAnalysisCardProps) {
     const [state, setState] = useState<CardState>("idle");
+    const [analysis, setAnalysis] = useState<CodeAnalysisResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-    const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
-    // Mock data
-    const analysis = {
-        summary: "No critical vulnerabilities found. However, there are 2 potential security hotspots related to input sanitization that should be reviewed.",
-        score: "B+",
-        issues: [
-            { severity: "medium", title: "Missing input validation", file: "auth.controller.ts", line: 45 },
-            { severity: "low", title: "Hardcoded timeout value", file: "users.service.ts", line: 120 }
-        ]
-    };
-
+    // Cycle through loading messages
     useEffect(() => {
         if (state !== "loading") return;
         const interval = setInterval(() => {
@@ -43,14 +37,47 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
         return () => clearInterval(interval);
     }, [state]);
 
+    // Reset and check for cached analysis when commit changes
+    useEffect(() => {
+        async function checkCache() {
+            if (!commitSha) {
+                setState("idle");
+                setAnalysis(null);
+                return;
+            }
+
+            try {
+                // Try to get cached analysis
+                const result = await tasksApi.getCommitCodeAnalysis(commitSha, { onlyCached: true });
+                setAnalysis(result);
+                setState("completed");
+            } catch (err) {
+                // No cache found, reset to idle
+                setState("idle");
+                setAnalysis(null);
+            }
+        }
+
+        checkCache();
+    }, [commitSha]);
+
     const handleGenerate = useCallback(async () => {
+        if (!commitSha) return;
+
         setState("loading");
         setLoadingMessageIndex(0);
-        setTimeout(() => {
+        setError(null);
+
+        try {
+            const result = await tasksApi.getCommitCodeAnalysis(commitSha);
+            setAnalysis(result);
             setState("completed");
-            setGeneratedAt(new Date());
-        }, 4000); // Slightly longer for "scanning" effect
-    }, [taskId]);
+        } catch (err) {
+            console.error("Failed to analyze code:", err);
+            setError(err instanceof Error ? err.message : "Unknown error");
+            setState("error");
+        }
+    }, [commitSha]);
 
     const handleRegenerateClick = () => {
         setIsConfirmDialogOpen(true);
@@ -58,10 +85,26 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
 
     const handleConfirmRegenerate = () => {
         setState("idle");
-        setGeneratedAt(null);
+        setAnalysis(null);
+        setError(null);
         // Immediately trigger regeneration
         handleGenerate();
     };
+
+    // No commit available - Disabled State
+    if (!commitSha) {
+        return (
+            <div className={`bg-white/20 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 border border-gray-200/50 min-h-[120px] opacity-50 ${className}`}>
+                <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
+                    <ShieldAlert size={18} className="text-gray-400" />
+                </div>
+                <h4 className="text-gray-400 font-medium text-sm leading-tight">
+                    Analyze code & vulnerabilities
+                </h4>
+                <p className="text-xs text-gray-400">Link a commit first</p>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -140,7 +183,7 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
                 )}
 
                 {/* COMPLETED */}
-                {state === "completed" && (
+                {state === "completed" && analysis && (
                     <motion.div
                         key="completed"
                         initial={{ opacity: 0, scale: 0.95 }}
@@ -149,16 +192,21 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
                         layoutId="code-analysis-card"
                         className={`relative bg-amber-50/50 backdrop-blur-sm rounded-xl p-4 border border-amber-200/50 min-h-[120px] w-full ${className}`}
                     >
-                        <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                                    <CheckCircle2 size={14} className="text-amber-600" />
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2 gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                                    <CheckCircle2 size={12} className="text-amber-600 sm:w-[14px] sm:h-[14px]" />
                                 </div>
-                                <span className="text-xs font-medium text-amber-700">Scan Complete</span>
+                                <span className="text-[11px] sm:text-xs font-medium text-amber-700 flex items-center gap-1 truncate">
+                                    Scan Complete
+                                    {analysis.cached && (
+                                        <span className="hidden sm:inline text-[10px] text-gray-400 font-normal shrink-0">(cached)</span>
+                                    )}
+                                </span>
                             </div>
                             <motion.button
                                 onClick={() => setIsModalOpen(true)}
-                                className="p-1.5 rounded-lg hover:bg-white/50 transition-colors group"
+                                className="self-end sm:self-auto p-1.5 rounded-lg hover:bg-white/50 transition-colors group shrink-0"
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.95 }}
                             >
@@ -174,7 +222,7 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
                         <div className="mt-3 pt-2 border-t border-amber-100 flex items-center justify-between">
                             <span className="text-[10px] text-gray-400 flex items-center gap-1">
                                 <Clock size={10} className="text-gray-400" />
-                                Scanned {formatTimeAgo(generatedAt)}
+                                Scanned {formatTimeAgo(analysis.timestamp)}
                             </span>
                             <button
                                 onClick={handleRegenerateClick}
@@ -185,13 +233,34 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
                         </div>
                     </motion.div>
                 )}
+
+                {/* ERROR STATE */}
+                {state === "error" && (
+                    <motion.div
+                        key="error"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className={`bg-red-50/50 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 border border-red-200/50 min-h-[120px] w-full ${className}`}
+                    >
+                        <div className="w-8 h-8 rounded-full border border-red-300 flex items-center justify-center">
+                            <ShieldAlert size={18} className="text-red-500" />
+                        </div>
+                        <p className="text-xs text-red-600 max-w-[200px] line-clamp-3">{error}</p>
+                        <button
+                            onClick={handleConfirmRegenerate}
+                            className="text-xs text-red-500 hover:text-red-700 underline"
+                        >
+                            Try again
+                        </button>
+                    </motion.div>
+                )}
             </AnimatePresence>
 
             <AnalysisModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 analysis={analysis}
-                generatedAt={generatedAt}
             />
 
             {/* REGENERATE CONFIRMATION DIALOG */}
@@ -209,7 +278,9 @@ export function AICodeAnalysisCard({ taskId, className = "" }: AICodeAnalysisCar
     );
 }
 
-function AnalysisModal({ isOpen, onClose, analysis, generatedAt }: { isOpen: boolean; onClose: () => void; analysis: any; generatedAt: Date | null }) {
+function AnalysisModal({ isOpen, onClose, analysis }: { isOpen: boolean; onClose: () => void; analysis: CodeAnalysisResult | null }) {
+    if (!analysis) return null;
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -257,27 +328,36 @@ function AnalysisModal({ isOpen, onClose, analysis, generatedAt }: { isOpen: boo
 
                             <div>
                                 <h4 className="text-sm font-semibold text-gray-900 mb-3">Identified Issues</h4>
-                                <div className="space-y-3">
-                                    {analysis.issues.map((issue: any, idx: number) => (
-                                        <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <span className={`w-2 h-2 rounded-full ${issue.severity === 'high' ? 'bg-red-500' : issue.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'}`} />
-                                                <div>
-                                                    <p className="text-sm font-medium text-gray-800">{issue.title}</p>
-                                                    <p className="text-xs text-gray-400 font-mono">{issue.file}:{issue.line}</p>
+                                {analysis.issues.length === 0 ? (
+                                    <p className="text-sm text-gray-500 italic">No issues detected.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {analysis.issues.map((issue, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-2 h-2 rounded-full ${issue.severity === 'high' ? 'bg-red-500' : issue.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'}`} />
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-800">{issue.title}</p>
+                                                        <p className="text-xs text-gray-400 font-mono">{issue.file}:{issue.line}</p>
+                                                    </div>
                                                 </div>
+                                                <span className={`text-[10px] font-medium uppercase tracking-wider ${issue.severity === 'high' ? 'text-red-500' : issue.severity === 'medium' ? 'text-amber-500' : 'text-blue-500'}`}>
+                                                    {issue.severity}
+                                                </span>
                                             </div>
-                                            <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">{issue.severity}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between flex-shrink-0">
                             <span className="text-xs text-gray-400 flex items-center gap-1.5">
                                 <Clock size={12} className="text-gray-400" />
-                                Scanned {formatTimeAgo(generatedAt)}
+                                Scanned {formatTimeAgo(analysis.timestamp)}
+                                {analysis.cached && (
+                                    <span className="ml-1 text-[10px] text-amber-500">(cached)</span>
+                                )}
                             </span>
                             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
                                 Close

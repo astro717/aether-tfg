@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bot, Maximize2, X, CheckCircle2, ClipboardList, Clock } from "lucide-react";
+import { tasksApi, type TaskReportResult } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
 
 interface AITaskReportCardProps {
-    taskId?: string; // Optional if we just want the UI for now
+    taskId?: string;
+    commitSha: string | null;
     className?: string;
 }
 
@@ -18,23 +20,13 @@ const LOADING_MESSAGES = [
     "Compiling report...",
 ];
 
-export function AITaskReportCard({ taskId, className = "" }: AITaskReportCardProps) {
+export function AITaskReportCard({ taskId, commitSha, className = "" }: AITaskReportCardProps) {
     const [state, setState] = useState<CardState>("idle");
+    const [report, setReport] = useState<TaskReportResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-    const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
-
-    // Mock data since the backend endpoint might not be ready
-    const report = {
-        summary: "Task is progressing well with 85% completion. The core features are implemented, but some edge cases in the validation logic need attention.",
-        sections: [
-            { title: "Progress Overview", content: "All primary objectives for the backend endpoints are complete. Frontend integration is currently receiving the most attention." },
-            { title: "Blockers", content: "None identified. API latency is within acceptable limits." },
-            { title: "Next Steps", content: "1. Finalize error handling.\n2. Add loading skeletons for better UX.\n3. Conduct user acceptance testing." }
-        ],
-        cached: false
-    };
 
     // Cycle through loading messages
     useEffect(() => {
@@ -47,16 +39,46 @@ export function AITaskReportCard({ taskId, className = "" }: AITaskReportCardPro
         return () => clearInterval(interval);
     }, [state]);
 
+    // Reset and check for cached report when commit changes
+    useEffect(() => {
+        async function checkCache() {
+            if (!taskId || !commitSha) {
+                setState("idle");
+                setReport(null);
+                return;
+            }
+
+            try {
+                const result = await tasksApi.getTaskReport(taskId, commitSha, { onlyCached: true });
+                setReport(result);
+                setState("completed");
+            } catch (err) {
+                // No cache found, reset to idle
+                setState("idle");
+                setReport(null);
+            }
+        }
+
+        checkCache();
+    }, [taskId, commitSha]);
+
     const handleGenerate = useCallback(async () => {
+        if (!taskId || !commitSha) return;
+
         setState("loading");
         setLoadingMessageIndex(0);
+        setError(null);
 
-        // Simulate API call
-        setTimeout(() => {
+        try {
+            const result = await tasksApi.getTaskReport(taskId, commitSha);
+            setReport(result);
             setState("completed");
-            setGeneratedAt(new Date());
-        }, 3000);
-    }, [taskId]);
+        } catch (err) {
+            console.error("Failed to generate report:", err);
+            setError(err instanceof Error ? err.message : "Unknown error");
+            setState("error");
+        }
+    }, [taskId, commitSha]);
 
     const handleRegenerateClick = () => {
         setIsConfirmDialogOpen(true);
@@ -64,10 +86,26 @@ export function AITaskReportCard({ taskId, className = "" }: AITaskReportCardPro
 
     const handleConfirmRegenerate = () => {
         setState("idle");
-        setGeneratedAt(null);
+        setReport(null);
+        setError(null);
         // Immediately trigger regeneration
         handleGenerate();
     };
+
+    // No commit available - Disabled State
+    if (!commitSha) {
+        return (
+            <div className={`bg-white/20 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 border border-gray-200/50 min-h-[120px] opacity-50 ${className}`}>
+                <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
+                    <ClipboardList size={18} className="text-gray-400" />
+                </div>
+                <h4 className="text-gray-400 font-medium text-sm leading-tight">
+                    Generate task report
+                </h4>
+                <p className="text-xs text-gray-400">Link a commit first</p>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -165,7 +203,7 @@ export function AITaskReportCard({ taskId, className = "" }: AITaskReportCardPro
                 )}
 
                 {/* COMPLETED STATE */}
-                {state === "completed" && (
+                {state === "completed" && report && (
                     <motion.div
                         key="completed"
                         initial={{ opacity: 0, scale: 0.95 }}
@@ -174,16 +212,21 @@ export function AITaskReportCard({ taskId, className = "" }: AITaskReportCardPro
                         layoutId="task-report-card"
                         className={`relative bg-blue-50/50 backdrop-blur-sm rounded-xl p-4 border border-blue-200/50 min-h-[120px] w-full ${className}`}
                     >
-                        <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                                    <CheckCircle2 size={14} className="text-blue-600" />
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2 gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                    <CheckCircle2 size={12} className="text-blue-600 sm:w-[14px] sm:h-[14px]" />
                                 </div>
-                                <span className="text-xs font-medium text-blue-700">Task Report Ready</span>
+                                <span className="text-[11px] sm:text-xs font-medium text-blue-700 flex items-center gap-1 truncate">
+                                    Task Report Ready
+                                    {report.cached && (
+                                        <span className="hidden sm:inline text-[10px] text-gray-400 font-normal shrink-0">(cached)</span>
+                                    )}
+                                </span>
                             </div>
                             <motion.button
                                 onClick={() => setIsModalOpen(true)}
-                                className="p-1.5 rounded-lg hover:bg-white/50 transition-colors group"
+                                className="self-end sm:self-auto p-1.5 rounded-lg hover:bg-white/50 transition-colors group shrink-0"
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.95 }}
                             >
@@ -199,7 +242,7 @@ export function AITaskReportCard({ taskId, className = "" }: AITaskReportCardPro
                         <div className="mt-3 pt-2 border-t border-blue-100 flex items-center justify-between">
                             <span className="text-[10px] text-gray-400 flex items-center gap-1">
                                 <Clock size={10} className="text-gray-400" />
-                                Generated {formatTimeAgo(generatedAt)}
+                                Generated {formatTimeAgo(report.timestamp)}
                             </span>
                             <button
                                 onClick={handleRegenerateClick}
@@ -210,13 +253,34 @@ export function AITaskReportCard({ taskId, className = "" }: AITaskReportCardPro
                         </div>
                     </motion.div>
                 )}
+
+                {/* ERROR STATE */}
+                {state === "error" && (
+                    <motion.div
+                        key="error"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className={`bg-red-50/50 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 border border-red-200/50 min-h-[120px] w-full ${className}`}
+                    >
+                        <div className="w-8 h-8 rounded-full border border-red-300 flex items-center justify-center">
+                            <Bot size={18} className="text-red-500" />
+                        </div>
+                        <p className="text-xs text-red-600 max-w-[200px] line-clamp-3">{error}</p>
+                        <button
+                            onClick={handleConfirmRegenerate}
+                            className="text-xs text-red-500 hover:text-red-700 underline"
+                        >
+                            Try again
+                        </button>
+                    </motion.div>
+                )}
             </AnimatePresence>
 
             <ReportModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 report={report}
-                generatedAt={generatedAt}
             />
 
             {/* REGENERATE CONFIRMATION DIALOG */}
@@ -234,7 +298,9 @@ export function AITaskReportCard({ taskId, className = "" }: AITaskReportCardPro
     );
 }
 
-function ReportModal({ isOpen, onClose, report, generatedAt }: { isOpen: boolean; onClose: () => void; report: any; generatedAt: Date | null }) {
+function ReportModal({ isOpen, onClose, report }: { isOpen: boolean; onClose: () => void; report: TaskReportResult | null }) {
+    if (!report) return null;
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -277,7 +343,7 @@ function ReportModal({ isOpen, onClose, report, generatedAt }: { isOpen: boolean
                                 <p className="text-sm text-blue-800 leading-relaxed">{report.summary}</p>
                             </div>
 
-                            {report.sections.map((section: any, idx: number) => (
+                            {report.sections.map((section, idx) => (
                                 <div key={idx}>
                                     <h4 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
                                         <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
@@ -293,7 +359,10 @@ function ReportModal({ isOpen, onClose, report, generatedAt }: { isOpen: boolean
                         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between flex-shrink-0">
                             <span className="text-xs text-gray-400 flex items-center gap-1.5">
                                 <Clock size={12} className="text-gray-400" />
-                                Generated {formatTimeAgo(generatedAt)}
+                                Generated {formatTimeAgo(report.timestamp)}
+                                {report.cached && (
+                                    <span className="ml-1 text-[10px] text-blue-500">(cached)</span>
+                                )}
                             </span>
                             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
                                 Close
