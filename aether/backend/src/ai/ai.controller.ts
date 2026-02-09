@@ -41,40 +41,71 @@ export class AiController {
    * This endpoint provides contextual explanation combining:
    * - Diff del commit
    * - Descripción de la Tarea (#N)
+   *
+   * Supports caching indexed by (task_id, commit_sha)
+   * Query params:
+   *   - onlyCached=true: only retrieve cached results (404 if not cached)
+   *   - forceRegenerate=true: bypass cache and generate fresh (for regeneration)
    */
   @Get('tasks/:taskId/commits/:sha/explain')
   async explainCommitInTaskContext(
     @Param('taskId') taskId: string,
     @Param('sha') sha: string,
+    @Query('onlyCached') onlyCached: string,
+    @Query('forceRegenerate') forceRegenerate: string,
     @CurrentUser() user: users,
   ) {
-    return this.aiService.explainCommitInTaskContext(sha, taskId, user);
+    return this.aiService.explainCommitInTaskContext(
+      sha,
+      taskId,
+      user,
+      onlyCached === 'true',
+      forceRegenerate === 'true',
+    );
   }
 
   /**
    * Analyze code quality and security vulnerabilities for a commit
    * GET /ai/commits/:sha/analyze
+   *
+   * Query params:
+   *   - onlyCached=true: only retrieve cached results (404 if not cached)
+   *   - forceRegenerate=true: bypass cache and generate fresh (deletes old reports)
    */
   @Get('commits/:sha/analyze')
   async analyzeCommit(
     @Param('sha') sha: string,
     @Query('onlyCached') onlyCached: string,
+    @Query('forceRegenerate') forceRegenerate: string,
     @CurrentUser() user: users,
   ) {
-    return this.aiService.analyzeCode(sha, user, onlyCached === 'true');
+    return this.aiService.analyzeCode(sha, user, onlyCached === 'true', forceRegenerate === 'true');
   }
 
   /**
    * Generate a comprehensive task report
    * GET /ai/tasks/:taskId/report
+   *
+   * Query params:
+   *   - commitSha: Required commit SHA to scope the report
+   *   - onlyCached=true: only retrieve cached results (404 if not cached)
+   *   - forceRegenerate=true: bypass cache, delete old reports, and generate fresh
+   *                           This fixes the "ghost regeneration" bug
    */
   @Get('tasks/:taskId/report')
   async generateTaskReport(
     @Param('taskId') taskId: string,
     @Query('commitSha') commitSha: string,
     @Query('onlyCached') onlyCached: string,
+    @Query('forceRegenerate') forceRegenerate: string,
     @CurrentUser() user: users,
   ) {
-    return this.aiService.generateTaskReport(taskId, commitSha, user, onlyCached === 'true');
+    return this.aiService.generateTaskReport(
+      taskId,
+      commitSha,
+      user,
+      onlyCached === 'true',
+      forceRegenerate === 'true',
+    );
   }
 }

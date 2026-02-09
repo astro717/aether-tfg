@@ -63,6 +63,17 @@ export function TaskDetailsPage() {
         }
     };
 
+    // CRITICAL: Reset ALL state when taskId changes to prevent stale data
+    // This must also reset 'task' to null to prevent the initialize effect from using stale data
+    useEffect(() => {
+        setSelectedCommitSha(null);
+        setCommitDiff(null);
+        setPendingCommitSha(null);
+        setTask(null);
+        setComments([]);
+        setError(null);
+    }, [taskId]);
+
     useEffect(() => {
         async function fetchTaskAndComments() {
             if (!taskId) return;
@@ -85,15 +96,31 @@ export function TaskDetailsPage() {
         fetchTaskAndComments();
     }, [taskId]);
 
-    // Initialize selectedCommitSha to the latest commit when task loads
+    // Initialize selectedCommitSha when task data loads
+    // This effect validates that the selected commit belongs to the current task
     useEffect(() => {
-        if (task?.task_commits?.length) {
-            const latestCommit = task.task_commits[task.task_commits.length - 1];
-            if (latestCommit?.commit_sha && !selectedCommitSha) {
-                setSelectedCommitSha(latestCommit.commit_sha);
+        if (!task) return; // Wait for task to load
+
+        const linkedShas = task.task_commits?.map(tc => tc.commit_sha) || [];
+
+        // Case 1: Task has no commits - ensure selection is cleared
+        if (linkedShas.length === 0) {
+            if (selectedCommitSha !== null) {
+                setSelectedCommitSha(null);
+                setCommitDiff(null);
             }
+            return;
         }
-    }, [task?.task_commits, selectedCommitSha]);
+
+        // Case 2: Valid selection exists for THIS task - keep it
+        if (selectedCommitSha && linkedShas.includes(selectedCommitSha)) {
+            return;
+        }
+
+        // Case 3: No selection or stale selection - select latest commit from THIS task
+        const latestCommit = task.task_commits![task.task_commits!.length - 1];
+        setSelectedCommitSha(latestCommit.commit_sha);
+    }, [task, selectedCommitSha]);
 
     // Fetch commit diff based on selected commit
     useEffect(() => {
@@ -232,7 +259,7 @@ export function TaskDetailsPage() {
     };
 
     return (
-        <div className="h-full overflow-y-auto p-4 pb-12">
+        <div className="h-full overflow-y-auto p-4 pb-32">
             <div className="max-w-[1600px] mx-auto grid grid-cols-12 gap-4 h-full items-stretch">
                 {/* LEFT COLUMN (Main Content) */}
                 <div className="col-span-8 flex flex-col gap-8 h-full">
@@ -460,6 +487,7 @@ export function TaskDetailsPage() {
                     <div className="flex-1 flex flex-col gap-4 min-h-[200px]">
                         {/* Card 1: AI Commit Explanation - Premium Component */}
                         <AICommitExplanationCard
+                            taskId={task.id}
                             commitSha={selectedCommitSha}
                             className="flex-1"
                         />
@@ -514,15 +542,13 @@ function CommitItem({
     return (
         <div
             onClick={onClick}
-            className={`rounded-[16px] p-3 flex items-center gap-3 transition-all ${
-                isSelected
+            className={`rounded-[16px] p-3 flex items-center gap-3 transition-all ${isSelected
                     ? 'bg-blue-50 border-2 border-blue-200'
                     : 'bg-white border-2 border-transparent hover:bg-gray-50'
-            } ${onClick ? 'cursor-pointer' : ''}`}
+                } ${onClick ? 'cursor-pointer' : ''}`}
         >
-            <code className={`text-xs px-2 py-1 rounded font-mono ${
-                isSelected ? 'text-blue-600 bg-blue-100' : 'text-gray-500 bg-gray-100'
-            }`}>
+            <code className={`text-xs px-2 py-1 rounded font-mono ${isSelected ? 'text-blue-600 bg-blue-100' : 'text-gray-500 bg-gray-100'
+                }`}>
                 {hash}
             </code>
             <span className="text-xs text-gray-400">{date}</span>

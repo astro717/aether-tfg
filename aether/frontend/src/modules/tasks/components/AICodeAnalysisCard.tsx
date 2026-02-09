@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock } from "lucide-react";
+import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock, GitCommit } from "lucide-react";
 import { tasksApi, type CodeAnalysisResult } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
@@ -20,7 +20,7 @@ const LOADING_MESSAGES = [
     "Validating inputs...",
 ];
 
-export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICodeAnalysisCardProps) {
+export function AICodeAnalysisCard({ commitSha, className = "" }: AICodeAnalysisCardProps) {
     const [state, setState] = useState<CardState>("idle");
     const [analysis, setAnalysis] = useState<CodeAnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -61,7 +61,7 @@ export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICode
         checkCache();
     }, [commitSha]);
 
-    const handleGenerate = useCallback(async () => {
+    const handleGenerate = useCallback(async (forceRegenerate: boolean = false) => {
         if (!commitSha) return;
 
         setState("loading");
@@ -69,7 +69,7 @@ export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICode
         setError(null);
 
         try {
-            const result = await tasksApi.getCommitCodeAnalysis(commitSha);
+            const result = await tasksApi.getCommitCodeAnalysis(commitSha, { forceRegenerate });
             setAnalysis(result);
             setState("completed");
         } catch (err) {
@@ -87,8 +87,8 @@ export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICode
         setState("idle");
         setAnalysis(null);
         setError(null);
-        // Immediately trigger regeneration
-        handleGenerate();
+        // Trigger regeneration with forceRegenerate=true to bypass cache and delete old reports
+        handleGenerate(true);
     };
 
     // No commit available - Disabled State
@@ -116,7 +116,7 @@ export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICode
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        onClick={handleGenerate}
+                        onClick={() => handleGenerate(false)}
                         className={`bg-white/30 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 cursor-pointer border border-gray-200 hover:bg-white/50 hover:border-gray-300 transition-all min-h-[120px] group w-full ${className}`}
                     >
                         <motion.div
@@ -218,12 +218,19 @@ export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICode
                             {analysis.summary}
                         </p>
 
-                        {/* Footer with timestamp and regenerate */}
+                        {/* Footer with timestamp, commit SHA, and regenerate */}
                         <div className="mt-3 pt-2 border-t border-amber-100 flex items-center justify-between">
-                            <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                                <Clock size={10} className="text-gray-400" />
-                                Scanned {formatTimeAgo(analysis.timestamp)}
-                            </span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                    <Clock size={10} className="text-gray-400" />
+                                    Scanned {formatTimeAgo(analysis.timestamp)}
+                                </span>
+                                <span className="text-[10px] text-gray-300">|</span>
+                                <span className="text-[10px] text-gray-400 flex items-center gap-1 font-mono" title={`Analyzing commit: ${commitSha}`}>
+                                    <GitCommit size={10} className="text-gray-400" />
+                                    {commitSha.substring(0, 7)}
+                                </span>
+                            </div>
                             <button
                                 onClick={handleRegenerateClick}
                                 className="text-[10px] text-gray-400 hover:text-amber-600 transition-colors"
@@ -261,6 +268,7 @@ export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICode
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 analysis={analysis}
+                commitSha={commitSha}
             />
 
             {/* REGENERATE CONFIRMATION DIALOG */}
@@ -278,7 +286,7 @@ export function AICodeAnalysisCard({ taskId, commitSha, className = "" }: AICode
     );
 }
 
-function AnalysisModal({ isOpen, onClose, analysis }: { isOpen: boolean; onClose: () => void; analysis: CodeAnalysisResult | null }) {
+function AnalysisModal({ isOpen, onClose, analysis, commitSha }: { isOpen: boolean; onClose: () => void; analysis: CodeAnalysisResult | null; commitSha: string }) {
     if (!analysis) return null;
 
     return (
@@ -309,10 +317,17 @@ function AnalysisModal({ isOpen, onClose, analysis }: { isOpen: boolean; onClose
                                 </div>
                                 <div>
                                     <h2 className="font-semibold text-gray-900">Security Analysis</h2>
-                                    <p className="text-xs text-gray-500 font-mono">Score: {analysis.score}</p>
+                                    <p className="text-xs text-gray-500 font-mono flex items-center gap-2">
+                                        Score: {analysis.score}
+                                        <span className="text-gray-300">|</span>
+                                        <span className="flex items-center gap-1" title={`Commit: ${commitSha}`}>
+                                            <GitCommit size={12} />
+                                            {commitSha.substring(0, 7)}
+                                        </span>
+                                    </p>
                                 </div>
                             </div>
-                            <motion.button onClick={onClose} className="p-2 rounded-lg hover:bg-white/50 transition-colors">
+                            <motion.button onClick={onClose} className="p-2 rounded-xl hover:bg-white/50 transition-colors">
                                 <X size={20} className="text-gray-500" />
                             </motion.button>
                         </div>
@@ -333,7 +348,7 @@ function AnalysisModal({ isOpen, onClose, analysis }: { isOpen: boolean; onClose
                                 ) : (
                                     <div className="space-y-3">
                                         {analysis.issues.map((issue, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                                            <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-2 h-2 rounded-full ${issue.severity === 'high' ? 'bg-red-500' : issue.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'}`} />
                                                     <div>
@@ -359,7 +374,7 @@ function AnalysisModal({ isOpen, onClose, analysis }: { isOpen: boolean; onClose
                                     <span className="ml-1 text-[10px] text-amber-500">(cached)</span>
                                 )}
                             </span>
-                            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+                            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50">
                                 Close
                             </button>
                         </div>

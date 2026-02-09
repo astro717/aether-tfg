@@ -50,7 +50,7 @@ export function CommitSelectionModal({
                             </div>
                             <motion.button
                                 onClick={onClose}
-                                className="p-2 rounded-lg hover:bg-white/50 transition-colors"
+                                className="p-2 rounded-xl hover:bg-white/50 transition-colors"
                             >
                                 <X size={20} className="text-gray-500" />
                             </motion.button>
@@ -68,7 +68,7 @@ export function CommitSelectionModal({
                             </div>
 
                             {commitMessage && (
-                                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
                                     <p className="text-xs text-gray-500 font-medium mb-1">Commit Message:</p>
                                     <p className="text-sm text-gray-700 line-clamp-2">{commitMessage}</p>
                                 </div>
@@ -79,13 +79,13 @@ export function CommitSelectionModal({
                         <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
                             <button
                                 onClick={onClose}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50 transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={onConfirm}
-                                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg shadow-sm hover:from-blue-600 hover:to-indigo-600 transition-all"
+                                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl shadow-sm hover:from-blue-600 hover:to-indigo-600 transition-all"
                             >
                                 Switch to this commit
                             </button>

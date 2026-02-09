@@ -96,6 +96,19 @@ export interface CommitExplanation {
   timestamp?: string; // ISO date string of when the explanation was generated
 }
 
+export interface CommitInTaskContextExplanation {
+  sha: string;
+  taskId: string;
+  taskTitle: string;
+  readableId: number;
+  explanation: string;
+  howItFulfillsTask: string;
+  remainingWork: string[];
+  technicalDetails: string;
+  cached: boolean;
+  timestamp?: string;
+}
+
 export interface CodeAnalysisResult {
   summary: string;
   score: string;
@@ -248,10 +261,34 @@ class TasksApi {
     return response.json();
   }
 
-  async getCommitCodeAnalysis(sha: string, options?: { onlyCached?: boolean }): Promise<CodeAnalysisResult> {
+  async getCommitExplanationInContext(taskId: string, sha: string, options?: { onlyCached?: boolean; forceRegenerate?: boolean }): Promise<CommitInTaskContextExplanation> {
+    const url = new URL(`${API_BASE_URL}/ai/tasks/${taskId}/commits/${sha}/explain`);
+    if (options?.onlyCached) {
+      url.searchParams.append('onlyCached', 'true');
+    }
+    if (options?.forceRegenerate) {
+      url.searchParams.append('forceRegenerate', 'true');
+    }
+
+    const response = await fetch(
+      url.toString(),
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || `HTTP ${response.status}`;
+      throw new Error(`Failed to fetch commit explanation in context: ${message}`);
+    }
+    return response.json();
+  }
+
+  async getCommitCodeAnalysis(sha: string, options?: { onlyCached?: boolean; forceRegenerate?: boolean }): Promise<CodeAnalysisResult> {
     const url = new URL(`${API_BASE_URL}/ai/commits/${sha}/analyze`);
     if (options?.onlyCached) {
       url.searchParams.append('onlyCached', 'true');
+    }
+    if (options?.forceRegenerate) {
+      url.searchParams.append('forceRegenerate', 'true');
     }
 
     const response = await fetch(
@@ -266,11 +303,14 @@ class TasksApi {
     return response.json();
   }
 
-  async getTaskReport(taskId: string, commitSha: string, options?: { onlyCached?: boolean }): Promise<TaskReportResult> {
+  async getTaskReport(taskId: string, commitSha: string, options?: { onlyCached?: boolean; forceRegenerate?: boolean }): Promise<TaskReportResult> {
     const url = new URL(`${API_BASE_URL}/ai/tasks/${taskId}/report`);
     url.searchParams.append('commitSha', commitSha);
     if (options?.onlyCached) {
       url.searchParams.append('onlyCached', 'true');
+    }
+    if (options?.forceRegenerate) {
+      url.searchParams.append('forceRegenerate', 'true');
     }
 
     const response = await fetch(

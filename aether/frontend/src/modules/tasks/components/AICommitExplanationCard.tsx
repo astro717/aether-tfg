@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bot, Maximize2, X, Sparkles, CheckCircle2, Clock } from "lucide-react";
-import { tasksApi, type CommitExplanation } from "../../dashboard/api/tasksApi";
+import { tasksApi, type CommitInTaskContextExplanation } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
 
 interface AICommitExplanationCardProps {
+  taskId: string;
   commitSha: string | null;
   className?: string;
 }
@@ -20,9 +21,9 @@ const LOADING_MESSAGES = [
   "Generating explanation...",
 ];
 
-export function AICommitExplanationCard({ commitSha, className = "" }: AICommitExplanationCardProps) {
+export function AICommitExplanationCard({ taskId, commitSha, className = "" }: AICommitExplanationCardProps) {
   const [state, setState] = useState<CardState>("idle");
-  const [explanation, setExplanation] = useState<CommitExplanation | null>(null);
+  const [explanation, setExplanation] = useState<CommitInTaskContextExplanation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,14 +40,22 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
     return () => clearInterval(interval);
   }, [state]);
 
-  // Check for cached explanation on mount or commit change
+  // Reset state when commitSha or taskId changes
+  // This ensures we don't show stale data from a previous task/commit
+  useEffect(() => {
+    setState("idle");
+    setExplanation(null);
+    setError(null);
+  }, [commitSha, taskId]);
+
+  // Check for cached explanation after reset
   useEffect(() => {
     async function checkCache() {
-      if (!commitSha) return;
+      if (!commitSha || !taskId) return;
 
       try {
-        // Try to get cached explanation without generating new one
-        const result = await tasksApi.getCommitExplanation(commitSha, { onlyCached: true });
+        // Try to get cached contextual explanation without generating new one
+        const result = await tasksApi.getCommitExplanationInContext(taskId, commitSha, { onlyCached: true });
         setExplanation(result);
         setState("completed");
       } catch (err) {
@@ -58,26 +67,26 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
     if (state === "idle") {
       checkCache();
     }
-  }, [commitSha]);
+  }, [commitSha, taskId, state]);
 
-  const handleGenerate = useCallback(async () => {
-    if (!commitSha) return;
+  const handleGenerate = useCallback(async (forceRegenerate: boolean = false) => {
+    if (!commitSha || !taskId) return;
 
     setState("loading");
     setLoadingMessageIndex(0);
     setError(null);
 
     try {
-      const result = await tasksApi.getCommitExplanation(commitSha);
+      const result = await tasksApi.getCommitExplanationInContext(taskId, commitSha, { forceRegenerate });
       setExplanation(result);
       setState("completed");
     } catch (err) {
-      console.error("Failed to generate explanation:", err);
+      console.error("Failed to generate contextual explanation:", err);
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
       setState("error");
     }
-  }, [commitSha]);
+  }, [commitSha, taskId]);
 
   const handleRegenerateClick = () => {
     setIsConfirmDialogOpen(true);
@@ -87,8 +96,14 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
     setState("idle");
     setExplanation(null);
     setError(null);
-    // Immediately trigger regeneration
-    handleGenerate();
+    // Immediately trigger regeneration with forceRegenerate=true to bypass cache
+    handleGenerate(true);
+  };
+
+  const handleReset = () => {
+    setState("idle");
+    setExplanation(null);
+    setError(null);
   };
 
   // No commit available
@@ -116,7 +131,7 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            onClick={handleGenerate}
+            onClick={() => handleGenerate(false)}
             className={`bg-white/30 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 cursor-pointer border border-gray-200 hover:bg-white/50 hover:border-gray-300 transition-all min-h-[120px] group ${className}`}
           >
             <motion.div
@@ -259,9 +274,9 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
               </motion.button>
             </div>
 
-            {/* Summary Preview (truncated) */}
+            {/* Explanation Preview (truncated) */}
             <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
-              {explanation.summary}
+              {explanation.explanation}
             </p>
 
             {/* Footer with timestamp and regenerate */}
@@ -330,7 +345,7 @@ export function AICommitExplanationCard({ commitSha, className = "" }: AICommitE
 interface ExplanationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  explanation: CommitExplanation | null;
+  explanation: CommitInTaskContextExplanation | null;
   commitSha: string;
 }
 
@@ -366,16 +381,16 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
                   <Sparkles size={20} className="text-white" />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-gray-900">AI Explanation</h2>
+                  <h2 className="font-semibold text-gray-900">AI Contextual Explanation</h2>
                   <p className="text-xs text-gray-500 font-mono">
-                    Commit #{commitSha.substring(0, 7)}
+                    Task #{explanation.readableId} • Commit {commitSha.substring(0, 7)}
                   </p>
                 </div>
               </div>
 
               <motion.button
                 onClick={onClose}
-                className="p-2 rounded-lg hover:bg-white/50 transition-colors"
+                className="p-2 rounded-xl hover:bg-white/50 transition-colors"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -385,35 +400,34 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
 
             {/* Content */}
             <div className="p-6 overflow-y-auto premium-scrollbar flex-1">
-              {/* Summary Section */}
-              <Section title="Summary">
-                <p className="text-gray-700 leading-relaxed text-sm">{explanation.summary}</p>
+              {/* Explanation Section */}
+              <Section title="What This Commit Does">
+                <p className="text-gray-700 leading-relaxed text-sm">{explanation.explanation}</p>
               </Section>
 
-              {/* Files Changed Section */}
-              <Section title="Files Changed">
-                <ul className="space-y-1">
-                  {explanation.filesChanged.map((file, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
-                      <span className="text-purple-500 mt-1">•</span>
-                      <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{file}</span>
-                    </li>
-                  ))}
-                </ul>
+              {/* How It Fulfills Task Section */}
+              <Section title="How It Fulfills the Task">
+                <p className="text-gray-700 leading-relaxed text-sm">{explanation.howItFulfillsTask}</p>
               </Section>
 
-              {/* Impact Section */}
-              <Section title="Impact">
-                <p className="text-gray-700 leading-relaxed text-sm">{explanation.impact}</p>
+              {/* Technical Details Section */}
+              <Section title="Technical Details">
+                <p className="text-gray-700 leading-relaxed text-sm">{explanation.technicalDetails}</p>
               </Section>
 
-              {/* Code Quality Section */}
-              <Section title="Code Quality Assessment">
-                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                  <QualityBadge quality={explanation.codeQuality} />
-                  <span className="text-sm font-medium text-gray-700">{explanation.codeQuality}</span>
-                </div>
-              </Section>
+              {/* Remaining Work Section */}
+              {explanation.remainingWork && explanation.remainingWork.length > 0 && (
+                <Section title="Remaining Work">
+                  <ul className="space-y-2">
+                    {explanation.remainingWork.map((item, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
+                        <span className="text-purple-500 mt-1">•</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Section>
+              )}
             </div>
 
             {/* Footer */}
@@ -427,7 +441,7 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
               </span>
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50"
               >
                 Close
               </button>
@@ -452,17 +466,3 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function QualityBadge({ quality }: { quality: string }) {
-  const lowerQuality = quality.toLowerCase();
-
-  if (lowerQuality.includes("good") || lowerQuality.includes("excellent")) {
-    return <div className="w-3 h-3 rounded-full bg-green-500" />;
-  }
-  if (lowerQuality.includes("improvement") || lowerQuality.includes("moderate")) {
-    return <div className="w-3 h-3 rounded-full bg-yellow-500" />;
-  }
-  if (lowerQuality.includes("concern") || lowerQuality.includes("poor")) {
-    return <div className="w-3 h-3 rounded-full bg-red-500" />;
-  }
-  return <div className="w-3 h-3 rounded-full bg-gray-400" />;
-}
