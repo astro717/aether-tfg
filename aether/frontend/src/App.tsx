@@ -11,6 +11,7 @@ import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { TaskDetailsPage } from "./modules/tasks/pages/TaskDetailsPage";
 import { MainDashboardPage } from "./modules/dashboard/pages/MainDashboardPage";
 import { MessagingPage } from "./modules/messaging/pages/MessagingPage";
+import { SettingsPage } from "./modules/settings/pages/SettingsPage";
 import { OrganizationProvider } from "./modules/organization/context/OrganizationContext";
 import { AuthProvider } from "./modules/auth/context/AuthContext";
 import { ToastProvider } from "./components/ui/Toast";
@@ -54,6 +55,16 @@ function App() {
             element={
               <DashboardLayout>
                 <MessagingPage />
+              </DashboardLayout>
+            }
+          />
+
+          {/* Settings Route */}
+          <Route
+            path="/settings"
+            element={
+              <DashboardLayout>
+                <SettingsPage />
               </DashboardLayout>
             }
           />

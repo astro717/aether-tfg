@@ -543,8 +543,8 @@ function CommitItem({
         <div
             onClick={onClick}
             className={`rounded-[16px] p-3 flex items-center gap-3 transition-all ${isSelected
-                    ? 'bg-blue-50 border-2 border-blue-200'
-                    : 'bg-white border-2 border-transparent hover:bg-gray-50'
+                ? 'bg-blue-50 border-2 border-blue-200'
+                : 'bg-white border-2 border-transparent hover:bg-gray-50'
                 } ${onClick ? 'cursor-pointer' : ''}`}
         >
             <code className={`text-xs px-2 py-1 rounded font-mono ${isSelected ? 'text-blue-600 bg-blue-100' : 'text-gray-500 bg-gray-100'

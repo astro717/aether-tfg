@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
-import { Search, Sidebar as SidebarIcon, Plus, Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Sidebar as SidebarIcon, Plus, Loader2, Settings } from "lucide-react";
+import { Link, useLocation, useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../modules/auth/context/AuthContext";
 import { tasksApi, type Task } from "../../modules/dashboard/api/tasksApi";
 import { messagingApi, type Conversation } from "../../modules/messaging/api/messagingApi";
 import { CreateTaskModal } from "../../modules/tasks/components/CreateTaskModal";
+import { SidebarSearch } from "./SidebarSearch";
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -15,9 +16,13 @@ const MESSAGES_POLLING_INTERVAL = 4000; // 4 seconds
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [myTasks, setMyTasks] = useState<Task[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
-    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const location = useLocation();
+    const isSettingsActive = location.pathname === '/settings';
+    const [searchParams] = useSearchParams();
+    const activeUserId = searchParams.get("user");
 
     // Sidebar collapse state
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -125,38 +130,42 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 {/* Search - Hidden when collapsed */}
                 {!isCollapsed && (
                     <div className="px-6 mb-6">
-                        <div className="relative">
-                            <Search
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                                size={15}
-                            />
-                            <input
-                                type="text"
-                                placeholder="Search"
-                                className="
-                                    w-full h-9 pl-9 pr-4
-                                    bg-gray-100 hover:bg-gray-200/60
-                                    rounded-full
-                                    text-sm text-gray-900
-                                    placeholder:text-gray-500
-                                    outline-none
-                                    border-none
-                                    focus:bg-white focus:ring-2 focus:ring-gray-200
-                                    transition-all duration-200
-                                "
-                            />
-                        </div>
+                        <SidebarSearch
+                            tasks={myTasks}
+                            conversations={conversations}
+                        />
                     </div>
                 )}
 
                 {/* User Profile */}
-                <div className={`mb-8 flex items-center ${isCollapsed ? 'px-4 justify-center' : 'px-6 gap-3'}`}>
-                    <div className="w-8 h-8 rounded-full bg-[#E5E7EB] flex items-center justify-center text-gray-500 font-medium text-sm flex-shrink-0">
-                        {userInitials}
-                    </div>
-                    {!isCollapsed && (
-                        <span className="font-medium text-gray-700 text-sm truncate">{userName}</span>
-                    )}
+                <div className={`mb-6 ${isCollapsed ? 'px-2' : 'px-4'}`}>
+                    <button
+                        className={`
+                            w-full flex items-center group
+                            ${isCollapsed ? 'justify-center p-2' : 'px-3 py-2 gap-3'}
+                            rounded-xl transition-all duration-200
+                            cursor-pointer outline-none
+                            ${isSettingsActive ? 'bg-[#E6E8EB] shadow-sm' : 'hover:bg-gray-100'}
+                        `}
+                        onClick={() => navigate('/settings')}
+                    >
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 transition-colors bg-gradient-to-b shadow-sm ring-1 ring-inset
+                            ${isSettingsActive
+                                ? 'from-[#3A3A3C] to-[#2C2C2E] text-white font-medium ring-transparent'
+                                : 'from-[#F2F2F7] to-[#E5E5EA] text-gray-500 font-medium ring-black/5 group-hover:from-[#E5E5EA] group-hover:to-[#D1D1D6]'}
+                        `}>
+                            {userInitials}
+                        </div>
+                        {!isCollapsed && (
+                            <>
+                                <span className={`font-medium text-sm truncate flex-1 text-left ${isSettingsActive ? 'text-gray-900' : 'text-gray-700'}`}>{userName}</span>
+                                <Settings
+                                    size={16}
+                                    className={`transition-all duration-200 ${isSettingsActive ? 'text-gray-600 opacity-100' : 'text-gray-400 opacity-0 group-hover:opacity-100'}`}
+                                />
+                            </>
+                        )}
+                    </button>
                 </div>
 
                 {/* Scrollable Tasks + Messages */}
@@ -187,11 +196,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                     <TaskItem
                                         key={task.id}
                                         taskId={task.id}
-                                        label={task.title}
-                                        active={selectedTaskId === task.id}
+                                        label={task.title || "Untitled Task"}
+                                        active={location.pathname === `/tasks/${task.id}`}
                                         hasDot
                                         dotColor={getPriorityDotColor(task.due_date)}
-                                        onClick={() => setSelectedTaskId(task.id)}
                                         isCollapsed={isCollapsed}
                                     />
                                 ))
@@ -223,14 +231,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                     const isComment = conv.lastMessage.type === 'comment_notification';
                                     const preview = isComment
                                         ? 'Commented on your task'
-                                        : conv.lastMessage.content;
+                                        : (conv.lastMessage.content || '');
                                     return (
                                         <Link key={conv.user.id} to={`/messages?user=${conv.user.id}`}>
                                             <MessageItem
                                                 name={conv.user.username || 'User'}
                                                 preview={preview}
                                                 unreadCount={conv.unreadCount}
-                                                active={false}
+                                                active={location.pathname === '/messages' && activeUserId === conv.user.id}
                                                 isCollapsed={isCollapsed}
                                             />
                                         </Link>
