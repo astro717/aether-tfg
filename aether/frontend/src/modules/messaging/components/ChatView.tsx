@@ -75,19 +75,36 @@ export function ChatView({
     }
   }, [loading, userId]); // Only on user switch or done loading
 
+  const prevLastMessageIdRef = useRef<string | null>(null);
+
   // 2. Smart auto-scroll on new messages
   useEffect(() => {
-    // Basic check: if we are close to bottom, or if *we* sent the last message, scroll down.
+    // Check if we actually have a *new* message at the end
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+
+    // If the last message ID hasn't changed, do NOTHING.
+    // This prevents scrolling on polling updates when content is stable.
+    if (lastMessage.id === prevLastMessageIdRef.current) {
+      return;
+    }
+
+    // Update ref for next time
+    prevLastMessageIdRef.current = lastMessage.id;
+
+    // Basic check: if we are close to bottom, scroll down.
     const container = scrollContainerRef.current;
     if (!container) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 150; // 150px threshold
 
-    // Always scroll if we just sent a message (optimistic or real)
-    const lastMessage = messages[messages.length - 1];
-    const isOurMessage = lastMessage?.sender_id === currentUserId;
+    // Determine if we should auto-scroll
+    const isOurMessage = lastMessage.sender_id === currentUserId;
 
+    // Scroll if:
+    // 1. We were already at the bottom (reading new incoming messages)
+    // 2. We just sent the message (force scroll to see our own message)
     if (isNearBottom || isOurMessage) {
       scrollToBottom("smooth");
     }
