@@ -128,9 +128,9 @@ export function MessagingLayout() {
         <div
           className="
             w-80 shrink-0
-            bg-white/50 backdrop-blur-xl
+            bg-white/50 dark:bg-white/5 backdrop-blur-xl
             rounded-[32px]
-            border border-white/40
+            border border-white/40 dark:border-white/10
             shadow-xl
             overflow-hidden
           "
@@ -149,9 +149,9 @@ export function MessagingLayout() {
         <div
           className="
             flex-1
-            bg-white/50 backdrop-blur-xl
+            bg-white/50 dark:bg-white/5 backdrop-blur-xl
             rounded-[32px]
-            border border-white/40
+            border border-white/40 dark:border-white/10
             shadow-xl
             overflow-hidden
           "

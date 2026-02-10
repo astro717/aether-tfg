@@ -4,6 +4,7 @@ import { Bot, Maximize2, X, Sparkles, CheckCircle2, Clock } from "lucide-react";
 import { tasksApi, type CommitInTaskContextExplanation } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
+import { useSettings } from "../../settings/context/SettingsContext";
 
 interface AICommitExplanationCardProps {
   taskId: string;
@@ -22,6 +23,7 @@ const LOADING_MESSAGES = [
 ];
 
 export function AICommitExplanationCard({ taskId, commitSha, className = "" }: AICommitExplanationCardProps) {
+  const { aiLanguage, analysisDepth } = useSettings();
   const [state, setState] = useState<CardState>("idle");
   const [explanation, setExplanation] = useState<CommitInTaskContextExplanation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
     setError(null);
 
     try {
-      const result = await tasksApi.getCommitExplanationInContext(taskId, commitSha, { forceRegenerate });
+      const result = await tasksApi.getCommitExplanationInContext(taskId, commitSha, { forceRegenerate, language: aiLanguage, depth: analysisDepth });
       setExplanation(result);
       setState("completed");
     } catch (err) {
@@ -86,7 +88,7 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
       setError(errorMessage);
       setState("error");
     }
-  }, [commitSha, taskId]);
+  }, [commitSha, taskId, aiLanguage, analysisDepth]);
 
   const handleRegenerateClick = () => {
     setIsConfirmDialogOpen(true);
@@ -109,14 +111,14 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
   // No commit available
   if (!commitSha) {
     return (
-      <div className={`bg-white/20 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 border border-gray-200/50 min-h-[120px] opacity-50 ${className}`}>
-        <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
-          <Bot size={18} className="text-gray-400" />
+      <div className={`bg-white/20 dark:bg-white/5 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 border border-gray-200/50 dark:border-zinc-700/50 min-h-[120px] opacity-50 ${className}`}>
+        <div className="w-8 h-8 rounded-full border border-gray-300 dark:border-zinc-600 flex items-center justify-center">
+          <Bot size={18} className="text-gray-400 dark:text-gray-500" />
         </div>
-        <h4 className="text-gray-400 font-medium text-sm leading-tight">
+        <h4 className="text-gray-400 dark:text-gray-500 font-medium text-sm leading-tight">
           Generate commit explanation
         </h4>
-        <p className="text-xs text-gray-400">Link a commit first</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">Link a commit first</p>
       </div>
     );
   }
@@ -132,15 +134,15 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             onClick={() => handleGenerate(false)}
-            className={`bg-white/30 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 cursor-pointer border border-gray-200 hover:bg-white/50 hover:border-gray-300 transition-all min-h-[120px] group ${className}`}
+            className={`bg-white/30 dark:bg-white/5 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 cursor-pointer border border-gray-200 dark:border-zinc-700 hover:bg-white/50 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-zinc-600 transition-all min-h-[120px] group ${className}`}
           >
             <motion.div
-              className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center group-hover:border-purple-400 group-hover:bg-purple-50 transition-all"
+              className="w-8 h-8 rounded-full border border-gray-300 dark:border-zinc-600 flex items-center justify-center group-hover:border-purple-400 group-hover:bg-purple-50 dark:group-hover:bg-purple-900/30 transition-all"
               whileHover={{ scale: 1.1 }}
             >
-              <Bot size={18} className="text-gray-600 group-hover:text-purple-500 transition-colors" />
+              <Bot size={18} className="text-gray-600 dark:text-gray-400 group-hover:text-purple-500 transition-colors" />
             </motion.div>
-            <h4 className="text-gray-700 font-medium text-sm leading-tight group-hover:text-purple-600 transition-colors">
+            <h4 className="text-gray-700 dark:text-gray-300 font-medium text-sm leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
               Generate commit explanation
             </h4>
           </motion.button>
@@ -170,7 +172,7 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
             />
 
             {/* Glass overlay */}
-            <div className="absolute inset-0 bg-white/40 backdrop-blur-sm border border-purple-200/50 rounded-xl" />
+            <div className="absolute inset-0 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-sm border border-purple-200/50 dark:border-purple-500/30 rounded-xl" />
 
             {/* Content */}
             <div className="relative z-10 flex flex-col items-center gap-3">
@@ -211,7 +213,7 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="text-sm font-medium text-purple-700"
+                  className="text-sm font-medium text-purple-700 dark:text-purple-300"
                 >
                   {LOADING_MESSAGES[loadingMessageIndex]}
                 </motion.p>
@@ -247,18 +249,18 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             layoutId="explanation-card"
-            className={`relative bg-white/40 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 min-h-[120px] ${className}`}
+            className={`relative bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 dark:border-green-500/30 min-h-[120px] ${className}`}
           >
             {/* Header */}
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-                  <CheckCircle2 size={14} className="text-green-600" />
+                <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <CheckCircle2 size={14} className="text-green-600 dark:text-green-400" />
                 </div>
-                <span className="text-xs font-medium text-green-700 flex items-center gap-1">
+                <span className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1">
                   AI Explanation
                   {explanation.cached && (
-                    <span className="text-[10px] text-gray-400 font-normal">(cached)</span>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-normal">(cached)</span>
                   )}
                 </span>
               </div>
@@ -266,28 +268,28 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
               {/* Expand Button */}
               <motion.button
                 onClick={() => setIsModalOpen(true)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors group"
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors group"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Maximize2 size={14} className="text-gray-400 group-hover:text-gray-600" />
+                <Maximize2 size={14} className="text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
               </motion.button>
             </div>
 
             {/* Explanation Preview (truncated) */}
-            <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-3">
               {explanation.explanation}
             </p>
 
             {/* Footer with timestamp and regenerate */}
-            <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                <Clock size={10} className="text-gray-400" />
+            <div className="mt-3 pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                <Clock size={10} className="text-gray-400 dark:text-gray-500" />
                 Generated {formatTimeAgo(explanation.timestamp)}
               </span>
               <button
                 onClick={handleRegenerateClick}
-                className="text-[10px] text-gray-400 hover:text-purple-600 transition-colors"
+                className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
               >
                 Regenerate
               </button>
@@ -302,15 +304,15 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className={`bg-red-50/50 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 border border-red-200/50 min-h-[120px] ${className}`}
+            className={`bg-red-50/50 dark:bg-red-900/20 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 border border-red-200/50 dark:border-red-500/30 min-h-[120px] ${className}`}
           >
-            <div className="w-8 h-8 rounded-full border border-red-300 flex items-center justify-center">
-              <Bot size={18} className="text-red-500" />
+            <div className="w-8 h-8 rounded-full border border-red-300 dark:border-red-500/50 flex items-center justify-center">
+              <Bot size={18} className="text-red-500 dark:text-red-400" />
             </div>
-            <p className="text-xs text-red-600 max-w-[200px] line-clamp-3">{error}</p>
+            <p className="text-xs text-red-600 dark:text-red-400 max-w-[200px] line-clamp-3">{error}</p>
             <button
               onClick={handleReset}
-              className="text-xs text-red-500 hover:text-red-700 underline"
+              className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
             >
               Try again
             </button>
@@ -372,17 +374,17 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            className="relative w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-blue-50 flex-shrink-0">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg">
                   <Sparkles size={20} className="text-white" />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-gray-900">AI Contextual Explanation</h2>
-                  <p className="text-xs text-gray-500 font-mono">
+                  <h2 className="font-semibold text-gray-900 dark:text-white">AI Contextual Explanation</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                     Task #{explanation.readableId} • Commit {commitSha.substring(0, 7)}
                   </p>
                 </div>
@@ -390,11 +392,11 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
 
               <motion.button
                 onClick={onClose}
-                className="p-2 rounded-xl hover:bg-white/50 transition-colors"
+                className="p-2 rounded-xl hover:bg-white/50 dark:hover:bg-zinc-800 transition-colors"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <X size={20} className="text-gray-500" />
+                <X size={20} className="text-gray-500 dark:text-gray-400" />
               </motion.button>
             </div>
 
@@ -402,17 +404,17 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
             <div className="p-6 overflow-y-auto premium-scrollbar flex-1">
               {/* Explanation Section */}
               <Section title="What This Commit Does">
-                <p className="text-gray-700 leading-relaxed text-sm">{explanation.explanation}</p>
+                <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">{explanation.explanation}</p>
               </Section>
 
               {/* How It Fulfills Task Section */}
               <Section title="How It Fulfills the Task">
-                <p className="text-gray-700 leading-relaxed text-sm">{explanation.howItFulfillsTask}</p>
+                <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">{explanation.howItFulfillsTask}</p>
               </Section>
 
               {/* Technical Details Section */}
               <Section title="Technical Details">
-                <p className="text-gray-700 leading-relaxed text-sm">{explanation.technicalDetails}</p>
+                <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">{explanation.technicalDetails}</p>
               </Section>
 
               {/* Remaining Work Section */}
@@ -420,7 +422,7 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
                 <Section title="Remaining Work">
                   <ul className="space-y-2">
                     {explanation.remainingWork.map((item, index) => (
-                      <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
+                      <li key={index} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <span className="text-purple-500 mt-1">•</span>
                         <span>{item}</span>
                       </li>
@@ -431,9 +433,9 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between flex-shrink-0">
-              <span className="text-xs text-gray-400 flex items-center gap-1.5">
-                <Clock size={12} className="text-gray-400" />
+            <div className="px-6 py-3 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/50 flex items-center justify-between flex-shrink-0">
+              <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
+                <Clock size={12} className="text-gray-400 dark:text-gray-500" />
                 Generated {formatTimeAgo(explanation.timestamp)}
                 {explanation.cached && (
                   <span className="ml-1 text-[10px] text-blue-500">(cached)</span>
@@ -441,7 +443,7 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
               </span>
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700"
               >
                 Close
               </button>
@@ -457,7 +459,7 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-5 last:mb-0">
-      <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
         <div className="w-1 h-4 rounded-full bg-gradient-to-b from-purple-500 to-blue-500" />
         {title}
       </h3>

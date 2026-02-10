@@ -11,6 +11,7 @@ import { MessagesModule } from './messages/messages.module';
 import { GithubModule } from './github/github.module';
 import { AiModule } from './ai/ai.module';
 import { SupabaseModule } from './supabase/supabase.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { HealthController } from './health.controller';
 import configuration, { configurationSchema } from './config/configuration';
 
@@ -35,6 +36,7 @@ import configuration, { configurationSchema } from './config/configuration';
     MessagesModule,
     GithubModule,
     AiModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })

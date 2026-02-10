@@ -2,15 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- Fondo radial global, inapelable --- */
+/* --- Global Background with Theme Support --- */
 html {
   height: 100%;
-  background: radial-gradient(ellipse at center, #f4f5f7 0%, #d8dadf 100%) !important;
+  background: radial-gradient(ellipse at center, #f4f5f7 0%, #d8dadf 100%);
   background-attachment: fixed;
   background-repeat: no-repeat;
+  transition: background 0.3s ease;
 }
 
-/* Asegura que todo ocupa el alto y NO tapa el radial */
+html.dark {
+  background: radial-gradient(ellipse at center, #18181B 0%, #09090B 100%);
+}
+
+/* Ensure full height and transparent children */
 body, #root {
   height: 100%;
   background: transparent !important;
@@ -18,12 +23,18 @@ body, #root {
   padding: 0;
 }
 
-/* (Opcional) Colores de texto base si los necesitas */
+/* Base text colors */
 :root {
   --foreground: 222.2 84% 4.9%;
 }
+
 body {
   color: hsl(var(--foreground));
+  transition: color 0.2s ease;
+}
+
+html.dark body {
+  color: #FAFAFA;
 }
 
 /* --- Premium Message Animations --- */

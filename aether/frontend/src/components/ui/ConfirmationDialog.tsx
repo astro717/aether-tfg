@@ -31,14 +31,14 @@ export function ConfirmationDialog({
 
   const variantStyles = {
     danger: {
-      icon: "bg-red-100 text-red-600",
+      icon: "bg-red-100 dark:bg-red-900/30 text-red-600",
       button: "bg-red-500 hover:bg-red-600 text-white",
-      border: "border-red-200",
+      border: "border-red-200 dark:border-red-800/50",
     },
     warning: {
-      icon: "bg-amber-100 text-amber-600",
+      icon: "bg-amber-100 dark:bg-amber-900/30 text-amber-600",
       button: "bg-amber-500 hover:bg-amber-600 text-white",
-      border: "border-amber-200",
+      border: "border-amber-200 dark:border-amber-800/50",
     },
   };
 
@@ -63,14 +63,14 @@ export function ConfirmationDialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className={`relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden border ${styles.border}`}
+            className={`relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden border ${styles.border}`}
           >
             {/* Close button */}
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              <X size={18} className="text-gray-400" />
+              <X size={18} className="text-gray-400 dark:text-gray-500" />
             </button>
 
             {/* Content */}
@@ -83,12 +83,12 @@ export function ConfirmationDialog({
               </div>
 
               {/* Title */}
-              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white text-center mb-2">
                 {title}
               </h3>
 
               {/* Message */}
-              <p className="text-sm text-gray-600 text-center leading-relaxed">
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
                 {message}
               </p>
             </div>
@@ -98,7 +98,7 @@ export function ConfirmationDialog({
               <button
                 onClick={onClose}
                 disabled={isLoading}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-xl transition-colors disabled:opacity-50"
               >
                 {cancelLabel}
               </button>

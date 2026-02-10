@@ -134,16 +134,16 @@ export function ChatView({
             className="
               w-16 h-16 mx-auto mb-4
               rounded-full
-              bg-white/40
+              bg-white/40 dark:bg-white/10
               flex items-center justify-center
             "
           >
             <MessageCircle size={28} className="text-gray-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-700 mb-1">
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-1">
             No Conversation Selected
           </h3>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Choose a conversation to start messaging
           </p>
         </div>
@@ -244,25 +244,25 @@ function ChatHeader({ user }: ChatHeaderProps) {
     .slice(0, 2) || user.username.slice(0, 2).toUpperCase();
 
   return (
-    <div className="flex items-center justify-between px-5 py-3 border-b border-white/20">
+    <div className="flex items-center justify-between px-5 py-3 border-b border-white/20 dark:border-white/10">
       {/* Left: Avatar & Name */}
       <div className="flex items-center gap-3">
         <div
           className="
             w-10 h-10
             rounded-full
-            bg-gradient-to-br from-gray-200 to-gray-300
+            bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-600 dark:to-zinc-700
             flex items-center justify-center
-            font-semibold text-gray-600 text-sm
+            font-semibold text-gray-600 dark:text-gray-300 text-sm
           "
         >
           {initials}
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
             {user.username}
           </h3>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             {user.email}
           </p>
         </div>
@@ -288,8 +288,8 @@ function UnreadSeparator() {
 function DateSeparator({ date }: { date: string }) {
   return (
     <div className="flex items-center justify-center py-4">
-      <div className="bg-gray-200/50 backdrop-blur-sm px-3 py-1 rounded-full border border-white/20">
-        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+      <div className="bg-gray-200/50 dark:bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full border border-white/20 dark:border-white/10">
+        <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {date}
         </span>
       </div>

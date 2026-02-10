@@ -35,51 +35,51 @@ export function CommitSelectionModal({
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+                        className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden"
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg">
                                     <GitCommit size={20} className="text-white" />
                                 </div>
                                 <div>
-                                    <h2 className="font-semibold text-gray-900">Switch Commit View</h2>
-                                    <p className="text-xs text-gray-500 font-mono">{shortHash}</p>
+                                    <h2 className="font-semibold text-gray-900 dark:text-white">Switch Commit View</h2>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{shortHash}</p>
                                 </div>
                             </div>
                             <motion.button
                                 onClick={onClose}
-                                className="p-2 rounded-xl hover:bg-white/50 transition-colors"
+                                className="p-2 rounded-xl hover:bg-white/50 dark:hover:bg-zinc-800 transition-colors"
                             >
-                                <X size={20} className="text-gray-500" />
+                                <X size={20} className="text-gray-500 dark:text-gray-400" />
                             </motion.button>
                         </div>
 
                         {/* Content */}
                         <div className="p-6 space-y-4">
-                            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                            <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/30">
                                 <AlertCircle className="text-blue-500 shrink-0 mt-0.5" size={18} />
                                 <div className="flex-1">
-                                    <p className="text-sm text-blue-900 leading-relaxed">
+                                    <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed">
                                         This will update the code view and AI analysis to reflect the state of code at this commit.
                                     </p>
                                 </div>
                             </div>
 
                             {commitMessage && (
-                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                    <p className="text-xs text-gray-500 font-medium mb-1">Commit Message:</p>
-                                    <p className="text-sm text-gray-700 line-clamp-2">{commitMessage}</p>
+                                <div className="p-3 bg-gray-50 dark:bg-zinc-800 rounded-xl border border-gray-100 dark:border-zinc-700">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">Commit Message:</p>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">{commitMessage}</p>
                                 </div>
                             )}
                         </div>
 
                         {/* Actions */}
-                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+                        <div className="px-6 py-4 bg-gray-50 dark:bg-zinc-800/50 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-end gap-3">
                             <button
                                 onClick={onClose}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50 transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors"
                             >
                                 Cancel
                             </button>

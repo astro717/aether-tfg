@@ -146,7 +146,7 @@ export function LinkCommitModal({
         <div className="absolute inset-0 bg-black/20 backdrop-blur-md" />
         <div
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-md mx-4 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6"
+          className="relative w-full max-w-md mx-4 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6"
           style={{
             boxShadow:
               "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1)",
@@ -154,13 +154,13 @@ export function LinkCommitModal({
         >
           <div className="flex flex-col items-center gap-3 text-center">
             <AlertCircle className="w-10 h-10 text-orange-500" />
-            <h3 className="text-lg font-semibold text-gray-900">No Repository Assigned</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No Repository Assigned</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               This task doesn't have a repository assigned. Please assign a repository first.
             </p>
             <button
               onClick={onClose}
-              className="mt-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+              className="mt-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
             >
               Close
             </button>
@@ -181,25 +181,25 @@ export function LinkCommitModal({
       {/* Modal Card */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-2xl mx-4 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl transform transition-all duration-200 ease-out animate-modal-enter"
+        className="relative w-full max-w-2xl mx-4 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-3xl shadow-2xl transform transition-all duration-200 ease-out animate-modal-enter"
         style={{
           boxShadow:
             "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1)",
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-200/50">
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-200/50 dark:border-zinc-700/50">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Link Commit</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Link Commit</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               Select a commit to link to this task
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <X size={18} className="text-gray-500" />
+            <X size={18} className="text-gray-500 dark:text-gray-400" />
           </button>
         </div>
 
@@ -216,13 +216,13 @@ export function LinkCommitModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by message, hash, or author..."
-                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-sm text-gray-800 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
               />
             </div>
             <button
               onClick={handleSyncCommits}
               disabled={syncing || loading}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:cursor-not-allowed text-gray-700 disabled:text-gray-400 rounded-xl text-sm font-medium transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 disabled:bg-gray-50 dark:disabled:bg-zinc-800/50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 disabled:text-gray-400 dark:disabled:text-gray-500 rounded-xl text-sm font-medium transition-all"
               title="Sync commits from GitHub"
             >
               <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
@@ -232,7 +232,7 @@ export function LinkCommitModal({
 
           {/* Success Message */}
           {syncSuccess && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+            <div className="mt-2 flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
               <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
               {syncSuccess}
             </div>
@@ -243,17 +243,17 @@ export function LinkCommitModal({
         <div className="px-6 py-4">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-gray-500" />
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
               <AlertCircle className="w-8 h-8 text-red-400" />
-              <p className="text-sm text-gray-600">{error}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">{error}</p>
             </div>
           ) : filteredCommits.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2">
-              <GitCommit className="w-8 h-8 text-gray-300" />
-              <p className="text-sm text-gray-500">
+              <GitCommit className="w-8 h-8 text-gray-300 dark:text-gray-600" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 {commits.length === 0
                   ? "No commits found. Please sync commits from GitHub first."
                   : "No commits match your search."}
@@ -272,10 +272,10 @@ export function LinkCommitModal({
                     disabled={isLinked}
                     className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
                       isLinked
-                        ? "bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed"
+                        ? "bg-gray-50 dark:bg-zinc-800/50 border-gray-200 dark:border-zinc-700 opacity-50 cursor-not-allowed"
                         : isSelected
-                        ? "bg-blue-50 border-blue-400 shadow-sm"
-                        : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-400 shadow-sm"
+                        : "bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 hover:border-gray-300 dark:hover:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700/50"
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -284,24 +284,24 @@ export function LinkCommitModal({
                           size={16}
                           className={
                             isLinked
-                              ? "text-gray-300"
+                              ? "text-gray-300 dark:text-gray-600"
                               : isSelected
                               ? "text-blue-500"
-                              : "text-gray-400"
+                              : "text-gray-400 dark:text-gray-500"
                           }
                         />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <code className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                          <code className="text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-zinc-700 px-2 py-0.5 rounded">
                             {commit.sha.substring(0, 7)}
                           </code>
                           {commit.author_login && (
-                            <span className="text-xs text-gray-500 font-medium">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
                               {commit.author_login}
                             </span>
                           )}
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
                             {new Date(commit.committed_at).toLocaleDateString("en-US", {
                               month: "short",
                               day: "numeric",
@@ -309,12 +309,12 @@ export function LinkCommitModal({
                             })}
                           </span>
                           {isLinked && (
-                            <span className="text-xs text-gray-400 italic ml-auto">
+                            <span className="text-xs text-gray-400 dark:text-gray-500 italic ml-auto">
                               Already linked
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-700 line-clamp-2">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">
                           {commit.message || "No message"}
                         </p>
                       </div>
@@ -327,10 +327,10 @@ export function LinkCommitModal({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3 px-6 pb-5 pt-2 border-t border-gray-200/50">
+        <div className="flex items-center justify-end gap-3 px-6 pb-5 pt-2 border-t border-gray-200/50 dark:border-zinc-700/50">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
           >
             Cancel
           </button>

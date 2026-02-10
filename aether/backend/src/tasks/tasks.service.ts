@@ -6,6 +6,7 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { Prisma } from '@prisma/client';
 import { MessagesService } from '../messages/messages.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 
 @Injectable()
@@ -13,6 +14,7 @@ export class TasksService {
   constructor(
     private prisma: PrismaService,
     private messagesService: MessagesService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateTaskDto, creator: any) {
@@ -62,7 +64,22 @@ export class TasksService {
       data.validated_by = creator.id;
     }
 
-    return this.prisma.tasks.create({ data });
+    const task = await this.prisma.tasks.create({ data });
+
+    // Create notification if task is assigned to someone other than creator
+    if (dto.assignee_id && dto.assignee_id !== creator.id) {
+      await this.notificationsService.create({
+        user_id: dto.assignee_id,
+        actor_id: creator.id,
+        type: 'TASK_ASSIGNED',
+        title: 'New Task Assigned',
+        content: dto.title,
+        entity_id: task.id,
+        entity_type: 'task',
+      });
+    }
+
+    return task;
   }
 
 
@@ -351,8 +368,52 @@ export class TasksService {
       },
     });
 
-    // If task has an assignee and commenter is NOT the assignee, send notification
-    if (task.assignee_id && task.assignee_id !== userId) {
+    // Parse @mentions from content
+    const mentionedUsernames = this.parseMentions(content);
+    const mentionedUserIds = new Set<string>();
+
+    if (mentionedUsernames.length > 0) {
+      // Find users by username
+      const mentionedUsers = await this.prisma.users.findMany({
+        where: {
+          username: { in: mentionedUsernames },
+        },
+        select: { id: true, username: true },
+      });
+
+      // Create MENTION notifications for mentioned users (except commenter)
+      for (const mentionedUser of mentionedUsers) {
+        if (mentionedUser.id !== userId) {
+          mentionedUserIds.add(mentionedUser.id);
+          await this.notificationsService.create({
+            user_id: mentionedUser.id,
+            actor_id: userId,
+            type: 'MENTION',
+            title: 'You were mentioned',
+            content: `Mentioned you in a comment on "${task.title}"`,
+            entity_id: taskId,
+            entity_type: 'task',
+          });
+        }
+      }
+    }
+
+    // Create TASK_COMMENT notification for assignee if:
+    // - Task has an assignee
+    // - Commenter is NOT the assignee
+    // - Assignee was NOT already mentioned (to avoid duplicate notifications)
+    if (task.assignee_id && task.assignee_id !== userId && !mentionedUserIds.has(task.assignee_id)) {
+      await this.notificationsService.create({
+        user_id: task.assignee_id,
+        actor_id: userId,
+        type: 'TASK_COMMENT',
+        title: 'New Comment',
+        content: `Commented on "${task.title}"`,
+        entity_id: taskId,
+        entity_type: 'task',
+      });
+
+      // Also send the legacy chat notification for backwards compatibility
       await this.messagesService.createCommentNotification(
         userId,
         task.assignee_id,
@@ -363,6 +424,19 @@ export class TasksService {
     }
 
     return comment;
+  }
+
+  /**
+   * Parse @username mentions from content
+   */
+  private parseMentions(content: string): string[] {
+    const mentionRegex = /@(\w+)/g;
+    const matches: string[] = [];
+    let match;
+    while ((match = mentionRegex.exec(content)) !== null) {
+      matches.push(match[1]);
+    }
+    return [...new Set(matches)]; // Remove duplicates
   }
 
   async getComments(taskId: string) {

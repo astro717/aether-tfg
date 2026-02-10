@@ -115,23 +115,23 @@ export function UserSearchModal({
           relative z-10
           w-full max-w-md
           mx-4
-          bg-white/70 backdrop-blur-xl
+          bg-white/70 dark:bg-zinc-900/90 backdrop-blur-xl
           rounded-2xl
-          border border-white/40
+          border border-white/40 dark:border-zinc-700/50
           shadow-2xl
           overflow-hidden
         "
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/30">
-          <h2 className="text-lg font-semibold text-gray-900">New Message</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/30 dark:border-zinc-700/50">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">New Message</h2>
           <button
             onClick={onClose}
             className="
               w-8 h-8 rounded-full
               flex items-center justify-center
-              text-gray-500 hover:text-gray-700
-              hover:bg-white/60
+              text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200
+              hover:bg-white/60 dark:hover:bg-zinc-800
               transition-all duration-150
             "
           >
@@ -143,7 +143,7 @@ export function UserSearchModal({
         <div className="px-5 py-4">
           <div className="relative">
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
               size={16}
             />
             <input
@@ -154,13 +154,13 @@ export function UserSearchModal({
               placeholder="To: Search by name or email"
               className="
                 w-full h-10 pl-10 pr-4
-                bg-white/50 backdrop-blur-sm
+                bg-white/50 dark:bg-zinc-800/50 backdrop-blur-sm
                 rounded-full
-                text-sm text-gray-800
-                placeholder:text-gray-400
+                text-sm text-gray-800 dark:text-white
+                placeholder:text-gray-400 dark:placeholder:text-gray-500
                 outline-none
-                border border-white/30
-                focus:bg-white/70 focus:border-gray-300
+                border border-white/30 dark:border-zinc-700
+                focus:bg-white/70 dark:focus:bg-zinc-800 focus:border-gray-300 dark:focus:border-zinc-600
                 transition-all duration-200
               "
             />
@@ -171,7 +171,7 @@ export function UserSearchModal({
         <div className="px-3 pb-4 max-h-80 overflow-y-auto">
           {loading ? (
             <div className="py-8 flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-gray-500" />
             </div>
           ) : error ? (
             <div className="py-8 text-center">
@@ -179,7 +179,7 @@ export function UserSearchModal({
             </div>
           ) : filteredMembers.length === 0 ? (
             <div className="py-8 text-center">
-              <p className="text-gray-400 text-sm">
+              <p className="text-gray-400 dark:text-gray-500 text-sm">
                 {searchQuery ? "No members found" : "No organization members"}
               </p>
             </div>
@@ -221,7 +221,7 @@ function MemberItem({ member, hasExistingConversation, onClick }: MemberItemProp
       className="
         w-full flex items-center gap-3 p-3 rounded-xl
         text-left
-        hover:bg-white/60
+        hover:bg-white/60 dark:hover:bg-zinc-800/60
         transition-all duration-150
       "
     >
@@ -230,9 +230,9 @@ function MemberItem({ member, hasExistingConversation, onClick }: MemberItemProp
         className="
           w-10 h-10 flex-shrink-0
           rounded-full
-          bg-gradient-to-br from-gray-200 to-gray-300
+          bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-600 dark:to-zinc-700
           flex items-center justify-center
-          font-semibold text-gray-600 text-sm
+          font-semibold text-gray-600 dark:text-gray-300 text-sm
         "
       >
         {initials}
@@ -241,16 +241,16 @@ function MemberItem({ member, hasExistingConversation, onClick }: MemberItemProp
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-800 truncate">
+          <span className="text-sm font-semibold text-gray-800 dark:text-white truncate">
             {member.username}
           </span>
           {hasExistingConversation && (
-            <span className="text-xs text-gray-400 flex-shrink-0">
+            <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
               (existing)
             </span>
           )}
         </div>
-        <p className="text-xs text-gray-500 truncate">{member.email}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{member.email}</p>
       </div>
     </button>
   );

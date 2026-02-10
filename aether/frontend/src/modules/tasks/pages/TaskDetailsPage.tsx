@@ -265,18 +265,18 @@ export function TaskDetailsPage() {
                 <div className="col-span-8 flex flex-col gap-8 h-full">
                     {/* Header */}
                     <div>
-                        <Link to="/dashboard" className="inline-flex items-center text-gray-400 hover:text-gray-600 mb-4 transition-colors">
+                        <Link to="/dashboard" className="inline-flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 mb-4 transition-colors">
                             <ArrowLeft size={16} className="mr-1" /> Back
                         </Link>
                         <div className="flex items-center gap-3 mb-2">
-                            <h1 className="text-4xl font-semibold text-gray-900">
+                            <h1 className="text-4xl font-semibold text-gray-900 dark:text-white">
                                 {task.title}
                             </h1>
                             {/* Task ID Badge - Liquid Glass / Pill Style */}
                             <div className="relative group">
                                 <button
                                     onClick={handleCopyTaskId}
-                                    className="flex items-center gap-1.5 font-mono text-xs text-slate-500 bg-white/50 backdrop-blur-sm px-3 py-1 rounded-full border border-white/60 hover:bg-white/70 hover:border-gray-200/50 transition-all cursor-pointer"
+                                    className="flex items-center gap-1.5 font-mono text-xs text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full border border-white/60 dark:border-white/20 hover:bg-white/70 dark:hover:bg-white/20 hover:border-gray-200/50 transition-all cursor-pointer"
                                 >
                                     <span>#{task.readable_id}</span>
                                     {copied ? <CheckCheck size={12} className="text-green-500" /> : <Copy size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />}
@@ -299,8 +299,8 @@ export function TaskDetailsPage() {
 
                     {/* Description - Ghost style */}
                     <div>
-                        <h3 className="text-gray-500 font-medium mb-3">Description</h3>
-                        <div className="bg-white/30 rounded-xl p-6 text-gray-600 leading-relaxed border border-gray-200 min-h-[100px]">
+                        <h3 className="text-gray-500 dark:text-gray-400 font-medium mb-3">Description</h3>
+                        <div className="bg-white/30 dark:bg-white/5 rounded-xl p-6 text-gray-600 dark:text-gray-300 leading-relaxed border border-gray-200 dark:border-white/10 min-h-[100px]">
                             {task.description || "No description provided for this task."}
                         </div>
                     </div>
@@ -318,28 +318,28 @@ export function TaskDetailsPage() {
                         {/* Right: Commit List */}
                         <div className="col-span-7">
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-gray-500 font-medium">
+                                <h3 className="text-gray-500 dark:text-gray-400 font-medium">
                                     Linked commits
                                 </h3>
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={refreshCommits}
                                         disabled={isRefreshingCommits}
-                                        className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg disabled:opacity-50"
                                         title="Refresh commits"
                                     >
                                         <RefreshCw size={16} className={isRefreshingCommits ? "animate-spin" : ""} />
                                     </button>
                                     <button
                                         onClick={() => setIsLinkCommitModalOpen(true)}
-                                        className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg"
                                         title="Link commit manually"
                                     >
                                         <Plus size={18} />
                                     </button>
                                 </div>
                             </div>
-                            <div className="bg-white/30 rounded-xl p-4 space-y-3 max-h-[195px] overflow-y-auto border border-gray-200 premium-scrollbar">
+                            <div className="bg-white/30 dark:bg-white/5 rounded-xl p-4 space-y-3 max-h-[195px] overflow-y-auto border border-gray-200 dark:border-white/10 premium-scrollbar">
                                 {task.task_commits && task.task_commits.length > 0 ? (
                                     [...task.task_commits]
                                         .sort((a, b) => new Date(b.commits.committed_at).getTime() - new Date(a.commits.committed_at).getTime())
@@ -369,8 +369,8 @@ export function TaskDetailsPage() {
                             <div className="flex items-center gap-3">
                                 {selectedCommitSha ? (
                                     <>
-                                        <h3 className="text-gray-500 font-medium">Viewing snapshot:</h3>
-                                        <code className="text-xs font-mono text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                                        <h3 className="text-gray-500 dark:text-gray-400 font-medium">Viewing snapshot:</h3>
+                                        <code className="text-xs font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/20 px-2 py-1 rounded border border-blue-200 dark:border-blue-500/30">
                                             {selectedCommitSha.substring(0, 7)}
                                         </code>
                                         {(() => {
@@ -390,7 +390,7 @@ export function TaskDetailsPage() {
                                         })()}
                                     </>
                                 ) : (
-                                    <h3 className="text-gray-500 font-medium">Last commit</h3>
+                                    <h3 className="text-gray-500 dark:text-gray-400 font-medium">Last commit</h3>
                                 )}
                             </div>
                             {commitDiff && (
@@ -424,12 +424,12 @@ export function TaskDetailsPage() {
                     </div>
 
                     {/* Comments - Ghost style */}
-                    <div className="h-[562px] bg-white/30 rounded-xl p-4 flex flex-col overflow-hidden border border-gray-200">
+                    <div className="h-[562px] bg-white/30 dark:bg-white/5 rounded-xl p-4 flex flex-col overflow-hidden border border-gray-200 dark:border-white/10">
                         <div className="flex items-center justify-between mb-3 px-1">
-                            <h3 className="text-gray-500 font-medium text-sm">Comments</h3>
+                            <h3 className="text-gray-500 dark:text-gray-400 font-medium text-sm">Comments</h3>
                             <button
                                 onClick={() => setIsCommentModalOpen(true)}
-                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                             >
                                 <Plus size={18} />
                             </button>
@@ -517,9 +517,9 @@ export function TaskDetailsPage() {
 function StatRow({ label, value }: { label: string; value: string }) {
     return (
         <div className="flex items-baseline mb-3 last:mb-0">
-            <span className="text-[#A1A1AA] w-32 font-medium">{label}</span>
-            <span className="text-[#A1A1AA] hidden sm:inline mr-4">|</span>
-            <span className="text-gray-600 font-medium">{value}</span>
+            <span className="text-[#A1A1AA] dark:text-gray-500 w-32 font-medium">{label}</span>
+            <span className="text-[#A1A1AA] dark:text-gray-600 hidden sm:inline mr-4">|</span>
+            <span className="text-gray-600 dark:text-gray-300 font-medium">{value}</span>
         </div>
     );
 }
@@ -543,19 +543,19 @@ function CommitItem({
         <div
             onClick={onClick}
             className={`rounded-[16px] p-3 flex items-center gap-3 transition-all ${isSelected
-                ? 'bg-blue-50 border-2 border-blue-200'
-                : 'bg-white border-2 border-transparent hover:bg-gray-50'
+                ? 'bg-blue-50 dark:bg-blue-500/20 border-2 border-blue-200 dark:border-blue-500/30'
+                : 'bg-white dark:bg-white/5 border-2 border-transparent hover:bg-gray-50 dark:hover:bg-white/10'
                 } ${onClick ? 'cursor-pointer' : ''}`}
         >
-            <code className={`text-xs px-2 py-1 rounded font-mono ${isSelected ? 'text-blue-600 bg-blue-100' : 'text-gray-500 bg-gray-100'
+            <code className={`text-xs px-2 py-1 rounded font-mono ${isSelected ? 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-500/20' : 'text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/10'
                 }`}>
                 {hash}
             </code>
-            <span className="text-xs text-gray-400">{date}</span>
-            {author && <span className="text-xs text-gray-500 font-medium">{author}</span>}
-            <span className="text-sm text-gray-700 truncate flex-1">{message}</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{date}</span>
+            {author && <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{author}</span>}
+            <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{message}</span>
             {isSelected && (
-                <GitCommit size={14} className="text-blue-500 shrink-0" />
+                <GitCommit size={14} className="text-blue-500 dark:text-blue-400 shrink-0" />
             )}
         </div>
     );
@@ -586,21 +586,21 @@ function CommentCard({
     };
 
     return (
-        <div className="bg-[#FCFCFD] rounded-[24px] p-5 shadow-sm">
+        <div className="bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm">
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                     <div className="w-5 h-5 rounded-full bg-gray-500 flex items-center justify-center text-[10px] text-white font-bold">
                         {role}
                     </div>
-                    <span className="font-bold text-sm text-gray-900">
+                    <span className="font-bold text-sm text-gray-900 dark:text-white">
                         {author} {isMe && <span className="text-gray-400 font-normal ml-1">(You)</span>}
                     </span>
                 </div>
                 {createdAt && (
-                    <span className="text-[10px] text-gray-400">{formatTime(createdAt)}</span>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatTime(createdAt)}</span>
                 )}
             </div>
-            <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-medium">
                 {content}
             </p>
         </div>

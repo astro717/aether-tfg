@@ -36,7 +36,7 @@ export function ThreadsList({
       {/* Header */}
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 tracking-tight">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white tracking-tight">
             Messages
           </h2>
           <button
@@ -44,8 +44,8 @@ export function ThreadsList({
             className="
               w-8 h-8 rounded-full
               flex items-center justify-center
-              text-gray-500 hover:text-gray-700
-              hover:bg-white/60
+              text-gray-500 hover:text-gray-700 dark:hover:text-gray-300
+              hover:bg-white/60 dark:hover:bg-white/10
               transition-all duration-150
             "
             title="New message"
@@ -67,13 +67,13 @@ export function ThreadsList({
             placeholder="Search"
             className="
               w-full h-9 pl-9 pr-4
-              bg-white/50 backdrop-blur-sm
+              bg-white/50 dark:bg-white/10 backdrop-blur-sm
               rounded-full
-              text-sm text-gray-800
-              placeholder:text-gray-400
+              text-sm text-gray-800 dark:text-gray-200
+              placeholder:text-gray-400 dark:placeholder:text-gray-500
               outline-none
-              border border-white/30
-              focus:bg-white/70 focus:border-white/50
+              border border-white/30 dark:border-white/10
+              focus:bg-white/70 dark:focus:bg-white/15 focus:border-white/50 dark:focus:border-white/20
               transition-all duration-200
             "
           />
@@ -138,8 +138,8 @@ function ConversationItem({ conversation, isSelected, onClick }: ConversationIte
         text-left
         transition-all duration-150
         ${isSelected
-          ? "bg-white/80 shadow-sm"
-          : "hover:bg-white/40"
+          ? "bg-white/80 dark:bg-white/10 shadow-sm"
+          : "hover:bg-white/40 dark:hover:bg-white/5"
         }
       `}
     >
@@ -152,12 +152,12 @@ function ConversationItem({ conversation, isSelected, onClick }: ConversationIte
           <span
             className={`
               text-sm font-semibold truncate
-              ${isSelected ? "text-gray-900" : "text-gray-800"}
+              ${isSelected ? "text-gray-900 dark:text-white" : "text-gray-800 dark:text-gray-200"}
             `}
           >
             {user.username}
           </span>
-          <span className="text-[11px] text-gray-400 flex-shrink-0 ml-2">
+          <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
             {formatTimestamp(new Date(lastMessage.created_at))}
           </span>
         </div>
@@ -166,7 +166,7 @@ function ConversationItem({ conversation, isSelected, onClick }: ConversationIte
           <p
             className={`
               text-[13px] truncate pr-2
-              ${unreadCount > 0 ? "text-gray-700 font-medium" : "text-gray-500"}
+              ${unreadCount > 0 ? "text-gray-700 dark:text-gray-300 font-medium" : "text-gray-500 dark:text-gray-400"}
             `}
           >
             {previewText}
@@ -211,9 +211,9 @@ function UserAvatar({ user }: UserAvatarProps) {
         className="
           w-12 h-12
           rounded-full
-          bg-gradient-to-br from-gray-200 to-gray-300
+          bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-600 dark:to-zinc-700
           flex items-center justify-center
-          font-semibold text-gray-600 text-sm
+          font-semibold text-gray-600 dark:text-gray-300 text-sm
         "
       >
         {initials}

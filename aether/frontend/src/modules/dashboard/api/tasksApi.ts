@@ -261,13 +261,19 @@ class TasksApi {
     return response.json();
   }
 
-  async getCommitExplanationInContext(taskId: string, sha: string, options?: { onlyCached?: boolean; forceRegenerate?: boolean }): Promise<CommitInTaskContextExplanation> {
+  async getCommitExplanationInContext(taskId: string, sha: string, options?: { onlyCached?: boolean; forceRegenerate?: boolean; language?: string; depth?: string }): Promise<CommitInTaskContextExplanation> {
     const url = new URL(`${API_BASE_URL}/ai/tasks/${taskId}/commits/${sha}/explain`);
     if (options?.onlyCached) {
       url.searchParams.append('onlyCached', 'true');
     }
     if (options?.forceRegenerate) {
       url.searchParams.append('forceRegenerate', 'true');
+    }
+    if (options?.language) {
+      url.searchParams.append('language', options.language);
+    }
+    if (options?.depth) {
+      url.searchParams.append('depth', options.depth);
     }
 
     const response = await fetch(
@@ -282,13 +288,19 @@ class TasksApi {
     return response.json();
   }
 
-  async getCommitCodeAnalysis(sha: string, options?: { onlyCached?: boolean; forceRegenerate?: boolean }): Promise<CodeAnalysisResult> {
+  async getCommitCodeAnalysis(sha: string, options?: { onlyCached?: boolean; forceRegenerate?: boolean; language?: string; depth?: string }): Promise<CodeAnalysisResult> {
     const url = new URL(`${API_BASE_URL}/ai/commits/${sha}/analyze`);
     if (options?.onlyCached) {
       url.searchParams.append('onlyCached', 'true');
     }
     if (options?.forceRegenerate) {
       url.searchParams.append('forceRegenerate', 'true');
+    }
+    if (options?.language) {
+      url.searchParams.append('language', options.language);
+    }
+    if (options?.depth) {
+      url.searchParams.append('depth', options.depth);
     }
 
     const response = await fetch(

@@ -79,12 +79,12 @@ export function SmartSelect({
   // Render disabled state with pre-selected value
   if (disabled && disabledValue) {
     return (
-      <div className="w-full flex items-center gap-2 px-4 py-3 bg-gray-100 border border-gray-200 rounded-2xl text-sm text-gray-600 cursor-not-allowed">
-        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
+      <div className="w-full flex items-center gap-2 px-4 py-3 bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl text-sm text-gray-600 dark:text-gray-400 cursor-not-allowed">
+        <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-400">
           {disabledValue.label.charAt(0).toUpperCase()}
         </div>
         <span>{disabledValue.label}</span>
-        <span className="text-gray-400 text-xs ml-auto">(assigned to you)</span>
+        <span className="text-gray-400 dark:text-gray-500 text-xs ml-auto">(assigned to you)</span>
       </div>
     );
   }
@@ -96,20 +96,20 @@ export function SmartSelect({
         onClick={() => !loading && setIsOpen(true)}
         className={`
           w-full flex items-center gap-2 px-4 py-3
-          bg-gray-50 border border-gray-200 rounded-2xl
-          text-sm text-gray-800
+          bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl
+          text-sm text-gray-800 dark:text-white
           transition-all cursor-pointer
-          ${isOpen ? "ring-2 ring-blue-500/20 border-blue-400" : "hover:bg-gray-100"}
+          ${isOpen ? "ring-2 ring-blue-500/20 border-blue-400 dark:border-blue-500" : "hover:bg-gray-100 dark:hover:bg-zinc-700"}
         `}
       >
         {loading ? (
-          <span className="flex items-center gap-2 text-gray-400 flex-1">
+          <span className="flex items-center gap-2 text-gray-400 dark:text-gray-500 flex-1">
             <Loader2 size={14} className="animate-spin" />
             Loading members...
           </span>
         ) : isOpen ? (
           <>
-            <Search size={14} className="text-gray-400 flex-shrink-0" />
+            <Search size={14} className="text-gray-400 dark:text-gray-500 flex-shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -117,23 +117,23 @@ export function SmartSelect({
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type to search..."
-              className="flex-1 bg-transparent outline-none placeholder:text-gray-400"
+              className="flex-1 bg-transparent outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500 dark:text-white"
               onClick={(e) => e.stopPropagation()}
             />
           </>
         ) : selectedOption ? (
           <span className="flex items-center gap-2 flex-1">
-            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
+            <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-400">
               {selectedOption.label.charAt(0).toUpperCase()}
             </div>
             {selectedOption.label}
           </span>
         ) : (
-          <span className="text-gray-400 flex-1">{placeholder}</span>
+          <span className="text-gray-400 dark:text-gray-500 flex-1">{placeholder}</span>
         )}
         <ChevronDown
           size={16}
-          className={`text-gray-400 transition-transform flex-shrink-0 ${
+          className={`text-gray-400 dark:text-gray-500 transition-transform flex-shrink-0 ${
             isOpen ? "rotate-180" : ""
           }`}
         />
@@ -142,13 +142,13 @@ export function SmartSelect({
       {/* Dropdown Menu */}
       {isOpen && !loading && (
         <div
-          className="absolute top-full left-0 right-0 mt-2 bg-white/95 backdrop-blur-xl border border-gray-200/60 rounded-2xl shadow-xl max-h-52 overflow-y-auto z-50"
+          className="absolute top-full left-0 right-0 mt-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-gray-200/60 dark:border-zinc-700/60 rounded-2xl shadow-xl max-h-52 overflow-y-auto z-50"
           style={{
             boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5)",
           }}
         >
           {filteredOptions.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-gray-400 text-center">
+            <div className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500 text-center">
               {searchQuery ? "No results found" : "No options available"}
             </div>
           ) : (
@@ -163,17 +163,17 @@ export function SmartSelect({
                 }}
                 className={`
                   w-full flex items-center justify-between px-4 py-2.5
-                  hover:bg-gray-50 transition-colors text-left
+                  hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors text-left
                   ${index === 0 ? "rounded-t-2xl" : ""}
                   ${index === filteredOptions.length - 1 ? "rounded-b-2xl" : ""}
-                  ${value === option.id ? "bg-blue-50/50" : ""}
+                  ${value === option.id ? "bg-blue-50/50 dark:bg-blue-900/20" : ""}
                 `}
               >
                 <span className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
+                  <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-400">
                     {option.label.charAt(0).toUpperCase()}
                   </div>
-                  <span className="text-sm text-gray-800">{option.label}</span>
+                  <span className="text-sm text-gray-800 dark:text-white">{option.label}</span>
                 </span>
                 {value === option.id && (
                   <Check size={16} className="text-blue-500" />

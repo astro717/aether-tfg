@@ -281,10 +281,10 @@ function KanbanColumn({
       strategy={verticalListSortingStrategy}
     >
       <div
-        className={`flex flex-col ${width} bg-white/40 backdrop-blur-xl rounded-[40px] p-4 border border-white/40 shadow-xl transition-all hover:z-40 h-full`}
+        className={`flex flex-col ${width} bg-white/40 dark:bg-white/5 backdrop-blur-xl rounded-[40px] p-4 border border-white/40 dark:border-white/10 shadow-xl transition-all hover:z-40 h-full`}
         data-column-id={id}
       >
-        <h3 className={`text-gray-500 font-medium mb-3 text-lg tracking-wide flex items-center justify-between ${contentOffset}`}>
+        <h3 className={`text-gray-500 dark:text-gray-300 font-medium mb-3 text-lg tracking-wide flex items-center justify-between ${contentOffset}`}>
           {title}
         </h3>
 
@@ -300,8 +300,8 @@ function KanbanColumn({
           )}
         </DroppableArea>
 
-        <div className={`mt-4 text-gray-400 text-sm font-medium ${contentOffset}`}>
-          total <span className="text-gray-500 ml-1">{total}</span>
+        <div className={`mt-4 text-gray-400 dark:text-gray-500 text-sm font-medium ${contentOffset}`}>
+          total <span className="text-gray-500 dark:text-gray-400 ml-1">{total}</span>
         </div>
       </div>
     </SortableContext>
@@ -327,7 +327,7 @@ function DroppableArea({
     <div
       ref={setNodeRef}
       className={`flex-1 space-y-3 overflow-y-auto ${contentOffset} min-h-[100px] transition-colors ${
-        isOver ? 'bg-blue-50/30 rounded-2xl' : ''
+        isOver ? 'bg-blue-50/30 dark:bg-blue-500/10 rounded-2xl' : ''
       }`}
     >
       {children}
@@ -382,15 +382,15 @@ function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boole
   const displayName = isAssignedToMe ? `${userName} (You)` : userName;
 
   return (
-    <div className={`bg-white/70 backdrop-blur-md border border-white/50 rounded-[24px] p-3 shadow-sm hover:scale-[1.02] hover:shadow-lg transition-all duration-200 cursor-pointer hover:bg-white/95 w-full ${
+    <div className={`bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/50 dark:border-white/10 rounded-[24px] p-3 shadow-sm hover:scale-[1.02] hover:shadow-lg transition-all duration-200 cursor-pointer hover:bg-white/95 dark:hover:bg-white/15 w-full ${
       isDragging ? 'shadow-xl scale-105 rotate-2' : ''
     }`}>
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center text-[9px] font-bold shadow-sm">
+          <div className="w-6 h-6 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[9px] font-bold shadow-sm">
             {userInitials}
           </div>
-          <span className="text-xs font-bold text-gray-800 tracking-tight">
+          <span className="text-xs font-bold text-gray-800 dark:text-gray-200 tracking-tight">
             {displayName}
           </span>
         </div>
@@ -406,12 +406,12 @@ function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boole
         </div>
       </div>
 
-      <h4 className="text-gray-600 text-[13px] font-medium mb-2 leading-tight pl-1">
+      <h4 className="text-gray-600 dark:text-gray-300 text-[13px] font-medium mb-2 leading-tight pl-1">
         {task.title}
       </h4>
 
       <div className="flex items-center justify-between pl-1">
-        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">
           {formattedDate}
         </span>
       </div>

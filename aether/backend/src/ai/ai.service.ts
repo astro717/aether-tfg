@@ -34,6 +34,33 @@ export interface CommitInTaskContextExplanation {
   technicalDetails: string;
 }
 
+// Language code to full name mapping for prompt injection
+const LANGUAGE_MAP: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  pt: 'Portuguese',
+  zh: 'Chinese',
+  ja: 'Japanese',
+};
+
+// Depth instructions for controlling analysis verbosity
+const DEPTH_INSTRUCTIONS: Record<string, { explanation: string; codeAnalysis: string }> = {
+  concise: {
+    explanation: 'Be extremely concise. Use bullet points where possible. Focus only on the most critical changes. Limit summary to 1-2 sentences maximum. Omit minor details.',
+    codeAnalysis: 'Be extremely concise. Report only HIGH severity security issues. Skip minor code quality concerns. Limit summary to 1 sentence.',
+  },
+  standard: {
+    explanation: 'Provide a balanced analysis with moderate detail. Include key changes and their implications.',
+    codeAnalysis: 'Provide a balanced security analysis. Report HIGH and MEDIUM severity issues. Include brief recommendations.',
+  },
+  detailed: {
+    explanation: 'Provide a comprehensive technical analysis. Explain the "why" behind changes in depth. Include implementation details and architectural implications. Discuss potential edge cases or considerations.',
+    codeAnalysis: 'Provide a comprehensive security analysis. Report ALL severity levels including LOW. Include detailed recommendations and code snippets to illustrate issues. Suggest refactoring opportunities.',
+  },
+};
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
@@ -649,6 +676,8 @@ Respond in this exact JSON format (no markdown, just raw JSON):
    * Explain a commit in the context of a specific task (Phase 6 - AI Prompt Design)
    * This uses the task description + commit diff to provide contextual explanation
    * NOW with caching support indexed by (task_id, commit_sha)
+   * @param language - Output language code (en, es, fr, de, pt, zh, ja)
+   * @param depth - Analysis depth (concise, standard, detailed)
    */
   async explainCommitInTaskContext(
     sha: string,
@@ -656,6 +685,8 @@ Respond in this exact JSON format (no markdown, just raw JSON):
     user: any,
     onlyCached: boolean = false,
     forceRegenerate: boolean = false,
+    language: string = 'en',
+    depth: string = 'standard',
   ): Promise<CommitInTaskContextExplanation & { cached: boolean; timestamp: Date }> {
     // Step 1: Check cache in ai_reports table using task_id + commit_sha + type
     // UNLESS forceRegenerate is true (for regeneration flow)
@@ -742,36 +773,43 @@ Respond in this exact JSON format (no markdown, just raw JSON):
       );
     }
 
-    // Build the contextual prompt (as specified in Phase 6)
-    const prompt = `Explica este cambio en el contexto de la tarea.
+    // Build the contextual prompt with dynamic language and depth support
+    const languageName = LANGUAGE_MAP[language] || 'English';
+    const depthInstruction = DEPTH_INSTRUCTIONS[depth]?.explanation || DEPTH_INSTRUCTIONS.standard.explanation;
+    const prompt = `You are a code analyst. Explain this change in the context of the task.
+IMPORTANT: Respond entirely in ${languageName} language.
+DEPTH LEVEL: ${depthInstruction}
 
-TAREA #${task.readable_id}: "${task.title}"
-Descripción de la tarea: ${task.description || 'Sin descripción proporcionada'}
-Estado actual: ${task.status}
+TASK #${task.readable_id}: "${task.title}"
+Task description: ${task.description || 'No description provided'}
+Current status: ${task.status}
 
 COMMIT: ${sha.substring(0, 7)}
-Mensaje: ${diff.message}
-Estadísticas: +${diff.stats.additions} adiciones, -${diff.stats.deletions} eliminaciones
+Message: ${diff.message}
+Stats: +${diff.stats.additions} additions, -${diff.stats.deletions} deletions
 
-Archivos modificados:
+Files changed:
 ${diff.files.map(f => `- ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n')}
 
-Cambios de código (extracto):
-${diff.files.slice(0, 4).map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 600) || 'Sin patch disponible'}`).join('\n')}
+Code changes (excerpt):
+${diff.files.slice(0, 4).map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 600) || 'No patch available'}`).join('\n')}
 
-INSTRUCCIONES:
-Analiza cómo este commit contribuye a completar la tarea. Considera:
-1. ¿Qué hace específicamente este commit?
-2. ¿Cómo ayuda a cumplir los requisitos de la tarea?
-3. ¿Queda trabajo pendiente para completar la tarea?
-4. Detalles técnicos relevantes del cambio.
+INSTRUCTIONS:
+Analyze how this commit contributes to completing the task. Consider:
+1. What does this commit specifically do?
+2. How does it help fulfill the task requirements?
+3. What work remains to complete the task?
+4. Relevant technical details of the change.
 
-Responde en este formato JSON exacto (sin markdown, solo JSON puro):
+CRITICAL: All text content in your response MUST be written in ${languageName}.
+CRITICAL: Follow the DEPTH LEVEL instruction for verbosity.
+
+Respond in this exact JSON format (no markdown, just raw JSON):
 {
-  "explanation": "Explicación clara de lo que hace este commit en 2-3 oraciones",
-  "howItFulfillsTask": "Cómo este commit contribuye a completar la tarea #${task.readable_id}",
-  "remainingWork": ["Trabajo pendiente 1", "Trabajo pendiente 2"],
-  "technicalDetails": "Resumen técnico de los cambios implementados"
+  "explanation": "Clear explanation of what this commit does (in ${languageName})",
+  "howItFulfillsTask": "How this commit contributes to completing task #${task.readable_id} (in ${languageName})",
+  "remainingWork": ["Remaining work 1 (in ${languageName})", "Remaining work 2 (in ${languageName})"],
+  "technicalDetails": "Technical summary of the implemented changes (in ${languageName})"
 }`;
 
     let aiResponse: string;
@@ -840,8 +878,10 @@ Responde en este formato JSON exacto (sin markdown, solo JSON puro):
    * @param user - Current user (for GitHub access)
    * @param onlyCached - Only return cached results (404 if not cached)
    * @param forceRegenerate - Skip cache and regenerate (deletes old reports)
+   * @param language - Output language code (en, es, fr, de, pt, zh, ja)
+   * @param depth - Analysis depth (concise, standard, detailed)
    */
-  async analyzeCode(sha: string, user: any, onlyCached: boolean = false, forceRegenerate: boolean = false): Promise<any> {
+  async analyzeCode(sha: string, user: any, onlyCached: boolean = false, forceRegenerate: boolean = false, language: string = 'en', depth: string = 'standard'): Promise<any> {
     // Step 1: If forceRegenerate, delete old reports first (Clean Slate approach)
     if (forceRegenerate) {
       this.logger.log(`Force regenerate requested for code analysis ${sha.substring(0, 7)}, deleting old reports...`);
@@ -902,7 +942,11 @@ Responde en este formato JSON exacto (sin markdown, solo JSON puro):
       throw new InternalServerErrorException(`Failed to fetch commit from GitHub: ${errorMessage}`);
     }
 
+    const languageName = LANGUAGE_MAP[language] || 'English';
+    const depthInstruction = DEPTH_INSTRUCTIONS[depth]?.codeAnalysis || DEPTH_INSTRUCTIONS.standard.codeAnalysis;
     const prompt = `You are a security analyst. Analyze this code for vulnerabilities and quality issues.
+IMPORTANT: All text content in your response MUST be written in ${languageName} language.
+DEPTH LEVEL: ${depthInstruction}
 
 COMMIT: ${sha.substring(0, 7)}
 Message: ${diff.message}
@@ -921,9 +965,11 @@ CRITICAL OUTPUT INSTRUCTIONS:
 - The response must start with { and end with }
 - The "score" field must be exactly ONE uppercase letter: A, B, C, D, or F
 - If no issues found, use an empty array for "issues"
+- The "summary" and "title" fields MUST be written in ${languageName}
+- Follow the DEPTH LEVEL instruction for verbosity and issue severity filtering
 
 Required JSON structure:
-{"summary":"Brief summary of findings","score":"A","issues":[{"severity":"high","title":"Issue title","file":"filename.ts","line":123}]}`;
+{"summary":"Brief summary of findings (in ${languageName})","score":"A","issues":[{"severity":"high","title":"Issue title (in ${languageName})","file":"filename.ts","line":123}]}`;
 
     const aiResponse = await this.callGemini(prompt);
 

@@ -98,10 +98,10 @@ export function PersonalView() {
             <div className="grid grid-cols-12 grid-rows-[minmax(0,3fr)_minmax(0,2fr)] gap-8 h-full w-full">
 
                 {/* --- In Progress Section (Top Left) --- */}
-                <section className="col-span-8 row-start-1 bg-white/40 backdrop-blur-xl rounded-[40px] p-8 border border-white/40 shadow-sm relative overflow-hidden flex flex-col min-h-0 h-full">
+                <section className="col-span-8 row-start-1 bg-white/40 dark:bg-white/5 backdrop-blur-xl rounded-[40px] p-8 border border-white/40 dark:border-white/10 shadow-sm relative overflow-hidden flex flex-col min-h-0 h-full">
                     <div className="flex items-center justify-between mb-6 flex-shrink-0">
-                        <h2 className="text-gray-500 font-medium text-lg">In Progress</h2>
-                        <button className="text-gray-400 hover:text-gray-600 transition-colors">
+                        <h2 className="text-gray-500 dark:text-gray-300 font-medium text-lg">In Progress</h2>
+                        <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                             <Maximize2 size={18} />
                         </button>
                     </div>
@@ -122,12 +122,12 @@ export function PersonalView() {
 
                 {/* --- Deadlines Section (Bottom Left) --- */}
                 <section className="col-span-8 row-start-2 pt-4 flex flex-col min-h-0 h-full">
-                    <h2 className="text-gray-500 font-medium text-lg mb-8 pl-2 flex-shrink-0">Deadlines</h2>
+                    <h2 className="text-gray-500 dark:text-gray-300 font-medium text-lg mb-8 pl-2 flex-shrink-0">Deadlines</h2>
 
                     {/* Timeline Visualization */}
                     <div className="relative w-full flex-1">
                         {/* Dates Row */}
-                        <div className="flex justify-between px-4 text-xs font-medium text-gray-400 mb-4">
+                        <div className="flex justify-between px-4 text-xs font-medium text-gray-400 dark:text-gray-500 mb-4">
                             {weekDays.map((day) => {
                                 const dayDate = new Date(day);
                                 dayDate.setHours(0, 0, 0, 0);
@@ -136,7 +136,7 @@ export function PersonalView() {
                                 return (
                                     <span
                                         key={label}
-                                        className={`${isCurrent ? 'bg-gray-300/50 rounded-full px-2 py-1 text-gray-600' : ''}`}
+                                        className={`${isCurrent ? 'bg-gray-300/50 dark:bg-gray-600/50 rounded-full px-2 py-1 text-gray-600 dark:text-gray-300' : ''}`}
                                     >
                                         {label}
                                     </span>
@@ -161,7 +161,7 @@ export function PersonalView() {
 
                         {/* Floating Cards */}
                         {timelineTasks.length === 0 && (
-                            <p className="text-gray-400 text-sm pl-4 pt-4">No deadlines this week</p>
+                            <p className="text-gray-400 dark:text-gray-500 text-sm pl-4 pt-4">No deadlines this week</p>
                         )}
                         {timelineTasks.map((task, index) => {
                             const date = new Date(task.due_date!);
@@ -181,8 +181,8 @@ export function PersonalView() {
                                     className="absolute"
                                     style={{ top: topOffset, ...style }}
                                 >
-                                    <div className={`bg-white/80 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border-l-4 ${colorClass} w-40`}>
-                                        <span className="text-[10px] text-gray-800 font-medium leading-tight block">
+                                    <div className={`bg-white/80 dark:bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border-l-4 ${colorClass} w-40`}>
+                                        <span className="text-[10px] text-gray-800 dark:text-gray-200 font-medium leading-tight block">
                                             {task.title}
                                         </span>
                                     </div>
@@ -193,8 +193,8 @@ export function PersonalView() {
                 </section>
 
                 {/* --- Assigned Section (Top Right) --- */}
-                <section className="col-span-4 row-start-1 bg-white/40 backdrop-blur-xl rounded-[40px] p-8 border border-white/40 shadow-sm flex flex-col min-h-0 h-full">
-                    <h2 className="text-gray-500 font-medium text-lg mb-6 flex-shrink-0">Assigned</h2>
+                <section className="col-span-4 row-start-1 bg-white/40 dark:bg-white/5 backdrop-blur-xl rounded-[40px] p-8 border border-white/40 dark:border-white/10 shadow-sm flex flex-col min-h-0 h-full">
+                    <h2 className="text-gray-500 dark:text-gray-300 font-medium text-lg mb-6 flex-shrink-0">Assigned</h2>
 
                     <div className="space-y-4 overflow-y-auto pr-7 -mr-7 flex-1 min-h-0">
                         {assignedTasks.length === 0 && (
@@ -207,8 +207,8 @@ export function PersonalView() {
                 </section>
 
                 {/* --- Awaiting Review Section (Bottom Right) --- */}
-                <section className="col-span-4 row-start-2 bg-white/40 backdrop-blur-xl rounded-[40px] p-8 border border-white/40 shadow-sm flex flex-col min-h-0 h-full">
-                    <h2 className="text-gray-500 font-medium text-lg mb-6 flex-shrink-0">Awaiting Review</h2>
+                <section className="col-span-4 row-start-2 bg-white/40 dark:bg-white/5 backdrop-blur-xl rounded-[40px] p-8 border border-white/40 dark:border-white/10 shadow-sm flex flex-col min-h-0 h-full">
+                    <h2 className="text-gray-500 dark:text-gray-300 font-medium text-lg mb-6 flex-shrink-0">Awaiting Review</h2>
 
                     <div className="space-y-4 overflow-y-auto pr-2 -mr-2 flex-1 min-h-0">
                         {doneTasks.length === 0 && (
@@ -242,12 +242,12 @@ function InProgressCard({ task, isLast }: { task: Task; isLast?: boolean }) {
     const initial = task.users_tasks_assignee_idTousers?.username?.charAt(0).toUpperCase() || 'U';
 
     return (
-        <div className={`bg-white/60 backdrop-blur-lg rounded-[28px] p-4 px-6 flex items-center justify-between shadow-sm border border-white/50 hover:scale-[1.01] transition-transform duration-200 group ${isLast ? '' : ''}`}>
+        <div className={`bg-white/60 dark:bg-white/10 backdrop-blur-lg rounded-[28px] p-4 px-6 flex items-center justify-between shadow-sm border border-white/50 dark:border-white/10 hover:scale-[1.01] transition-transform duration-200 group ${isLast ? '' : ''}`}>
             <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-[10px] font-bold shadow-md group-hover:bg-gray-900">
+                <div className="w-8 h-8 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[10px] font-bold shadow-md group-hover:bg-gray-900 dark:group-hover:bg-gray-100">
                     {initial}
                 </div>
-                <span className="text-gray-800 font-semibold text-sm tracking-tight">{task.title}</span>
+                <span className="text-gray-800 dark:text-gray-200 font-semibold text-sm tracking-tight">{task.title}</span>
             </div>
 
             <div className="flex items-center gap-6">
@@ -255,7 +255,7 @@ function InProgressCard({ task, isLast }: { task: Task; isLast?: boolean }) {
                     <Icon size={12} fill="currentColor" className="opacity-80" />
                     <span className="text-[10px] font-bold uppercase tracking-wide">{style.label}</span>
                 </div>
-                {date && <span className="text-xs text-gray-400 font-medium">{date}</span>}
+                {date && <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">{date}</span>}
             </div>
         </div>
     );
@@ -270,22 +270,22 @@ function AssignedCard({ task }: { task: Task }) {
     const displayName = isAssignedToMe ? `${name} (You)` : name;
 
     return (
-        <div className="bg-white/60 backdrop-blur-lg rounded-[28px] p-4 px-5 shadow-sm border border-white/50 hover:scale-[1.02] transition-all duration-200">
+        <div className="bg-white/60 dark:bg-white/10 backdrop-blur-lg rounded-[28px] p-4 px-5 shadow-sm border border-white/50 dark:border-white/10 hover:scale-[1.02] transition-all duration-200">
             <div className="flex items-center gap-2 mb-1">
-                <div className="w-5 h-5 rounded-full bg-black text-white flex items-center justify-center text-[8px] font-bold shadow-sm">
+                <div className="w-5 h-5 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[8px] font-bold shadow-sm">
                     {initial}
                 </div>
-                <span className="text-xs text-gray-500">
-                    by <span className="text-gray-800 font-bold">{displayName}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                    by <span className="text-gray-800 dark:text-gray-200 font-bold">{displayName}</span>
                 </span>
             </div>
 
             <div className="pl-7">
-                <p className="text-gray-600 text-[13px] font-medium leading-relaxed mb-2">
+                <p className="text-gray-600 dark:text-gray-300 text-[13px] font-medium leading-relaxed mb-2">
                     {task.title}
                 </p>
                 <div className="flex justify-end">
-                    {date && <span className="text-[10px] text-gray-400 font-medium">{date}</span>}
+                    {date && <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">{date}</span>}
                 </div>
             </div>
         </div>
@@ -296,15 +296,15 @@ function AwaitingReviewCard({ task }: { task: Task }) {
     const date = formatDate(task.due_date);
 
     return (
-        <div className="bg-white/60 backdrop-blur-md rounded-[28px] p-4 px-6 shadow-sm border border-white/50 flex items-center justify-between hover:scale-[1.01] transition-transform duration-200 group">
+        <div className="bg-white/60 dark:bg-white/10 backdrop-blur-md rounded-[28px] p-4 px-6 shadow-sm border border-white/50 dark:border-white/10 flex items-center justify-between hover:scale-[1.01] transition-transform duration-200 group">
             <div className="flex flex-col justify-center">
-                <h3 className="text-gray-800 font-semibold text-sm tracking-tight leading-snug">{task.title}</h3>
+                <h3 className="text-gray-800 dark:text-gray-200 font-semibold text-sm tracking-tight leading-snug">{task.title}</h3>
                 <div className="mt-1">
-                    {date && <span className="text-xs text-gray-400 font-medium">{date}</span>}
+                    {date && <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">{date}</span>}
                 </div>
             </div>
 
-            <button className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-400 hover:text-green-500 transition-colors flex-shrink-0 ml-4">
+            <button className="w-8 h-8 rounded-full bg-white dark:bg-white/10 shadow-sm flex items-center justify-center text-gray-400 hover:text-green-500 transition-colors flex-shrink-0 ml-4">
                 <Check size={14} />
             </button>
         </div>

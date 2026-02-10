@@ -146,21 +146,21 @@ export function PremiumDatePicker({
         onClick={() => setIsOpen(!isOpen)}
         className={`
           w-full flex items-center gap-2 px-4 py-3
-          bg-gray-50 border border-gray-200 rounded-2xl
+          bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl
           text-sm cursor-pointer transition-all
-          ${isOpen ? "ring-2 ring-blue-500/20 border-blue-400" : "hover:bg-gray-100"}
+          ${isOpen ? "ring-2 ring-blue-500/20 border-blue-400 dark:border-blue-500" : "hover:bg-gray-100 dark:hover:bg-zinc-700"}
         `}
       >
-        <Calendar size={16} className="text-gray-400 flex-shrink-0" />
-        <span className={`flex-1 ${value ? "text-gray-800" : "text-gray-400"}`}>
+        <Calendar size={16} className="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+        <span className={`flex-1 ${value ? "text-gray-800 dark:text-white" : "text-gray-400 dark:text-gray-500"}`}>
           {value ? formatDisplayDate(value) : placeholder}
         </span>
         {value && (
           <button
             onClick={handleClear}
-            className="p-0.5 rounded-full hover:bg-gray-200 transition-colors"
+            className="p-0.5 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
           >
-            <X size={14} className="text-gray-400" />
+            <X size={14} className="text-gray-400 dark:text-gray-500" />
           </button>
         )}
       </div>
@@ -168,7 +168,7 @@ export function PremiumDatePicker({
       {/* Calendar Dropdown */}
       {isOpen && (
         <div
-          className="premium-calendar absolute top-full left-0 mt-2 bg-white/95 backdrop-blur-xl border border-gray-200/60 rounded-2xl shadow-xl z-50 p-4 w-[300px]"
+          className="premium-calendar absolute top-full left-0 mt-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-gray-200/60 dark:border-zinc-700/60 rounded-2xl shadow-xl z-50 p-4 w-[300px]"
           style={{
             boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5)",
           }}
@@ -177,18 +177,18 @@ export function PremiumDatePicker({
           <div className="flex items-center justify-between mb-4">
             <button
               onClick={handlePrevMonth}
-              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              <ChevronLeft size={18} className="text-gray-500" />
+              <ChevronLeft size={18} className="text-gray-500 dark:text-gray-400" />
             </button>
-            <span className="text-sm font-semibold text-gray-800">
+            <span className="text-sm font-semibold text-gray-800 dark:text-white">
               {MONTHS[viewDate.getMonth()]} {viewDate.getFullYear()}
             </span>
             <button
               onClick={handleNextMonth}
-              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              <ChevronRight size={18} className="text-gray-500" />
+              <ChevronRight size={18} className="text-gray-500 dark:text-gray-400" />
             </button>
           </div>
 
@@ -197,7 +197,7 @@ export function PremiumDatePicker({
             {DAYS.map((day) => (
               <div
                 key={day}
-                className="w-9 h-8 flex items-center justify-center text-xs font-medium text-gray-400"
+                className="w-9 h-8 flex items-center justify-center text-xs font-medium text-gray-400 dark:text-gray-500"
               >
                 {day}
               </div>
@@ -221,7 +221,7 @@ export function PremiumDatePicker({
                     ${selected ? "selected" : ""}
                     ${today && !selected ? "today" : ""}
                     ${disabled ? "disabled" : ""}
-                    ${!isCurrentMonth ? "other-month" : "text-gray-700"}
+                    ${!isCurrentMonth ? "other-month" : "text-gray-700 dark:text-gray-300"}
                   `}
                 >
                   {date.getDate()}
@@ -231,7 +231,7 @@ export function PremiumDatePicker({
           </div>
 
           {/* Quick Actions */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-zinc-700">
             <button
               onClick={() => handleSelectDate(new Date())}
               className="text-xs font-medium text-[#007AFF] hover:text-[#0066DD] transition-colors"
@@ -244,7 +244,7 @@ export function PremiumDatePicker({
                 nextWeek.setDate(nextWeek.getDate() + 7);
                 handleSelectDate(nextWeek);
               }}
-              className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+              className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             >
               Next week
             </button>

@@ -27,6 +27,8 @@ model users {
   other_users                     users[]              @relation("usersTousers")
   sent_messages                   messages[]           @relation("messages_sender")
   received_messages               messages[]           @relation("messages_receiver")
+  notifications_received          notifications[]      @relation("UserNotifications")
+  notifications_triggered         notifications[]      @relation("ActorNotifications")
 }
 
 model ai_reports {
@@ -196,4 +198,24 @@ model message_attachments {
   message messages @relation(fields: [message_id], references: [id], onDelete: Cascade)
 
   @@index([message_id])
+}
+
+model notifications {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id     String    @db.Uuid // Recipient
+  actor_id    String?   @db.Uuid // Who triggered the notification (optional for system notifications)
+  type        String    // 'TASK_ASSIGNED', 'TASK_COMMENT', 'MENTION', 'MESSAGE'
+  title       String
+  content     String?
+  entity_id   String?   @db.Uuid // ID of related task/message
+  entity_type String?   // 'task', 'message'
+  read_at     DateTime? @db.Timestamp(6)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+
+  user  users  @relation("UserNotifications", fields: [user_id], references: [id], onDelete: Cascade)
+  actor users? @relation("ActorNotifications", fields: [actor_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([created_at])
+  @@index([user_id, read_at])
 }

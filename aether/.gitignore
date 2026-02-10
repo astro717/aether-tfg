@@ -30,3 +30,4 @@ backend/prisma/migrations/
 # AI & Testing
 *plan*.md
 testsprite_tests/
+claude/

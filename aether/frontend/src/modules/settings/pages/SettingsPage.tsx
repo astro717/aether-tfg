@@ -28,6 +28,8 @@ import {
     Trash,
 } from "lucide-react";
 import { useAuth } from "../../auth/context/AuthContext";
+import { useTheme, type Theme } from "../context/ThemeContext";
+import { useSettings, type AnalysisDepth } from "../context/SettingsContext";
 import { useNavigate } from "react-router-dom";
 
 type SettingsTab = "profile" | "appearance" | "notifications" | "security" | "integrations" | "ai";
@@ -49,11 +51,10 @@ const statusOptions: { id: UserStatus; label: string; color: string }[] = [
     { id: "away", label: "Away", color: "#9CA3AF" },
 ];
 
-type Theme = "light" | "dark" | "system";
-type AnalysisDepth = "concise" | "standard" | "detailed";
-
 export function SettingsPage() {
     const { user, logout } = useAuth();
+    const { theme, setTheme } = useTheme();
+    const { aiLanguage, setAiLanguage, analysisDepth, setAnalysisDepth } = useSettings();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
 
@@ -66,7 +67,6 @@ export function SettingsPage() {
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
 
     // Appearance states
-    const [theme, setTheme] = useState<Theme>("system");
     const [sidebarBehavior, setSidebarBehavior] = useState<"expanded" | "remember">("remember");
 
     // Notification states
@@ -77,9 +77,7 @@ export function SettingsPage() {
     const [mentions, setMentions] = useState(true);
     const [dueDateReminders, setDueDateReminders] = useState(true);
 
-    // AI states
-    const [aiLanguage, setAiLanguage] = useState("en");
-    const [analysisDepth, setAnalysisDepth] = useState<AnalysisDepth>("standard");
+    // AI states (aiLanguage and analysisDepth now come from SettingsContext)
     const [gitContext, setGitContext] = useState(true);
 
     // API Keys state (mock)
@@ -100,7 +98,7 @@ export function SettingsPage() {
     const currentStatus = statusOptions.find(s => s.id === status)!;
 
     return (
-        <div className="h-full w-full overflow-auto bg-[#FCFCFD]">
+        <div className="h-full w-full overflow-auto bg-[#FCFCFD] dark:bg-transparent transition-colors duration-200">
             <div className="max-w-5xl mx-auto px-6 py-10">
                 {/* Header */}
                 <motion.div
@@ -109,10 +107,10 @@ export function SettingsPage() {
                     transition={{ duration: 0.3 }}
                     className="mb-10"
                 >
-                    <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
+                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">
                         Settings
                     </h1>
-                    <p className="text-gray-500 text-sm mt-1">
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
                         Manage your account and preferences
                     </p>
                 </motion.div>
@@ -125,7 +123,7 @@ export function SettingsPage() {
                         transition={{ duration: 0.3, delay: 0.1 }}
                         className="w-56 flex-shrink-0"
                     >
-                        <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-2 sticky top-6">
+                        <div className="bg-white dark:bg-[#18181B] border border-gray-100 dark:border-zinc-800 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none p-2 sticky top-6 transition-colors duration-200">
                             {tabs.map((tab) => {
                                 const Icon = tab.icon;
                                 const isActive = activeTab === tab.id;
@@ -137,12 +135,12 @@ export function SettingsPage() {
                                             w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium
                                             transition-all duration-200 outline-none
                                             ${isActive
-                                                ? "bg-[#F4F4F5] text-gray-900"
-                                                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                                ? "bg-[#F4F4F5] dark:bg-zinc-800 text-gray-900 dark:text-white"
+                                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800/50 hover:text-gray-900 dark:hover:text-white"
                                             }
                                         `}
                                     >
-                                        <Icon size={18} className={isActive ? "text-gray-900" : "text-gray-400"} />
+                                        <Icon size={18} className={isActive ? "text-gray-900 dark:text-white" : "text-gray-400"} />
                                         {tab.label}
                                     </button>
                                 );
@@ -215,8 +213,8 @@ export function SettingsPage() {
                                                     </label>
                                                     <button
                                                         onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-                                                        className="group flex items-center gap-3 pl-3 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm 
-                                                            hover:border-gray-300 hover:shadow-sm transition-all duration-200 min-w-[200px]"
+                                                        className="group flex items-center gap-3 pl-3 pr-4 py-2.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-sm 
+                                                            hover:border-gray-300 dark:hover:border-zinc-600 hover:shadow-sm transition-all duration-200 min-w-[200px]"
                                                     >
                                                         <div className="relative">
                                                             <div
@@ -228,12 +226,12 @@ export function SettingsPage() {
                                                                 style={{ backgroundColor: currentStatus.color }}
                                                             />
                                                         </div>
-                                                        <span className="flex-1 text-left font-medium text-gray-700">{currentStatus.label}</span>
-                                                        <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
+                                                        <span className="flex-1 text-left font-medium text-gray-700 dark:text-gray-200">{currentStatus.label}</span>
+                                                        <ChevronDown size={14} className="text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400 transition-colors" />
                                                     </button>
 
                                                     {statusDropdownOpen && (
-                                                        <div className="absolute top-full left-0 mt-2 w-full min-w-[200px] bg-white border border-gray-100 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                                                        <div className="absolute top-full left-0 mt-2 w-full min-w-[200px] bg-white dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                                                             {statusOptions.map((opt) => (
                                                                 <button
                                                                     key={opt.id}
@@ -242,18 +240,18 @@ export function SettingsPage() {
                                                                         setStatusDropdownOpen(false);
                                                                     }}
                                                                     className={`
-                                                                        flex items-center gap-3 px-4 py-2.5 w-full hover:bg-gray-50 transition-colors
-                                                                        ${status === opt.id ? "bg-gray-50/50" : ""}
+                                                                        flex items-center gap-3 px-4 py-2.5 w-full hover:bg-gray-50 dark:hover:bg-zinc-700/50 transition-colors
+                                                                        ${status === opt.id ? "bg-gray-50/50 dark:bg-zinc-700/50" : ""}
                                                                     `}
                                                                 >
                                                                     <div
                                                                         className="w-2 h-2 rounded-full"
                                                                         style={{ backgroundColor: opt.color }}
                                                                     />
-                                                                    <span className={`flex-1 text-left text-sm ${status === opt.id ? "text-gray-900 font-medium" : "text-gray-600"}`}>
+                                                                    <span className={`flex-1 text-left text-sm ${status === opt.id ? "text-gray-900 dark:text-white font-medium" : "text-gray-600 dark:text-gray-400"}`}>
                                                                         {opt.label}
                                                                     </span>
-                                                                    {status === opt.id && <Check size={14} className="text-gray-900" />}
+                                                                    {status === opt.id && <Check size={14} className="text-gray-900 dark:text-white" />}
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -294,8 +292,8 @@ export function SettingsPage() {
                                                 value={bio}
                                                 onChange={(e) => setBio(e.target.value)}
                                                 rows={3}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm
-                                                    placeholder:text-gray-400 resize-none
+                                                className="w-full px-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-gray-900 dark:text-white text-sm
+                                                    placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none
                                                     focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500
                                                     transition-all duration-200"
                                                 placeholder="Tell your team a bit about yourself..."
@@ -307,22 +305,22 @@ export function SettingsPage() {
                                     </SettingsCard>
 
                                     {/* Danger Zone */}
-                                    <div className="bg-white border border-red-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6">
-                                        <h2 className="text-lg font-semibold text-red-600 mb-2">Danger Zone</h2>
-                                        <p className="text-sm text-gray-500 mb-6">
+                                    <div className="bg-white dark:bg-[#18181B] border border-red-100 dark:border-red-900/30 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none p-6 transition-colors duration-200">
+                                        <h2 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">Danger Zone</h2>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                                             Irreversible and destructive actions
                                         </p>
                                         <div className="flex flex-col sm:flex-row gap-3">
                                             <button
                                                 onClick={handleLogout}
-                                                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl
-                                                    hover:bg-gray-200 transition-all duration-200"
+                                                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl
+                                                    hover:bg-gray-200 dark:hover:bg-zinc-700 transition-all duration-200"
                                             >
                                                 <LogOut size={16} />
                                                 Sign Out
                                             </button>
-                                            <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 text-sm font-medium rounded-xl
-                                                hover:bg-red-100 transition-all duration-200">
+                                            <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium rounded-xl
+                                                hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200">
                                                 <Trash2 size={16} />
                                                 Delete Account
                                             </button>
@@ -546,23 +544,23 @@ export function SettingsPage() {
                                                     <Github size={24} className="text-white" />
                                                 </div>
                                                 <div>
-                                                    <h3 className="text-sm font-medium text-gray-900">GitHub</h3>
-                                                    <p className="text-sm text-gray-500">Connect your repositories</p>
+                                                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">GitHub</h3>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">Connect your repositories</p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-600 text-xs font-medium rounded-full">
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-medium rounded-full">
                                                     <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                                                     Connected
                                                 </span>
-                                                <button className="text-sm text-gray-500 hover:text-gray-700 font-medium">
+                                                <button className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium">
                                                     Disconnect
                                                 </button>
                                             </div>
                                         </div>
-                                        <div className="mt-4 pt-4 border-t border-gray-100">
-                                            <p className="text-xs text-gray-500">
-                                                Connected as <span className="font-medium text-gray-700">@{user?.username || "username"}</span>
+                                        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Connected as <span className="font-medium text-gray-700 dark:text-gray-300">@{user?.username || "username"}</span>
                                             </p>
                                         </div>
                                     </SettingsCard>
@@ -571,28 +569,28 @@ export function SettingsPage() {
                                     <SettingsCard
                                         title="API Keys"
                                         action={
-                                            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                                            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
                                                 <Plus size={14} />
                                                 Generate Key
                                             </button>
                                         }
                                     >
-                                        <p className="text-sm text-gray-500 mb-4">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                             Personal access tokens for CLI and API integrations
                                         </p>
                                         <div className="space-y-3">
                                             {apiKeys.map((key) => (
                                                 <div
                                                     key={key.id}
-                                                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
+                                                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-xl"
                                                 >
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
-                                                            <Key size={18} className="text-gray-500" />
+                                                        <div className="w-10 h-10 rounded-lg bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 flex items-center justify-center">
+                                                            <Key size={18} className="text-gray-500 dark:text-gray-400" />
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-medium text-gray-900">{key.name}</p>
-                                                            <p className="text-xs text-gray-500">
+                                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{key.name}</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
                                                                 Created {key.created} · Last used {key.lastUsed}
                                                             </p>
                                                         </div>
@@ -600,16 +598,16 @@ export function SettingsPage() {
                                                     <div className="flex items-center gap-2">
                                                         <button
                                                             onClick={() => setShowApiKey(showApiKey === key.id ? null : key.id)}
-                                                            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                                                            className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                                                         >
                                                             {showApiKey === key.id ? <EyeOff size={16} /> : <Eye size={16} />}
                                                         </button>
-                                                        <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                                                        <button className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                                                             <Copy size={16} />
                                                         </button>
                                                         <button
                                                             onClick={() => setApiKeys(apiKeys.filter(k => k.id !== key.id))}
-                                                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                                            className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                                                         >
                                                             <Trash size={16} />
                                                         </button>
@@ -643,8 +641,8 @@ export function SettingsPage() {
                                         </p>
                                         <select
                                             value={aiLanguage}
-                                            onChange={(e) => setAiLanguage(e.target.value)}
-                                            className="w-full max-w-xs px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm
+                                            onChange={(e) => setAiLanguage(e.target.value as 'en' | 'es' | 'fr' | 'de' | 'pt' | 'zh' | 'ja')}
+                                            className="w-full max-w-xs px-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-gray-900 dark:text-white text-sm
                                                 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500
                                                 transition-all duration-200 cursor-pointer"
                                         >
@@ -693,9 +691,9 @@ export function SettingsPage() {
                                                     Allow AI to read linked commit messages to understand why changes were made,
                                                     not just the current code state.
                                                 </p>
-                                                <div className="mt-3 flex items-start gap-2 p-3 bg-blue-50 rounded-xl">
-                                                    <AlertCircle size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-                                                    <p className="text-xs text-blue-700">
+                                                <div className="mt-3 flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                                                    <AlertCircle size={16} className="text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                                                    <p className="text-xs text-blue-700 dark:text-blue-300">
                                                         When enabled, AI can provide richer context about code evolution and decision history.
                                                     </p>
                                                 </div>
@@ -709,7 +707,7 @@ export function SettingsPage() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
 
@@ -725,9 +723,9 @@ function SettingsCard({
     action?: React.ReactNode;
 }) {
     return (
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6">
+        <div className="bg-white dark:bg-[#18181B] border border-gray-100 dark:border-zinc-800 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none p-6 transition-colors duration-200">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
                 {action}
             </div>
             {children}
@@ -750,16 +748,16 @@ function InputField({
 }) {
     return (
         <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 {label}
             </label>
             <input
                 type={type}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm
-                    placeholder:text-gray-400
-                    focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-gray-900 dark:text-white text-sm
+                    placeholder:text-gray-400 dark:placeholder:text-gray-500
+                    focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400
                     transition-all duration-200"
                 placeholder={placeholder}
             />
@@ -789,11 +787,11 @@ function Toggle({
             onClick={() => onChange(!checked)}
             className={`
                 relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0
-                ${checked ? "bg-[#18181B]" : "bg-gray-200"}
+                ${checked ? "bg-[#18181B] dark:bg-white" : "bg-gray-200 dark:bg-zinc-700"}
             `}
         >
             <motion.div
-                className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
+                className={`absolute top-1 w-4 h-4 rounded-full shadow-sm ${checked ? "bg-white dark:bg-zinc-900" : "bg-white"}`}
                 animate={{ left: checked ? "calc(100% - 20px)" : "4px" }}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
             />
@@ -813,10 +811,10 @@ function ToggleRow({
     onChange: (value: boolean) => void;
 }) {
     return (
-        <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+        <div className="flex items-center justify-between py-3 border-b border-gray-50 dark:border-zinc-800 last:border-0">
             <div>
-                <p className="text-sm font-medium text-gray-900">{label}</p>
-                <p className="text-sm text-gray-500">{description}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{label}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
             </div>
             <Toggle checked={checked} onChange={onChange} />
         </div>
@@ -840,18 +838,18 @@ function ThemeOption({
             className={`
                 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200
                 ${selected
-                    ? "border-[#18181B] bg-gray-50"
-                    : "border-gray-100 hover:border-gray-200 bg-white"
+                    ? "border-[#18181B] dark:border-white bg-gray-50 dark:bg-zinc-800"
+                    : "border-gray-100 dark:border-zinc-700 hover:border-gray-200 dark:hover:border-zinc-600 bg-white dark:bg-zinc-800/50"
                 }
             `}
         >
-            <Icon size={24} className={selected ? "text-gray-900" : "text-gray-400"} />
-            <span className={`text-sm font-medium ${selected ? "text-gray-900" : "text-gray-600"}`}>
+            <Icon size={24} className={selected ? "text-gray-900 dark:text-white" : "text-gray-400"} />
+            <span className={`text-sm font-medium ${selected ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-400"}`}>
                 {label}
             </span>
             {selected && (
-                <div className="w-5 h-5 rounded-full bg-[#18181B] flex items-center justify-center">
-                    <Check size={12} className="text-white" />
+                <div className="w-5 h-5 rounded-full bg-[#18181B] dark:bg-white flex items-center justify-center">
+                    <Check size={12} className="text-white dark:text-zinc-900" />
                 </div>
             )}
         </button>
@@ -875,20 +873,20 @@ function RadioOption({
             className={`
                 flex items-start gap-3 p-4 rounded-xl border-2 w-full text-left transition-all duration-200
                 ${selected
-                    ? "border-[#18181B] bg-gray-50"
-                    : "border-gray-100 hover:border-gray-200 bg-white"
+                    ? "border-[#18181B] dark:border-white bg-gray-50 dark:bg-zinc-800"
+                    : "border-gray-100 dark:border-zinc-700 hover:border-gray-200 dark:hover:border-zinc-600 bg-white dark:bg-zinc-800/50"
                 }
             `}
         >
             <div className={`
                 w-5 h-5 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors
-                ${selected ? "border-[#18181B] bg-[#18181B]" : "border-gray-300"}
+                ${selected ? "border-[#18181B] dark:border-white bg-[#18181B] dark:bg-white" : "border-gray-300 dark:border-zinc-600"}
             `}>
-                {selected && <div className="w-2 h-2 rounded-full bg-white" />}
+                {selected && <div className="w-2 h-2 rounded-full bg-white dark:bg-zinc-900" />}
             </div>
             <div>
-                <p className="text-sm font-medium text-gray-900">{label}</p>
-                <p className="text-sm text-gray-500">{description}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{label}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
             </div>
         </button>
     );
@@ -911,20 +909,20 @@ function DepthOption({
             className={`
                 flex items-start gap-3 p-4 rounded-xl border-2 w-full text-left transition-all duration-200
                 ${selected
-                    ? "border-[#18181B] bg-gray-50"
-                    : "border-gray-100 hover:border-gray-200 bg-white"
+                    ? "border-[#18181B] dark:border-white bg-gray-50 dark:bg-zinc-800"
+                    : "border-gray-100 dark:border-zinc-700 hover:border-gray-200 dark:hover:border-zinc-600 bg-white dark:bg-zinc-800/50"
                 }
             `}
         >
             <div className={`
                 w-5 h-5 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors
-                ${selected ? "border-[#18181B] bg-[#18181B]" : "border-gray-300"}
+                ${selected ? "border-[#18181B] dark:border-white bg-[#18181B] dark:bg-white" : "border-gray-300 dark:border-zinc-600"}
             `}>
-                {selected && <div className="w-2 h-2 rounded-full bg-white" />}
+                {selected && <div className="w-2 h-2 rounded-full bg-white dark:bg-zinc-900" />}
             </div>
             <div>
-                <p className="text-sm font-medium text-gray-900">{label}</p>
-                <p className="text-sm text-gray-500">{description}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{label}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
             </div>
         </button>
     );
@@ -946,30 +944,30 @@ function SessionItem({
     current?: boolean;
 }) {
     return (
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-xl">
             <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center">
-                    <Icon size={18} className="text-gray-500" />
+                <div className="w-10 h-10 rounded-xl bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 flex items-center justify-center">
+                    <Icon size={18} className="text-gray-500 dark:text-gray-400" />
                 </div>
                 <div>
-                    <p className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
                         {device}
                         {current && (
-                            <span className="px-2 py-0.5 bg-green-50 text-green-600 text-xs font-medium rounded-full">
+                            <span className="px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-medium rounded-full">
                                 Current
                             </span>
                         )}
                     </p>
-                    <p className="text-xs text-gray-500">{browser} · {location}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{browser} · {location}</p>
                 </div>
             </div>
             <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400 flex items-center gap-1">
+                <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
                     <Clock size={12} />
                     {lastActive}
                 </span>
                 {!current && (
-                    <button className="text-sm text-red-500 hover:text-red-600 font-medium transition-colors">
+                    <button className="text-sm text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 font-medium transition-colors">
                         Revoke
                     </button>
                 )}
@@ -988,9 +986,9 @@ function SecurityLogItem({
     time: string;
 }) {
     return (
-        <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-            <p className="text-sm font-medium text-gray-900">{action}</p>
-            <p className="text-sm text-gray-500">{date} at {time}</p>
+        <div className="flex items-center justify-between py-3 border-b border-gray-50 dark:border-zinc-800 last:border-0">
+            <p className="text-sm font-medium text-gray-900 dark:text-white">{action}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{date} at {time}</p>
         </div>
     );
 }

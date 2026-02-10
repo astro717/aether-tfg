@@ -172,7 +172,7 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
       <div
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
-        className="relative w-full max-w-lg mx-4 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl transform transition-all duration-200 ease-out animate-modal-enter"
+        className="relative w-full max-w-lg mx-4 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-3xl shadow-2xl transform transition-all duration-200 ease-out animate-modal-enter"
         style={{
           boxShadow:
             "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1)",
@@ -180,12 +180,12 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
-          <h2 className="text-lg font-semibold text-gray-900">Create New Task</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Create New Task</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <X size={18} className="text-gray-500" />
+            <X size={18} className="text-gray-500 dark:text-gray-400" />
           </button>
         </div>
 
@@ -193,7 +193,7 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
         <div className="px-6 pb-4 space-y-4">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Title <span className="text-red-500">*</span>
             </label>
             <input
@@ -202,13 +202,13 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter task title..."
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl text-sm text-gray-800 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Description
             </label>
             <textarea
@@ -216,13 +216,13 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add a description..."
               rows={3}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl resize-none text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl resize-none text-sm text-gray-800 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
             />
           </div>
 
           {/* Due Date - Premium DatePicker */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Deadline
             </label>
             <PremiumDatePicker
@@ -235,7 +235,7 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
 
           {/* Assignee - Smart Select */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Assignee <span className="text-red-500">*</span>
             </label>
             <SmartSelect
@@ -254,7 +254,7 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
             <p className="text-sm text-red-500 px-1">{error}</p>
           )}
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             Press ⌘ + Enter to create
           </p>
         </div>
@@ -263,7 +263,7 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
         <div className="flex items-center justify-end gap-3 px-6 pb-5">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
           >
             Cancel
           </button>

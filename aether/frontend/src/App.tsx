@@ -14,11 +14,17 @@ import { MessagingPage } from "./modules/messaging/pages/MessagingPage";
 import { SettingsPage } from "./modules/settings/pages/SettingsPage";
 import { OrganizationProvider } from "./modules/organization/context/OrganizationContext";
 import { AuthProvider } from "./modules/auth/context/AuthContext";
+import { ThemeProvider } from "./modules/settings/context/ThemeContext";
+import { SettingsProvider } from "./modules/settings/context/SettingsContext";
+import { NotificationsProvider } from "./modules/notifications/context/NotificationsContext";
 import { ToastProvider } from "./components/ui/Toast";
 
 function App() {
   return (
+    <ThemeProvider>
+    <SettingsProvider>
     <AuthProvider>
+    <NotificationsProvider>
     <OrganizationProvider>
     <ToastProvider>
       <BrowserRouter>
@@ -72,7 +78,10 @@ function App() {
       </BrowserRouter>
     </ToastProvider>
     </OrganizationProvider>
+    </NotificationsProvider>
     </AuthProvider>
+    </SettingsProvider>
+    </ThemeProvider>
   );
 }
 

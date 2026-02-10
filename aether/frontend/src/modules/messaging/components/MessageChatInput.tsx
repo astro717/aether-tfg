@@ -172,7 +172,7 @@ export function MessageChatInput({
     <div
       className={`
         relative p-4
-        ${isDragOver ? "bg-blue-50/50" : "bg-gradient-to-t from-white via-white to-transparent"}
+        ${isDragOver ? "bg-blue-50/50 dark:bg-blue-900/20" : "bg-gradient-to-t from-white dark:from-zinc-900 via-white dark:via-zinc-900 to-transparent"}
         transition-colors duration-300
       `}
       onDragOver={handleDragOver}
@@ -186,12 +186,12 @@ export function MessageChatInput({
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.98 }}
-            className="absolute inset-2 bg-blue-500/10 backdrop-blur-sm flex flex-col items-center justify-center z-20 border-2 border-dashed border-blue-400 rounded-2xl"
+            className="absolute inset-2 bg-blue-500/10 dark:bg-blue-500/20 backdrop-blur-sm flex flex-col items-center justify-center z-20 border-2 border-dashed border-blue-400 rounded-2xl"
           >
-            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-2">
-              <Sparkles className="text-blue-600" size={24} />
+            <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center mb-2">
+              <Sparkles className="text-blue-600 dark:text-blue-400" size={24} />
             </div>
-            <p className="text-blue-600 font-semibold text-lg">Drop files to attach</p>
+            <p className="text-blue-600 dark:text-blue-400 font-semibold text-lg">Drop files to attach</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -224,14 +224,14 @@ export function MessageChatInput({
               exit={{ height: 0, opacity: 0 }}
               className="mb-3 px-1"
             >
-              <div className="flex items-center justify-between text-xs font-medium text-blue-600 mb-1.5">
+              <div className="flex items-center justify-between text-xs font-medium text-blue-600 dark:text-blue-400 mb-1.5">
                 <span className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                   Uploading files...
                 </span>
                 <span>{progress}%</span>
               </div>
-              <div className="h-1 bg-blue-100 rounded-full overflow-hidden">
+              <div className="h-1 bg-blue-100 dark:bg-blue-900/30 rounded-full overflow-hidden">
                 <motion.div
                   className="h-full bg-gradient-to-r from-blue-500 to-indigo-500"
                   initial={{ width: 0 }}
@@ -247,13 +247,13 @@ export function MessageChatInput({
         <div
           className={`
             relative flex items-center gap-2 p-1.5
-            bg-white/80 backdrop-blur-xl
+            bg-white/80 dark:bg-zinc-800/80 backdrop-blur-xl
             rounded-[24px]
             border transition-all duration-300 ease-out
             shadow-sm hover:shadow-md
             ${isFocused
               ? "border-blue-400/50 shadow-blue-500/10 ring-4 ring-blue-500/5"
-              : "border-gray-200/60 shadow-gray-200/50"
+              : "border-gray-200/60 dark:border-zinc-700/60 shadow-gray-200/50 dark:shadow-black/20"
             }
 `}
         >
@@ -267,8 +267,8 @@ export function MessageChatInput({
                 flex items-center justify-center
                 transition-all duration-200
                 ${showAttachMenu
-                  ? "bg-gray-100 text-gray-900 rotate-90"
-                  : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                  ? "bg-gray-100 dark:bg-zinc-700 text-gray-900 dark:text-white rotate-90"
+                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-700"
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
               `}
@@ -285,32 +285,32 @@ export function MessageChatInput({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.9 }}
                   transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                  className="absolute bottom-12 left-0 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden min-w-[200px] z-30 p-1.5 ring-1 ring-black/5"
+                  className="absolute bottom-12 left-0 mb-2 bg-white dark:bg-zinc-800 rounded-2xl shadow-xl border border-gray-100 dark:border-zinc-700 overflow-hidden min-w-[200px] z-30 p-1.5 ring-1 ring-black/5 dark:ring-white/5"
                 >
 
                   <button
                     onClick={() => handleFileSelect("image/*,video/*")}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-blue-50 transition-colors group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors group"
                   >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center group-hover:from-blue-200 group-hover:to-indigo-200 transition-colors">
-                      <Image size={16} className="text-blue-600" />
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center group-hover:from-blue-200 group-hover:to-indigo-200 dark:group-hover:from-blue-900/70 dark:group-hover:to-indigo-900/70 transition-colors">
+                      <Image size={16} className="text-blue-600 dark:text-blue-400" />
                     </div>
                     <div className="text-left">
-                      <span className="block text-sm font-medium text-gray-700 group-hover:text-blue-700">Photos & Videos</span>
-                      <span className="block text-[10px] text-gray-400">Share memories</span>
+                      <span className="block text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-400">Photos & Videos</span>
+                      <span className="block text-[10px] text-gray-400 dark:text-gray-500">Share memories</span>
                     </div>
                   </button>
 
                   <button
                     onClick={() => handleFileSelect("*/*")}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-purple-50 transition-colors group mt-1"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors group mt-1"
                   >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center group-hover:from-purple-200 group-hover:to-pink-200 transition-colors">
-                      <FileText size={16} className="text-purple-600" />
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 flex items-center justify-center group-hover:from-purple-200 group-hover:to-pink-200 dark:group-hover:from-purple-900/70 dark:group-hover:to-pink-900/70 transition-colors">
+                      <FileText size={16} className="text-purple-600 dark:text-purple-400" />
                     </div>
                     <div className="text-left">
-                      <span className="block text-sm font-medium text-gray-700 group-hover:text-purple-700">Documents</span>
-                      <span className="block text-[10px] text-gray-400">PDFs, files, etc.</span>
+                      <span className="block text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-400">Documents</span>
+                      <span className="block text-[10px] text-gray-400 dark:text-gray-500">PDFs, files, etc.</span>
                     </div>
                   </button>
                 </motion.div>
@@ -341,13 +341,13 @@ export function MessageChatInput({
               className="
                 w-full
                 bg-transparent
-                text-[15px] leading-relaxed text-gray-800
-                placeholder:text-gray-400
+                text-[15px] leading-relaxed text-gray-800 dark:text-white
+                placeholder:text-gray-400 dark:placeholder:text-gray-500
                 outline-none
                 resize-none
                 border-none p-0 m-0
                 max-h-[160px]
-                selection:bg-blue-100 selection:text-blue-900
+                selection:bg-blue-100 selection:text-blue-900 dark:selection:bg-blue-900/50 dark:selection:text-blue-200
                 disabled:opacity-50
               "
               style={{
@@ -375,7 +375,7 @@ textarea::-webkit-scrollbar {
                 transition-all duration-300
                 ${canSend
                   ? "bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 hover:scale-105 active:scale-95"
-                  : "bg-gray-100 text-gray-300 cursor-not-allowed"
+                  : "bg-gray-100 dark:bg-zinc-700 text-gray-300 dark:text-gray-500 cursor-not-allowed"
                 }
 `}
             >
@@ -416,7 +416,7 @@ function FilePreview({ file, onRemove }: FilePreviewProps) {
       className="relative group flex-shrink-0"
     >
       {isImage && file.preview ? (
-        <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-gray-100 border border-gray-200/50 shadow-sm">
+        <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-gray-100 dark:bg-zinc-800 border border-gray-200/50 dark:border-zinc-700/50 shadow-sm">
           <img
             src={file.preview}
             alt={file.file.name}
@@ -434,10 +434,10 @@ function FilePreview({ file, onRemove }: FilePreviewProps) {
           </div>
         </div>
       ) : (
-        <div className="relative w-48 flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200/60 shadow-sm group-hover:shadow-md transition-all">
+        <div className="relative w-48 flex items-center gap-3 p-3 bg-white dark:bg-zinc-800 rounded-xl border border-gray-200/60 dark:border-zinc-700/60 shadow-sm group-hover:shadow-md transition-all">
           <div className={`
             w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
-            ${isVideo ? 'bg-indigo-50 text-indigo-500' : 'bg-orange-50 text-orange-500'}
+            ${isVideo ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500' : 'bg-orange-50 dark:bg-orange-900/30 text-orange-500'}
           `}>
             {isVideo ? (
               <Film size={18} />
@@ -446,10 +446,10 @@ function FilePreview({ file, onRemove }: FilePreviewProps) {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-800 truncate max-w-[120px]">
+            <p className="text-sm font-medium text-gray-800 dark:text-white truncate max-w-[120px]">
               {file.file.name}
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               {formatFileSize(file.file.size)}
             </p>
           </div>
@@ -461,11 +461,11 @@ function FilePreview({ file, onRemove }: FilePreviewProps) {
               w-6 h-6
               rounded-full
               flex items-center justify-center
-              hover:bg-gray-200
+              hover:bg-gray-200 dark:hover:bg-zinc-700
               transition-colors
             "
           >
-            <X size={14} className="text-gray-500" />
+            <X size={14} className="text-gray-500 dark:text-gray-400" />
           </motion.button>
         </div>
       )}

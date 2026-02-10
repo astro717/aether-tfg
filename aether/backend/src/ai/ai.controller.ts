@@ -46,6 +46,8 @@ export class AiController {
    * Query params:
    *   - onlyCached=true: only retrieve cached results (404 if not cached)
    *   - forceRegenerate=true: bypass cache and generate fresh (for regeneration)
+   *   - language: output language code (en, es, fr, de, pt, zh, ja)
+   *   - depth: analysis depth (concise, standard, detailed)
    */
   @Get('tasks/:taskId/commits/:sha/explain')
   async explainCommitInTaskContext(
@@ -53,6 +55,8 @@ export class AiController {
     @Param('sha') sha: string,
     @Query('onlyCached') onlyCached: string,
     @Query('forceRegenerate') forceRegenerate: string,
+    @Query('language') language: string,
+    @Query('depth') depth: string,
     @CurrentUser() user: users,
   ) {
     return this.aiService.explainCommitInTaskContext(
@@ -61,6 +65,8 @@ export class AiController {
       user,
       onlyCached === 'true',
       forceRegenerate === 'true',
+      language || 'en',
+      depth || 'standard',
     );
   }
 
@@ -71,15 +77,19 @@ export class AiController {
    * Query params:
    *   - onlyCached=true: only retrieve cached results (404 if not cached)
    *   - forceRegenerate=true: bypass cache and generate fresh (deletes old reports)
+   *   - language: output language code (en, es, fr, de, pt, zh, ja)
+   *   - depth: analysis depth (concise, standard, detailed)
    */
   @Get('commits/:sha/analyze')
   async analyzeCommit(
     @Param('sha') sha: string,
     @Query('onlyCached') onlyCached: string,
     @Query('forceRegenerate') forceRegenerate: string,
+    @Query('language') language: string,
+    @Query('depth') depth: string,
     @CurrentUser() user: users,
   ) {
-    return this.aiService.analyzeCode(sha, user, onlyCached === 'true', forceRegenerate === 'true');
+    return this.aiService.analyzeCode(sha, user, onlyCached === 'true', forceRegenerate === 'true', language || 'en', depth || 'standard');
   }
 
   /**

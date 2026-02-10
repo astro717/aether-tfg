@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { SendMessageDto, AttachmentDto } from './dto/send-message.dto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UploadUrlDto, UploadUrlResponse } from './dto/upload-url.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const BUCKET_NAME = 'chat-uploads';
 
@@ -11,6 +12,8 @@ export class MessagesService {
   constructor(
     private prisma: PrismaService,
     private supabase: SupabaseService,
+    @Inject(forwardRef(() => NotificationsService))
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -190,6 +193,21 @@ export class MessagesService {
         },
         attachments: true,
       },
+    });
+
+    // Create a MESSAGE notification for the receiver
+    await this.notificationsService.create({
+      user_id: dto.receiverId,
+      actor_id: senderId,
+      type: 'MESSAGE',
+      title: 'New Message',
+      content: dto.content
+        ? dto.content.length > 50
+          ? dto.content.substring(0, 50) + '...'
+          : dto.content
+        : 'Sent an attachment',
+      entity_id: message.id,
+      entity_type: 'message',
     });
 
     return message;
