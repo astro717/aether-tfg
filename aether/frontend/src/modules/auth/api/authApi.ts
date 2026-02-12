@@ -5,6 +5,7 @@ export interface AuthUser {
   username: string;
   email: string;
   role: string;
+  avatar_color?: string; // e.g. "blue", "green"
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -73,3 +74,76 @@ export async function connectGithub(code: string) {
   return res.json();
 }
 
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to send reset email');
+  }
+
+  return res.json();
+}
+
+export async function resetPassword(token: string, password: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to reset password');
+  }
+
+  return res.json();
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to change password');
+  }
+
+  return res.json();
+}
+
+export async function sendResetEmailToCurrentUser(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/auth/send-reset-email`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to send reset email');
+  }
+
+  return res.json();
+}
+
+export async function updateProfile(data: Partial<AuthUser> & { jobTitle?: string; bio?: string }): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE_URL}/users/me/profile`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to update profile');
+  }
+
+  return res.json();
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Clock } from "lucide-react";
 import { useAuth } from "../../auth/context/AuthContext";
 import { useOrganization } from "../../organization/context/OrganizationContext";
 import { organizationApi, type OrganizationMember } from "../../organization/api/organizationApi";
@@ -24,6 +24,7 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("");
   const [assigneeId, setAssigneeId] = useState<string>("");
 
   // UI state
@@ -91,6 +92,7 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
       setTitle("");
       setDescription("");
       setDueDate("");
+      setDueTime("");
       setAssigneeId("");
       setError("");
     }
@@ -116,10 +118,21 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
     setError("");
 
     try {
+      // Construct final due date with time if present
+      let finalDueDate: Date | undefined;
+
+      if (dueDate) {
+        // Create date object from local date string YYYY-MM-DD
+        // If time is provided, use it. Otherwise default to start of workday (09:00:00)
+        const timeString = dueTime || "09:00:00";
+        const dateTimeString = `${dueDate}T${timeString}`;
+        finalDueDate = new Date(dateTimeString);
+      }
+
       await tasksApi.createTask({
         title: title.trim(),
         description: description.trim() || undefined,
-        due_date: dueDate || undefined,
+        due_date: finalDueDate ? finalDueDate.toISOString() : undefined,
         assignee_id: assigneeId,
         organization_id: currentOrganization.id,
       });
@@ -220,17 +233,36 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
             />
           </div>
 
-          {/* Due Date - Premium DatePicker */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Deadline
-            </label>
-            <PremiumDatePicker
-              value={dueDate}
-              onChange={setDueDate}
-              placeholder="Select a deadline"
-              minDate={new Date()}
-            />
+          {/* Due Date & Time */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Due Date
+              </label>
+              <PremiumDatePicker
+                value={dueDate}
+                onChange={setDueDate}
+                placeholder="Select date"
+                minDate={new Date()}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Time <span className="text-xs text-gray-400 font-normal">(Optional)</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Clock size={16} className="text-gray-400 dark:text-gray-500" />
+                </div>
+                <input
+                  type="time"
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                  disabled={!dueDate}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl text-sm text-gray-800 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Assignee - Smart Select */}

@@ -1,15 +1,20 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
+import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {}
+    private emailService: EmailService,
+    private configService: ConfigService,
+  ) { }
 
   async validateUser(username: string, password: string) {
     const user = await this.prisma.users.findUnique({ where: { username } });
@@ -55,6 +60,7 @@ export class AuthService {
           email,
           password_hash: hashed,
           role: 'user',
+          avatar_color: ['blue', 'purple', 'green', 'orange', 'pink', 'teal', 'indigo', 'rose', 'amber', 'cyan'][Math.floor(Math.random() * 10)],
         },
       });
 
@@ -147,5 +153,131 @@ export class AuthService {
       user: updatedUser,
       github_login: githubUser.login,
     };
+  }
+
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const user = await this.prisma.users.findUnique({ where: { email } });
+
+    // Always return success to prevent email enumeration attacks
+    if (!user) {
+      return { message: 'If an account exists with this email, you will receive a password reset link.' };
+    }
+
+    // Generate a secure random token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    // Set expiration to 1 hour from now
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    // Save hashed token to database
+    await this.prisma.users.update({
+      where: { id: user.id },
+      data: {
+        reset_password_token: hashedToken,
+        reset_password_expires: expiresAt,
+      },
+    });
+
+    // Build reset URL with raw token (not hashed)
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    // Send email
+    await this.emailService.sendPasswordResetEmail(user.email, resetLink, user.username);
+
+    return { message: 'If an account exists with this email, you will receive a password reset link.' };
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    // Hash the token to compare with stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await this.prisma.users.findFirst({
+      where: {
+        reset_password_token: hashedToken,
+        reset_password_expires: {
+          gt: new Date(),
+        },
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    // Validate password strength
+    if (newPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters long');
+    }
+
+    // Hash the new password and clear the reset token
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.users.update({
+      where: { id: user.id },
+      data: {
+        password_hash: hashedPassword,
+        reset_password_token: null,
+        reset_password_expires: null,
+      },
+    });
+
+    // Send confirmation email
+    await this.emailService.sendPasswordChangedEmail(user.email, user.username);
+
+    return { message: 'Password has been reset successfully' };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.prisma.users.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify current password
+    const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Validate new password strength
+    if (newPassword.length < 8) {
+      throw new BadRequestException('New password must be at least 8 characters long');
+    }
+
+    // Ensure new password is different from current
+    const isSame = await bcrypt.compare(newPassword, user.password_hash);
+    if (isSame) {
+      throw new BadRequestException('New password must be different from current password');
+    }
+
+    // Hash and save new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.users.update({
+      where: { id: userId },
+      data: { password_hash: hashedPassword },
+    });
+
+    // Send confirmation email
+    await this.emailService.sendPasswordChangedEmail(user.email, user.username);
+
+    return { message: 'Password changed successfully' };
+  }
+
+  async sendPasswordResetToCurrentUser(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.users.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.forgotPassword(user.email);
   }
 }

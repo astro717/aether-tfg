@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Search, PenSquare, Loader2 } from "lucide-react";
 import { type Conversation, type MessageUser } from "../api/messagingApi";
 import { formatTimestamp } from "../data/mockData";
+import { getAvatarColorClasses } from "../../../lib/avatarColors";
 
 interface ThreadsListProps {
   conversations: Conversation[];
@@ -205,16 +206,19 @@ function UserAvatar({ user }: UserAvatarProps) {
     .toUpperCase()
     .slice(0, 2) || user.username.slice(0, 2).toUpperCase();
 
+  const colors = getAvatarColorClasses(user.avatar_color);
+
   return (
     <div className="relative flex-shrink-0">
       <div
-        className="
+        className={`
           w-12 h-12
           rounded-full
-          bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-600 dark:to-zinc-700
+          ${colors.bg}
+          ${colors.border}
           flex items-center justify-center
-          font-semibold text-gray-600 dark:text-gray-300 text-sm
-        "
+          font-semibold ${colors.text} text-sm
+        `}
       >
         {initials}
       </div>

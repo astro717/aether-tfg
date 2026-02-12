@@ -4,6 +4,7 @@ import { MessageBubble } from "./MessageBubble";
 import { MessageChatInput } from "./MessageChatInput";
 import { type Message, type MessageUser } from "../api/messagingApi";
 import { type UploadedFile } from "../../../hooks/useFileUpload";
+import { getAvatarColorClasses } from "../../../lib/avatarColors";
 
 interface ChatViewProps {
   userId: string | null;
@@ -243,18 +244,21 @@ function ChatHeader({ user }: ChatHeaderProps) {
     .toUpperCase()
     .slice(0, 2) || user.username.slice(0, 2).toUpperCase();
 
+  const colors = getAvatarColorClasses(user.avatar_color);
+
   return (
     <div className="flex items-center justify-between px-5 py-3 border-b border-white/20 dark:border-white/10">
       {/* Left: Avatar & Name */}
       <div className="flex items-center gap-3">
         <div
-          className="
+          className={`
             w-10 h-10
             rounded-full
-            bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-600 dark:to-zinc-700
+            ${colors.bg}
+            ${colors.border}
             flex items-center justify-center
-            font-semibold text-gray-600 dark:text-gray-300 text-sm
-          "
+            font-semibold ${colors.text} text-sm
+          `}
         >
           {initials}
         </div>

@@ -21,7 +21,7 @@ interface AuthenticatedRequest {
 @Controller('notifications')
 @UseGuards(AuthGuard('jwt'))
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(private readonly notificationsService: NotificationsService) { }
 
   /**
    * GET /notifications
@@ -81,5 +81,14 @@ export class NotificationsController {
       throw new NotFoundException('Notification not found');
     }
     return { deleted: true };
+  }
+
+  /**
+   * DELETE /notifications
+   * Delete all notifications
+   */
+  @Delete()
+  async deleteAll(@Request() req: AuthenticatedRequest) {
+    return this.notificationsService.deleteAll(req.user.id);
   }
 }

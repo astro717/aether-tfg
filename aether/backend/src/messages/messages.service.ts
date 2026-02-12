@@ -14,7 +14,7 @@ export class MessagesService {
     private supabase: SupabaseService,
     @Inject(forwardRef(() => NotificationsService))
     private notificationsService: NotificationsService,
-  ) {}
+  ) { }
 
   /**
    * Get all conversations for a user, grouped by the other participant.
@@ -35,6 +35,7 @@ export class MessagesService {
             id: true,
             username: true,
             email: true,
+            avatar_color: true,
           },
         },
         receiver: {
@@ -42,6 +43,7 @@ export class MessagesService {
             id: true,
             username: true,
             email: true,
+            avatar_color: true,
           },
         },
         attachments: true,
@@ -71,8 +73,8 @@ export class MessagesService {
         // Count unread messages from this user
         const unreadCount = messages.filter(
           m => m.sender_id === otherUserId &&
-               m.receiver_id === userId &&
-               !m.read_at
+            m.receiver_id === userId &&
+            !m.read_at
         ).length;
 
         conversationsMap.set(otherUserId, {
@@ -101,7 +103,7 @@ export class MessagesService {
     // Verify the other user exists
     const otherUser = await this.prisma.users.findUnique({
       where: { id: otherUserId },
-      select: { id: true, username: true, email: true },
+      select: { id: true, username: true, email: true, avatar_color: true },
     });
 
     if (!otherUser) {
@@ -121,6 +123,7 @@ export class MessagesService {
             id: true,
             username: true,
             email: true,
+            avatar_color: true,
           },
         },
         attachments: true,
@@ -166,14 +169,14 @@ export class MessagesService {
         content: dto.content || null,
         attachments: dto.attachments && dto.attachments.length > 0
           ? {
-              create: dto.attachments.map((att: AttachmentDto) => ({
-                file_path: att.filePath,
-                file_url: att.fileUrl,
-                file_name: att.fileName,
-                file_size: att.fileSize,
-                file_type: att.fileType,
-              })),
-            }
+            create: dto.attachments.map((att: AttachmentDto) => ({
+              file_path: att.filePath,
+              file_url: att.fileUrl,
+              file_name: att.fileName,
+              file_size: att.fileSize,
+              file_type: att.fileType,
+            })),
+          }
           : undefined,
       },
       include: {
@@ -182,6 +185,7 @@ export class MessagesService {
             id: true,
             username: true,
             email: true,
+            avatar_color: true,
           },
         },
         receiver: {
@@ -189,6 +193,7 @@ export class MessagesService {
             id: true,
             username: true,
             email: true,
+            avatar_color: true,
           },
         },
         attachments: true,
@@ -243,6 +248,7 @@ export class MessagesService {
             id: true,
             username: true,
             email: true,
+            avatar_color: true,
           },
         },
         receiver: {
@@ -250,6 +256,7 @@ export class MessagesService {
             id: true,
             username: true,
             email: true,
+            avatar_color: true,
           },
         },
       },

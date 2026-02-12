@@ -94,8 +94,13 @@ export function PremiumDatePicker({
   };
 
   const handleSelectDate = (date: Date) => {
-    const isoDate = date.toISOString().split("T")[0];
-    onChange(isoDate);
+    // Fix: Use local date components into YYYY-MM-DD to avoid timezone shifts
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const localIsoDate = `${year}-${month}-${day}`;
+
+    onChange(localIsoDate);
     setIsOpen(false);
   };
 

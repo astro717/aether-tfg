@@ -1,16 +1,21 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import { Check, X, AlertCircle, Info } from "lucide-react";
+import { X, AlertCircle, Info, MessageSquare, CheckCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-type ToastType = "success" | "error" | "info" | "warning";
+export type ToastType = "success" | "error" | "info" | "warning" | "message";
 
-interface Toast {
+export interface Toast {
   id: string;
-  message: string;
   type: ToastType;
+  title?: string;
+  message: string;
+  duration?: number;
+  onClick?: () => void;
 }
 
 interface ToastContextValue {
-  showToast: (message: string, type?: ToastType) => void;
+  showToast: (props: Omit<Toast, "id"> | string, type?: ToastType) => void;
+  dismissToast: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -26,14 +31,21 @@ export function useToast() {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const showToast = useCallback((message: string, type: ToastType = "success") => {
+  const showToast = useCallback((props: Omit<Toast, "id"> | string, type: ToastType = "success") => {
     const id = crypto.randomUUID();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    const toastProps = typeof props === "string"
+      ? { message: props, type }
+      : { ...props, type: props.type || type };
 
-    // Auto-dismiss after 3 seconds
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3000);
+    setToasts((prev) => [...prev, { id, ...toastProps }]);
+
+    // Auto-dismiss
+    const duration = toastProps.duration || 5000;
+    if (duration > 0) {
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, duration);
+    }
   }, []);
 
   const dismissToast = useCallback((id: string) => {
@@ -41,18 +53,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, dismissToast }}>
       {children}
 
-      {/* Toast Container */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none">
-        {toasts.map((toast) => (
-          <ToastItem
-            key={toast.id}
-            toast={toast}
-            onDismiss={() => dismissToast(toast.id)}
-          />
-        ))}
+      {/* Toast Container - Top Right */}
+      <div className="fixed top-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none sm:w-[380px]">
+        <AnimatePresence mode="popLayout">
+          {toasts.map((toast) => (
+            <ToastItem
+              key={toast.id}
+              toast={toast}
+              onDismiss={() => dismissToast(toast.id)}
+            />
+          ))}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   );
@@ -60,46 +74,65 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
   const icons = {
-    success: <Check size={16} className="text-emerald-500" />,
-    error: <X size={16} className="text-red-500" />,
-    warning: <AlertCircle size={16} className="text-amber-500" />,
-    info: <Info size={16} className="text-blue-500" />,
+    success: <CheckCircle size={20} className="text-emerald-500" />,
+    error: <AlertCircle size={20} className="text-red-500" />,
+    warning: <AlertCircle size={20} className="text-amber-500" />,
+    info: <Info size={20} className="text-blue-500" />,
+    message: <MessageSquare size={20} className="text-indigo-500" />,
   };
 
   const bgColors = {
-    success: "bg-emerald-50/90 border-emerald-200/60",
-    error: "bg-red-50/90 border-red-200/60",
-    warning: "bg-amber-50/90 border-amber-200/60",
-    info: "bg-blue-50/90 border-blue-200/60",
+    success: "bg-white dark:bg-zinc-900 border-emerald-100 dark:border-emerald-900/30",
+    error: "bg-white dark:bg-zinc-900 border-red-100 dark:border-red-900/30",
+    warning: "bg-white dark:bg-zinc-900 border-amber-100 dark:border-amber-900/30",
+    info: "bg-white dark:bg-zinc-900 border-blue-100 dark:border-blue-900/30",
+    message: "bg-white dark:bg-zinc-900 border-indigo-100 dark:border-indigo-900/30",
   };
 
   return (
-    <div
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
       className={`
         pointer-events-auto
-        flex items-center gap-3
-        px-4 py-3
-        rounded-2xl
-        backdrop-blur-xl
+        w-full
+        flex items-start gap-3
+        p-4
+        rounded-xl
         border
-        shadow-lg shadow-black/5
-        animate-toast-enter
+        shadow-lg shadow-black/5 dark:shadow-black/20
+        cursor-pointer
         ${bgColors[toast.type]}
       `}
-      style={{
-        boxShadow: "0 10px 40px -10px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.5)",
+      onClick={() => {
+        if (toast.onClick) toast.onClick();
+        // optionally dismiss on click?
       }}
     >
-      <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white/80 shadow-sm">
+      <div className="flex-shrink-0 mt-0.5">
         {icons[toast.type]}
       </div>
-      <span className="text-sm font-medium text-gray-800">{toast.message}</span>
+      <div className="flex-1 min-w-0">
+        {toast.title && (
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-0.5">
+            {toast.title}
+          </h4>
+        )}
+        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+          {toast.message}
+        </p>
+      </div>
       <button
-        onClick={onDismiss}
-        className="ml-2 p-1 rounded-full hover:bg-black/5 transition-colors"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDismiss();
+        }}
+        className="flex-shrink-0 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 hover:text-gray-500 transition-colors"
       >
-        <X size={14} className="text-gray-400" />
+        <X size={16} />
       </button>
-    </div>
+    </motion.div>
   );
 }

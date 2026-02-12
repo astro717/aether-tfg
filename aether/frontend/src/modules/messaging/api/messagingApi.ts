@@ -5,6 +5,7 @@ export interface MessageUser {
   id: string;
   username: string;
   email: string;
+  avatar_color?: string;
 }
 
 export type MessageType = 'text' | 'comment_notification';

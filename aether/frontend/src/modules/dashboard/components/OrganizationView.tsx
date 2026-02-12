@@ -24,6 +24,9 @@ import { useOrganization } from "../../organization/context/OrganizationContext"
 import { useAuth } from "../../auth/context/AuthContext";
 import { tasksApi, type Task } from "../api/tasksApi";
 import { taskEvents } from "../../../lib/taskEvents";
+import { UserAvatar } from "../../../components/ui/UserAvatar";
+
+// ... existing code ...
 
 type ColumnId = 'pending' | 'in_progress' | 'done';
 
@@ -326,9 +329,8 @@ function DroppableArea({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 space-y-3 overflow-y-auto ${contentOffset} min-h-[100px] transition-colors ${
-        isOver ? 'bg-blue-50/30 dark:bg-blue-500/10 rounded-2xl' : ''
-      }`}
+      className={`flex-1 space-y-3 overflow-y-auto ${contentOffset} min-h-[100px] transition-colors ${isOver ? 'bg-blue-50/30 dark:bg-blue-500/10 rounded-2xl' : ''
+        }`}
     >
       {children}
     </div>
@@ -373,23 +375,21 @@ function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boole
     ? new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
     : 'No deadline';
 
-  const userInitials = task.users_tasks_assignee_idTousers?.username
-    ? task.users_tasks_assignee_idTousers.username.substring(0, 1).toUpperCase()
-    : '?';
-
   const userName = task.users_tasks_assignee_idTousers?.username || 'Unassigned';
   const isAssignedToMe = user && task.assignee_id === user.id;
   const displayName = isAssignedToMe ? `${userName} (You)` : userName;
 
   return (
-    <div className={`bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/50 dark:border-white/10 rounded-[24px] p-3 shadow-sm hover:scale-[1.02] hover:shadow-lg transition-all duration-200 cursor-pointer hover:bg-white/95 dark:hover:bg-white/15 w-full ${
-      isDragging ? 'shadow-xl scale-105 rotate-2' : ''
-    }`}>
+    <div className={`bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/50 dark:border-white/10 rounded-[24px] p-3 shadow-sm hover:scale-[1.02] hover:shadow-lg transition-all duration-200 cursor-pointer hover:bg-white/95 dark:hover:bg-white/15 w-full ${isDragging ? 'shadow-xl scale-105 rotate-2' : ''
+      }`}>
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[9px] font-bold shadow-sm">
-            {userInitials}
-          </div>
+          <UserAvatar
+            username={userName}
+            avatarColor={task.users_tasks_assignee_idTousers?.avatar_color}
+            size="xs"
+            className="w-6 h-6 text-[9px]"
+          />
           <span className="text-xs font-bold text-gray-800 dark:text-gray-200 tracking-tight">
             {displayName}
           </span>

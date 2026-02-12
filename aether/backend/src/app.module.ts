@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma.module';
 import { UsersModule } from './users/users.module';
@@ -12,6 +13,8 @@ import { GithubModule } from './github/github.module';
 import { AiModule } from './ai/ai.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { EmailModule } from './email/email.module';
+
 import { HealthController } from './health.controller';
 import configuration, { configurationSchema } from './config/configuration';
 
@@ -25,6 +28,7 @@ import configuration, { configurationSchema } from './config/configuration';
         abortEarly: false,
       },
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     SupabaseModule,
     UsersModule,
@@ -37,7 +41,8 @@ import configuration, { configurationSchema } from './config/configuration';
     GithubModule,
     AiModule,
     NotificationsModule,
+    EmailModule,
   ],
   controllers: [HealthController],
 })
-export class AppModule {}
+export class AppModule { }

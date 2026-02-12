@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     User,
@@ -19,18 +19,24 @@ import {
     Check,
     ChevronDown,
     Laptop,
-    Smartphone,
     AlertCircle,
     Copy,
     Eye,
     EyeOff,
     Plus,
     Trash,
+    Lock,
+    Mail,
+    CheckCircle,
+    Loader2,
 } from "lucide-react";
 import { useAuth } from "../../auth/context/AuthContext";
-import { useTheme, type Theme } from "../context/ThemeContext";
-import { useSettings, type AnalysisDepth } from "../context/SettingsContext";
+import { useTheme } from "../context/ThemeContext";
+import { useSettings } from "../context/SettingsContext";
 import { useNavigate } from "react-router-dom";
+import { changePassword, sendResetEmailToCurrentUser, updateProfile } from "../../auth/api/authApi";
+import { UserAvatar } from "../../../components/ui/UserAvatar";
+import { AVATAR_COLORS } from "../../../lib/avatarColors";
 
 type SettingsTab = "profile" | "appearance" | "notifications" | "security" | "integrations" | "ai";
 
@@ -54,7 +60,17 @@ const statusOptions: { id: UserStatus; label: string; color: string }[] = [
 export function SettingsPage() {
     const { user, logout } = useAuth();
     const { theme, setTheme } = useTheme();
-    const { aiLanguage, setAiLanguage, analysisDepth, setAnalysisDepth } = useSettings();
+    const {
+        aiLanguage,
+        setAiLanguage,
+        analysisDepth,
+        setAnalysisDepth,
+        soundSettings,
+        updateSoundSettings,
+        notificationSettings,
+        notificationSettingsLoading,
+        updateNotificationSettings,
+    } = useSettings();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
 
@@ -65,17 +81,48 @@ export function SettingsPage() {
     const [bio, setBio] = useState("");
     const [status, setStatus] = useState<UserStatus>("online");
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+
+    const handleSaveProfile = async () => {
+        setIsSaving(true);
+        setSaveSuccess(false);
+        try {
+            await updateProfile({
+                username: name,
+                email,
+                jobTitle,
+                bio,
+            });
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 3000);
+        } catch (error) {
+            console.error("Failed to update profile:", error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     // Appearance states
     const [sidebarBehavior, setSidebarBehavior] = useState<"expanded" | "remember">("remember");
 
-    // Notification states
-    const [emailNotifications, setEmailNotifications] = useState(true);
-    const [inAppNotifications, setInAppNotifications] = useState(true);
-    const [taskAssignment, setTaskAssignment] = useState(true);
-    const [taskComments, setTaskComments] = useState(true);
-    const [mentions, setMentions] = useState(true);
-    const [dueDateReminders, setDueDateReminders] = useState(true);
+    // Deadline reminder options for multi-select
+    const deadlineReminderOptions = [
+        { value: 1, label: "1 hour before" },
+        { value: 2, label: "2 hours before" },
+        { value: 6, label: "6 hours before" },
+        { value: 24, label: "24 hours before" },
+        { value: 48, label: "2 days before" },
+    ];
+
+    // Handler for updating notification settings
+    const handleNotificationSettingChange = async (key: string, value: boolean | number[]) => {
+        try {
+            await updateNotificationSettings({ [key]: value });
+        } catch (error) {
+            console.error("Failed to update setting:", error);
+        }
+    };
 
     // AI states (aiLanguage and analysisDepth now come from SettingsContext)
     const [gitContext, setGitContext] = useState(true);
@@ -85,10 +132,6 @@ export function SettingsPage() {
         { id: "1", name: "CLI Integration", created: "Jan 15, 2025", lastUsed: "2 hours ago" },
     ]);
     const [showApiKey, setShowApiKey] = useState<string | null>(null);
-
-    const userInitials = user?.username
-        ? user.username.substring(0, 2).toUpperCase()
-        : "U";
 
     const handleLogout = () => {
         logout();
@@ -174,10 +217,14 @@ export function SettingsPage() {
                                         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8">
                                             {/* Avatar Section */}
                                             <div className="relative group flex-shrink-0">
-                                                <div className="w-32 h-32 rounded-full bg-gradient-to-b from-[#F2F2F7] to-[#E5E5EA] border-[4px] border-white shadow-lg flex items-center justify-center overflow-hidden ring-1 ring-black/5">
-                                                    <span className="text-4xl font-[350] text-gray-500 tracking-tight" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-                                                        {userInitials}
-                                                    </span>
+                                                <div className="w-32 h-32 rounded-full border-[4px] border-white shadow-lg flex items-center justify-center overflow-hidden ring-1 ring-black/5">
+                                                    <UserAvatar
+                                                        username={user?.username || ''}
+                                                        avatarColor={user?.avatar_color}
+                                                        size="2xl"
+                                                        className="w-full h-full text-4xl"
+                                                        displayInitials={user?.username?.substring(0, 2).toUpperCase()}
+                                                    />
                                                 </div>
 
                                                 {/* Edit Overlay */}
@@ -299,8 +346,14 @@ export function SettingsPage() {
                                                 placeholder="Tell your team a bit about yourself..."
                                             />
                                         </div>
-                                        <div className="mt-6 flex justify-end">
-                                            <SaveButton />
+                                        <div className="mt-6 flex items-center justify-between">
+                                            {saveSuccess ? (
+                                                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium animate-in fade-in slide-in-from-left-2">
+                                                    <CheckCircle size={16} />
+                                                    Saved successfully
+                                                </div>
+                                            ) : <div />}
+                                            <SaveButton onClick={handleSaveProfile} loading={isSaving} />
                                         </div>
                                     </SettingsCard>
 
@@ -399,6 +452,13 @@ export function SettingsPage() {
                                     transition={{ duration: 0.2 }}
                                     className="space-y-6"
                                 >
+                                    {/* Loading state */}
+                                    {notificationSettingsLoading && (
+                                        <div className="flex items-center justify-center py-8">
+                                            <Loader2 size={24} className="animate-spin text-gray-400" />
+                                        </div>
+                                    )}
+
                                     {/* Channels */}
                                     <SettingsCard title="Notification Channels">
                                         <p className="text-sm text-gray-500 mb-4">
@@ -408,48 +468,145 @@ export function SettingsPage() {
                                             <ToggleRow
                                                 label="Email notifications"
                                                 description="Receive notifications via email"
-                                                checked={emailNotifications}
-                                                onChange={setEmailNotifications}
+                                                checked={notificationSettings?.notify_email_enabled ?? true}
+                                                onChange={(v) => handleNotificationSettingChange("notify_email_enabled", v)}
                                             />
                                             <ToggleRow
                                                 label="In-app notifications"
                                                 description="See notifications inside Aether"
-                                                checked={inAppNotifications}
-                                                onChange={setInAppNotifications}
+                                                checked={notificationSettings?.notify_inapp_enabled ?? true}
+                                                onChange={(v) => handleNotificationSettingChange("notify_inapp_enabled", v)}
                                             />
                                         </div>
                                     </SettingsCard>
 
-                                    {/* Triggers */}
-                                    <SettingsCard title="Notification Triggers">
+                                    {/* Sounds */}
+                                    <SettingsCard title="Sound Preferences">
+                                        <p className="text-sm text-gray-500 mb-6">
+                                            Customize your notification sounds and volume
+                                        </p>
+
+                                        {/* Volume */}
+                                        <div className="mb-8">
+                                            <label className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                                                <span>Master Volume</span>
+                                                <span className="text-gray-500">{Math.round((soundSettings.volume || 0.8) * 100)}%</span>
+                                            </label>
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="1"
+                                                step="0.1"
+                                                value={soundSettings.volume ?? 0.8}
+                                                onChange={(e) => updateSoundSettings({ volume: parseFloat(e.target.value) })}
+                                                className="w-full h-2 bg-gray-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-600 dark:accent-blue-500"
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* Message Sounds */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                                    Message & Mention Sound
+                                                </label>
+                                                <SoundSelector
+                                                    selected={soundSettings.notificationSound || "note_1.mp3"}
+                                                    onSelect={(sound) => updateSoundSettings({ notificationSound: sound })}
+                                                    volume={soundSettings.volume}
+                                                    options={[
+                                                        { id: "note_1.mp3", label: "Pebble" },
+                                                        { id: "note_2.mp3", label: "Cosmic" },
+                                                        { id: "note_3.mp3", label: "Ripple" },
+                                                        { id: "note_4.mp3", label: "Chime" },
+                                                    ]}
+                                                />
+                                            </div>
+
+                                            {/* Critical Alert Sounds */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                                    Critical Alert Sound
+                                                </label>
+                                                <SoundSelector
+                                                    selected={soundSettings.criticalSound || "alert_1.mp3"}
+                                                    onSelect={(sound) => updateSoundSettings({ criticalSound: sound })}
+                                                    volume={soundSettings.volume}
+                                                    isCritical
+                                                    options={[
+                                                        { id: "alert_1.mp3", label: "Radar" },
+                                                        { id: "alert_2.mp3", label: "Pulse" },
+                                                        { id: "alert_3.mp3", label: "Alarm" },
+                                                        { id: "alert_4.mp3", label: "System" },
+                                                    ]}
+                                                />
+                                            </div>
+                                        </div>
+                                    </SettingsCard>
+
+                                    {/* Email Triggers */}
+                                    <SettingsCard title="Email Notification Triggers">
                                         <p className="text-sm text-gray-500 mb-4">
-                                            Control which events trigger notifications
+                                            Control which events send you email notifications
                                         </p>
                                         <div className="space-y-1">
                                             <ToggleRow
                                                 label="Task assignments"
                                                 description="When someone assigns you a task"
-                                                checked={taskAssignment}
-                                                onChange={setTaskAssignment}
+                                                checked={notificationSettings?.notify_email_assignments ?? true}
+                                                onChange={(v) => handleNotificationSettingChange("notify_email_assignments", v)}
                                             />
                                             <ToggleRow
-                                                label="Comments on followed tasks"
-                                                description="When someone comments on a task you're following"
-                                                checked={taskComments}
-                                                onChange={setTaskComments}
+                                                label="Comments on your tasks"
+                                                description="When someone comments on a task you're assigned to"
+                                                checked={notificationSettings?.notify_email_comments ?? true}
+                                                onChange={(v) => handleNotificationSettingChange("notify_email_comments", v)}
                                             />
                                             <ToggleRow
                                                 label="Mentions"
                                                 description="When someone @mentions you"
-                                                checked={mentions}
-                                                onChange={setMentions}
+                                                checked={notificationSettings?.notify_email_mentions ?? true}
+                                                onChange={(v) => handleNotificationSettingChange("notify_email_mentions", v)}
                                             />
-                                            <ToggleRow
-                                                label="Due date reminders"
-                                                description="24 hours before a task is due"
-                                                checked={dueDateReminders}
-                                                onChange={setDueDateReminders}
-                                            />
+                                        </div>
+                                    </SettingsCard>
+
+                                    {/* Deadline Reminders */}
+                                    <SettingsCard title="Deadline Reminders">
+                                        <p className="text-sm text-gray-500 mb-4">
+                                            Choose when to receive email reminders about upcoming deadlines
+                                        </p>
+                                        <div className="space-y-2">
+                                            {deadlineReminderOptions.map((option) => {
+                                                const isSelected = notificationSettings?.deadline_reminder_hours?.includes(option.value) ?? option.value === 24;
+                                                return (
+                                                    <label
+                                                        key={option.value}
+                                                        className={`
+                                                            flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all
+                                                            ${isSelected
+                                                                ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                                                                : "bg-gray-50 dark:bg-zinc-800/50 border-transparent hover:border-gray-200 dark:hover:border-zinc-700"
+                                                            }
+                                                        `}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => {
+                                                                const currentHours = notificationSettings?.deadline_reminder_hours ?? [24];
+                                                                const newHours = e.target.checked
+                                                                    ? [...currentHours, option.value].sort((a, b) => a - b)
+                                                                    : currentHours.filter((h) => h !== option.value);
+                                                                handleNotificationSettingChange("deadline_reminder_hours", newHours);
+                                                            }}
+                                                            className="w-4 h-4 rounded border-gray-300 dark:border-zinc-600 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                        <span className={`text-sm font-medium ${isSelected ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>
+                                                            {option.label}
+                                                        </span>
+                                                    </label>
+                                                );
+                                            })}
                                         </div>
                                     </SettingsCard>
                                 </motion.div>
@@ -457,73 +614,7 @@ export function SettingsPage() {
 
                             {/* ==================== SECURITY TAB ==================== */}
                             {activeTab === "security" && (
-                                <motion.div
-                                    key="security"
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="space-y-6"
-                                >
-                                    {/* Password */}
-                                    <SettingsCard title="Password">
-                                        <p className="text-sm text-gray-500 mb-4">
-                                            Update your password to keep your account secure
-                                        </p>
-                                        <button className="px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl
-                                            hover:bg-gray-200 transition-all duration-200">
-                                            Change Password
-                                        </button>
-                                    </SettingsCard>
-
-                                    {/* Active Sessions */}
-                                    <SettingsCard title="Active Sessions">
-                                        <p className="text-sm text-gray-500 mb-4">
-                                            Manage devices where you're currently logged in
-                                        </p>
-                                        <div className="space-y-3">
-                                            <SessionItem
-                                                icon={Laptop}
-                                                device="MacBook Pro"
-                                                browser="Chrome on macOS"
-                                                location="San Francisco, CA"
-                                                lastActive="Now"
-                                                current
-                                            />
-                                            <SessionItem
-                                                icon={Smartphone}
-                                                device="iPhone 15 Pro"
-                                                browser="Safari on iOS"
-                                                location="San Francisco, CA"
-                                                lastActive="2 hours ago"
-                                            />
-                                        </div>
-                                    </SettingsCard>
-
-                                    {/* Security Log */}
-                                    <SettingsCard title="Security History">
-                                        <p className="text-sm text-gray-500 mb-4">
-                                            Recent security-related activity on your account
-                                        </p>
-                                        <div className="space-y-3">
-                                            <SecurityLogItem
-                                                action="Password changed"
-                                                date="Jan 10, 2025"
-                                                time="2:34 PM"
-                                            />
-                                            <SecurityLogItem
-                                                action="Email updated"
-                                                date="Dec 28, 2024"
-                                                time="10:15 AM"
-                                            />
-                                            <SecurityLogItem
-                                                action="Account created"
-                                                date="Nov 15, 2024"
-                                                time="9:00 AM"
-                                            />
-                                        </div>
-                                    </SettingsCard>
-                                </motion.div>
+                                <SecurityTab />
                             )}
 
                             {/* ==================== INTEGRATIONS TAB ==================== */}
@@ -765,12 +856,17 @@ function InputField({
     );
 }
 
-function SaveButton() {
+function SaveButton({ onClick, loading }: { onClick?: () => void; loading?: boolean }) {
     return (
-        <button className="px-5 py-2.5 bg-[#18181B] text-white text-sm font-medium rounded-xl
-            hover:bg-opacity-90 transition-all duration-200
-            focus:outline-none focus:ring-2 focus:ring-gray-900/20">
-            Save Changes
+        <button
+            onClick={onClick}
+            disabled={loading}
+            className="px-5 py-2.5 bg-[#18181B] dark:bg-white text-white dark:text-zinc-900 text-sm font-medium rounded-xl
+            hover:bg-opacity-90 dark:hover:bg-gray-100 transition-all duration-200
+            focus:outline-none focus:ring-2 focus:ring-gray-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+            {loading && <Loader2 size={16} className="animate-spin" />}
+            {loading ? "Saving..." : "Save Changes"}
         </button>
     );
 }
@@ -990,5 +1086,424 @@ function SecurityLogItem({
             <p className="text-sm font-medium text-gray-900 dark:text-white">{action}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400">{date} at {time}</p>
         </div>
+    );
+}
+
+function SoundSelector({
+    selected,
+    onSelect,
+    options,
+    volume = 0.5,
+    isCritical = false,
+}: {
+    selected: string;
+    onSelect: (sound: string) => void;
+    options: { id: string; label: string }[];
+    volume?: number;
+    isCritical?: boolean;
+}) {
+    const [playing, setPlaying] = useState<string | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    const playSound = (sound: string) => {
+        // Stop current if playing
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }
+
+        const audio = new Audio(`/sounds/${sound}`);
+        audio.volume = volume;
+        audioRef.current = audio;
+
+        setPlaying(sound);
+        audio.play().catch(() => { });
+
+        audio.onended = () => {
+            setPlaying(null);
+            audioRef.current = null;
+        };
+    };
+
+    return (
+        <div className="space-y-2">
+            {options.map((option) => (
+                <div
+                    key={option.id}
+                    onClick={() => onSelect(option.id)}
+                    className={`
+                        flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all duration-200
+                        ${selected === option.id
+                            ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                            : "bg-gray-50 dark:bg-zinc-800/50 border-transparent hover:border-gray-200 dark:hover:border-zinc-700"
+                        }
+                    `}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className={`
+                            w-4 h-4 rounded-full border flex items-center justify-center
+                            ${selected === option.id
+                                ? "border-blue-500 bg-blue-500"
+                                : "border-gray-300 dark:border-zinc-600"
+                            }
+                        `}>
+                            {selected === option.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                        <span className={`text-sm font-medium ${selected === option.id ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>
+                            {option.label}
+                        </span>
+                    </div>
+
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            playSound(option.id);
+                        }}
+                        className={`
+                            w-8 h-8 flex items-center justify-center rounded-full transition-colors
+                            ${playing === option.id
+                                ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                                : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5"
+                            }
+                        `}
+                    >
+                        {playing === option.id ? (
+                            <div className="flex gap-0.5 items-end justify-center h-3 w-3">
+                                <span className="w-0.5 bg-current animate-[pulse_0.5s_ease-in-out_infinite] h-full" />
+                                <span className="w-0.5 bg-current animate-[pulse_0.6s_ease-in-out_infinite] h-2/3" />
+                                <span className="w-0.5 bg-current animate-[pulse_0.7s_ease-in-out_infinite] h-full" />
+                            </div>
+                        ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        )}
+                    </button>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function SecurityTab() {
+    const { user } = useAuth();
+    const [showChangePassword, setShowChangePassword] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
+    const [sendingResetEmail, setSendingResetEmail] = useState(false);
+    const [resetEmailSent, setResetEmailSent] = useState(false);
+
+    const passwordStrength = () => {
+        if (newPassword.length === 0) return null;
+        if (newPassword.length < 8) return { label: "Too short", color: "bg-red-400", width: "33%" };
+        if (newPassword.length < 12) return { label: "Fair", color: "bg-yellow-400", width: "66%" };
+        return { label: "Strong", color: "bg-green-400", width: "100%" };
+    };
+
+    const strength = passwordStrength();
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError("");
+        setSuccess("");
+
+        if (newPassword.length < 8) {
+            setError("Password must be at least 8 characters long");
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setError("Passwords do not match");
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+            await changePassword(currentPassword, newPassword);
+            setSuccess("Password changed successfully");
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+            setShowChangePassword(false);
+            setTimeout(() => setSuccess(""), 5000);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to change password");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSendResetEmail = async () => {
+        setSendingResetEmail(true);
+        setError("");
+
+        try {
+            await sendResetEmailToCurrentUser();
+            setResetEmailSent(true);
+            setTimeout(() => setResetEmailSent(false), 10000);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to send reset email");
+        } finally {
+            setSendingResetEmail(false);
+        }
+    };
+
+    return (
+        <motion.div
+            key="security"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-6"
+        >
+            {/* Success Message */}
+            {success && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-xl"
+                >
+                    <CheckCircle size={20} className="text-green-600 dark:text-green-400" />
+                    <p className="text-sm text-green-700 dark:text-green-300">{success}</p>
+                </motion.div>
+            )}
+
+            {/* Change Password Card */}
+            <SettingsCard title="Password">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Update your password to keep your account secure
+                </p>
+
+                {!showChangePassword ? (
+                    <button
+                        onClick={() => setShowChangePassword(true)}
+                        className="px-4 py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl
+                            hover:bg-gray-200 dark:hover:bg-zinc-700 transition-all duration-200"
+                    >
+                        Change Password
+                    </button>
+                ) : (
+                    <form onSubmit={handleChangePassword} className="space-y-4">
+                        {/* Current Password */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Current Password
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={showCurrentPassword ? "text" : "password"}
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    required
+                                    disabled={isSubmitting}
+                                    className="w-full px-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-gray-900 dark:text-white text-sm
+                                        placeholder:text-gray-400 dark:placeholder:text-gray-500 pr-10
+                                        focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400
+                                        transition-all duration-200 disabled:opacity-50"
+                                    placeholder="Enter current password"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                    {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* New Password */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                New Password
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={showNewPassword ? "text" : "password"}
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    required
+                                    disabled={isSubmitting}
+                                    className="w-full px-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-gray-900 dark:text-white text-sm
+                                        placeholder:text-gray-400 dark:placeholder:text-gray-500 pr-10
+                                        focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400
+                                        transition-all duration-200 disabled:opacity-50"
+                                    placeholder="Enter new password"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowNewPassword(!showNewPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                            {strength && (
+                                <div className="mt-2 flex items-center gap-2">
+                                    <div className="flex-1 h-1.5 bg-gray-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full ${strength.color} transition-all`}
+                                            style={{ width: strength.width }}
+                                        />
+                                    </div>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">{strength.label}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Confirm Password */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Confirm New Password
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={showConfirmPassword ? "text" : "password"}
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    required
+                                    disabled={isSubmitting}
+                                    className="w-full px-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-gray-900 dark:text-white text-sm
+                                        placeholder:text-gray-400 dark:placeholder:text-gray-500 pr-10
+                                        focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400
+                                        transition-all duration-200 disabled:opacity-50"
+                                    placeholder="Confirm new password"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                            {confirmPassword && newPassword !== confirmPassword && (
+                                <p className="mt-1 text-xs text-red-500">Passwords do not match</p>
+                            )}
+                        </div>
+
+                        {error && (
+                            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                                <AlertCircle size={16} className="text-red-500 dark:text-red-400" />
+                                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowChangePassword(false);
+                                    setCurrentPassword("");
+                                    setNewPassword("");
+                                    setConfirmPassword("");
+                                    setError("");
+                                }}
+                                className="px-4 py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl
+                                    hover:bg-gray-200 dark:hover:bg-zinc-700 transition-all duration-200"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting || newPassword.length < 8 || newPassword !== confirmPassword}
+                                className="px-4 py-2.5 bg-[#18181b] dark:bg-white text-white dark:text-zinc-900 text-sm font-medium rounded-xl
+                                    hover:bg-[#27272a] dark:hover:bg-gray-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
+                                    flex items-center gap-2"
+                            >
+                                {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                                {isSubmitting ? "Saving..." : "Update Password"}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </SettingsCard>
+
+            {/* Forgot Password Card */}
+            <SettingsCard title="Forgot Current Password?">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    If you don't remember your current password, we can send a reset link to your email ({user?.email})
+                </p>
+
+                {resetEmailSent ? (
+                    <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                        <Mail size={20} className="text-green-600 dark:text-green-400" />
+                        <div>
+                            <p className="text-sm font-medium text-green-700 dark:text-green-300">Email Sent</p>
+                            <p className="text-xs text-green-600 dark:text-green-400">Check your inbox for the reset link</p>
+                        </div>
+                    </div>
+                ) : (
+                    <button
+                        onClick={handleSendResetEmail}
+                        disabled={sendingResetEmail}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl
+                            hover:bg-gray-200 dark:hover:bg-zinc-700 transition-all duration-200 disabled:opacity-50"
+                    >
+                        {sendingResetEmail ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" />
+                                Sending...
+                            </>
+                        ) : (
+                            <>
+                                <Mail size={16} />
+                                Send Reset Link
+                            </>
+                        )}
+                    </button>
+                )}
+            </SettingsCard>
+
+            {/* Active Sessions */}
+            <SettingsCard title="Active Sessions">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Manage devices where you're currently logged in
+                </p>
+                <div className="space-y-3">
+                    <SessionItem
+                        icon={Laptop}
+                        device="Current Device"
+                        browser="This browser session"
+                        location="Current location"
+                        lastActive="Now"
+                        current
+                    />
+                </div>
+            </SettingsCard>
+
+            {/* Security Tips */}
+            <SettingsCard title="Security Tips">
+                <div className="space-y-3">
+                    <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                        <Lock size={18} className="text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Use a strong password</p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400">
+                                At least 12 characters with a mix of letters, numbers, and symbols
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                        <Shield size={18} className="text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Don't reuse passwords</p>
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                                Use a unique password for each of your accounts
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </SettingsCard>
+        </motion.div>
     );
 }

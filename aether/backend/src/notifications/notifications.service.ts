@@ -4,7 +4,7 @@ import { CreateNotificationDto } from './dto/create-notification.dto';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   /**
    * Create a new notification
@@ -130,5 +130,15 @@ export class NotificationsService {
     return this.prisma.notifications.delete({
       where: { id: notificationId },
     });
+  }
+
+  /**
+   * Delete all notifications for a user
+   */
+  async deleteAll(userId: string) {
+    const result = await this.prisma.notifications.deleteMany({
+      where: { user_id: userId },
+    });
+    return { deletedCount: result.count };
   }
 }

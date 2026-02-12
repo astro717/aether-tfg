@@ -37,7 +37,7 @@ export class AuthController {
   async getMe(@CurrentUser() user: any) {
     const dbUser = await this.prisma.users.findUnique({
       where: { id: user.id },
-      select: { id: true, username: true, email: true, role: true },
+      select: { id: true, username: true, email: true, role: true, avatar_color: true },
     });
     return dbUser;
   }
@@ -52,5 +52,43 @@ export class AuthController {
       throw new BadRequestException('Authorization code is required');
     }
     return this.authService.connectGithub(user.id, body.code);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() body: { email: string }) {
+    if (!body.email) {
+      throw new BadRequestException('Email is required');
+    }
+    return this.authService.forgotPassword(body.email);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() body: { token: string; password: string }) {
+    if (!body.token || !body.password) {
+      throw new BadRequestException('Token and password are required');
+    }
+    return this.authService.resetPassword(body.token, body.password);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() body: { currentPassword: string; newPassword: string },
+  ) {
+    if (!body.currentPassword || !body.newPassword) {
+      throw new BadRequestException('Current password and new password are required');
+    }
+    return this.authService.changePassword(user.id, body.currentPassword, body.newPassword);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('send-reset-email')
+  @HttpCode(HttpStatus.OK)
+  async sendResetEmailToCurrentUser(@CurrentUser() user: any) {
+    return this.authService.sendPasswordResetToCurrentUser(user.id);
   }
 }

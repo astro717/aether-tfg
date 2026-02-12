@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { LoginForm } from "../components/LoginForm";
 import { SocialButtons } from "../components/SocialButtons";
 
@@ -29,6 +30,16 @@ export const LoginPage = () => (
 
       {/* Form */}
       <LoginForm />
+
+      {/* Forgot Password Link */}
+      <div className="text-center mt-3">
+        <Link
+          to="/forgot-password"
+          className="text-gray-500 text-sm hover:text-gray-700 transition-colors"
+        >
+          Forgot your password?
+        </Link>
+      </div>
 
       {/* Divider */}
       <div className="flex items-center gap-4 my-6">

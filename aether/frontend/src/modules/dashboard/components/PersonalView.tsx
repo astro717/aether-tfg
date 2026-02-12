@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { tasksApi, type Task } from '../api/tasksApi';
 import { useAuth } from '../../auth/context/AuthContext';
+import { getAvatarColorClasses } from '../../../lib/avatarColors';
 
 // --- Helper Utilities ---
 
@@ -240,11 +241,12 @@ function InProgressCard({ task, isLast }: { task: Task; isLast?: boolean }) {
     const style = tagStyles[tag];
     const Icon = style.icon;
     const initial = task.users_tasks_assignee_idTousers?.username?.charAt(0).toUpperCase() || 'U';
+    const avatarColors = getAvatarColorClasses(task.users_tasks_assignee_idTousers?.avatar_color);
 
     return (
         <div className={`bg-white/60 dark:bg-white/10 backdrop-blur-lg rounded-[28px] p-4 px-6 flex items-center justify-between shadow-sm border border-white/50 dark:border-white/10 hover:scale-[1.01] transition-transform duration-200 group ${isLast ? '' : ''}`}>
             <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[10px] font-bold shadow-md group-hover:bg-gray-900 dark:group-hover:bg-gray-100">
+                <div className={`w-8 h-8 rounded-full ${avatarColors.bg} ${avatarColors.text} ${avatarColors.border} flex items-center justify-center text-[10px] font-bold shadow-md`}>
                     {initial}
                 </div>
                 <span className="text-gray-800 dark:text-gray-200 font-semibold text-sm tracking-tight">{task.title}</span>
@@ -268,11 +270,12 @@ function AssignedCard({ task }: { task: Task }) {
     const initial = name.charAt(0).toUpperCase();
     const isAssignedToMe = user && task.assignee_id === user.id;
     const displayName = isAssignedToMe ? `${name} (You)` : name;
+    const avatarColors = getAvatarColorClasses(task.users_tasks_assignee_idTousers?.avatar_color);
 
     return (
         <div className="bg-white/60 dark:bg-white/10 backdrop-blur-lg rounded-[28px] p-4 px-5 shadow-sm border border-white/50 dark:border-white/10 hover:scale-[1.02] transition-all duration-200">
             <div className="flex items-center gap-2 mb-1">
-                <div className="w-5 h-5 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[8px] font-bold shadow-sm">
+                <div className={`w-5 h-5 rounded-full ${avatarColors.bg} ${avatarColors.text} ${avatarColors.border} flex items-center justify-center text-[8px] font-bold shadow-sm`}>
                     {initial}
                 </div>
                 <span className="text-xs text-gray-500 dark:text-gray-400">

@@ -1,6 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-export type NotificationType = 'TASK_ASSIGNED' | 'TASK_COMMENT' | 'MENTION' | 'MESSAGE';
+export type NotificationType = 'TASK_ASSIGNED' | 'TASK_COMMENT' | 'TASK_DEADLINE' | 'MENTION' | 'MESSAGE';
 
 export interface NotificationUser {
   id: string;
@@ -117,6 +117,22 @@ class NotificationsApi {
       }
     );
     if (!response.ok) throw new Error('Failed to delete notification');
+    return response.json();
+  }
+
+  /**
+   * DELETE /notifications
+   * Delete all notifications.
+   */
+  async deleteAllNotifications(): Promise<{ deletedCount: number }> {
+    const response = await fetch(
+      `${API_BASE_URL}/notifications`,
+      {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      }
+    );
+    if (!response.ok) throw new Error('Failed to delete all notifications');
     return response.json();
   }
 }

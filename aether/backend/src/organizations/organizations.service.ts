@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma.service';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // Get all organizations a user belongs to
   async findUserOrganizations(userId: string) {
@@ -56,6 +56,7 @@ export class OrganizationsService {
                 id: true,
                 username: true,
                 email: true,
+                avatar_color: true,
               },
             },
           },
