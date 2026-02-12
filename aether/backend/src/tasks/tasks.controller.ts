@@ -1,5 +1,5 @@
 
-import {Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, ParseUUIDPipe} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, ParseUUIDPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -18,10 +18,10 @@ import { RolesGuard } from '../auth/roles.guard';
 
 type AuthedRequest = Request & { user: User };
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 @Controller('tasks')
 export class TasksController {
-  constructor(private readonly tasksService: TasksService) {}
+  constructor(private readonly tasksService: TasksService) { }
 
   @Post()
   create(@Body() dto: CreateTaskDto, @CurrentUser() user: User) {
@@ -41,11 +41,29 @@ export class TasksController {
   }
 
 
-  @Roles('manager')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Post(':id/validate')
-  async validateTask(@Param('id') id: string, @CurrentUser() user: User) {
+  async validateTask(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: User,
+  ) {
     return this.tasksService.validateTask(id, user.id);
+  }
+
+  @Post(':id/reject')
+  async rejectTask(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: { reason?: string },
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.rejectTask(id, user.id, body.reason);
+  }
+
+  @Get('organization/:organizationId/pending-validation')
+  async getPendingValidationTasks(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.getPendingValidationTasks(organizationId, user.id);
   }
 
   @Get('organization/:organizationId/kanban')
@@ -56,7 +74,16 @@ export class TasksController {
     return this.tasksService.getTasksByStatus(organizationId, user.userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('organization/:organizationId/analytics')
+  async getAnalytics(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Query('period') period: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.getAnalytics(organizationId, user.id, period);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get()
   async findAll(@CurrentUser() user: User) {
     return this.tasksService.findAllByRole(user);
@@ -68,7 +95,6 @@ export class TasksController {
   }
 
   @Delete(':id')
-  @Roles('manager')
   async remove(@Param('id') id: string) {
     return this.tasksService.remove(id);
   }

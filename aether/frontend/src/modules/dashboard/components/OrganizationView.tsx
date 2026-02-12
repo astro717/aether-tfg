@@ -31,7 +31,7 @@ import { UserAvatar } from "../../../components/ui/UserAvatar";
 type ColumnId = 'pending' | 'in_progress' | 'done';
 
 export function OrganizationView() {
-  const { currentOrganization } = useOrganization();
+  const { currentOrganization, isManager } = useOrganization();
   const { user } = useAuth();
   const { data, loading, error, refetch, setData } = useKanbanData(currentOrganization?.id);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -56,12 +56,16 @@ export function OrganizationView() {
     return unsubscribe;
   }, [refetch]);
 
+  // Combine todo and pending for the "To Do" column (backward compatibility)
+  const todoTasks = [...(data?.todo || []), ...(data?.pending || [])];
+  const todoTotal = (data?.totals.todo || 0) + (data?.totals.pending || 0);
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const taskId = active.id as string;
 
     // Find the task across all columns
-    const allTasks = [...(data?.pending || []), ...(data?.in_progress || []), ...(data?.done || [])];
+    const allTasks = [...todoTasks, ...(data?.in_progress || []), ...(data?.done || [])];
     const task = allTasks.find(t => t.id === taskId);
 
     if (task) {
@@ -87,7 +91,7 @@ export function OrganizationView() {
       targetColumn = overId as ColumnId;
     } else {
       // 2. Is 'over' a Task? Find its column
-      if (data.pending.some(t => t.id === overId)) targetColumn = 'pending';
+      if (todoTasks.some(t => t.id === overId)) targetColumn = 'pending';
       else if (data.in_progress.some(t => t.id === overId)) targetColumn = 'in_progress';
       else if (data.done.some(t => t.id === overId)) targetColumn = 'done';
     }
@@ -96,7 +100,7 @@ export function OrganizationView() {
     if (!targetColumn) return;
 
     // Find the task
-    const allTasks = [...data.pending, ...data.in_progress, ...data.done];
+    const allTasks = [...todoTasks, ...data.in_progress, ...data.done];
     const task = allTasks.find(t => t.id === taskId);
 
     if (!task) return;
@@ -105,12 +109,13 @@ export function OrganizationView() {
     let currentColumn: ColumnId = 'pending';
     if (data.in_progress.some(t => t.id === taskId)) currentColumn = 'in_progress';
     else if (data.done.some(t => t.id === taskId)) currentColumn = 'done';
+    else if (todoTasks.some(t => t.id === taskId)) currentColumn = 'pending';
 
     // If dropped in the same column, do nothing
     if (currentColumn === targetColumn) return;
 
     // Permission check: allow move if user is manager OR user is the assignee
-    const canMove = user.role === 'manager' || task.assignee_id === user.id;
+    const canMove = isManager || task.assignee_id === user.id;
     if (!canMove) {
       setPermissionError("You can only move tasks assigned to you.");
       setTimeout(() => setPermissionError(null), 3000);
@@ -138,7 +143,7 @@ export function OrganizationView() {
       const newData = await tasksApi.getKanbanData(currentOrganization!.id);
 
       // Safety net: Check if the moved task is still present in the refetched data
-      const allNewTasks = [...newData.pending, ...newData.in_progress, ...newData.done];
+      const allNewTasks = [...(newData.todo || []), ...(newData.pending || []), ...newData.in_progress, ...newData.done];
       const taskStillExists = allNewTasks.some(t => t.id === taskId);
 
       if (!taskStillExists) {
@@ -220,10 +225,10 @@ export function OrganizationView() {
             <KanbanColumn
               id="pending"
               title="To Do"
-              total={data.totals.pending}
+              total={todoTotal}
               width="w-full"
               contentOffset="pr-[140px]"
-              tasks={data.pending}
+              tasks={todoTasks}
             />
           </div>
 

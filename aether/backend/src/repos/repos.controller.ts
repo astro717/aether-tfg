@@ -11,15 +11,14 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CommitsService } from '../commits/commits.service';
 
 @Controller('repos')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class ReposController {
   constructor(
     private readonly reposService: ReposService,
     private readonly commitsService: CommitsService,
-  ) {}
+  ) { }
 
   @Post()
-  @Roles('manager')
   create(@Body() dto: CreateRepoDto, @CurrentUser() user: users) {
     return this.reposService.create(dto, user);
   }
@@ -35,13 +34,11 @@ export class ReposController {
   }
 
   @Patch(':id')
-  @Roles('manager')
   update(@Param('id') id: string, @Body() dto: UpdateRepoDto, @CurrentUser() user: users) {
     return this.reposService.update(id, dto, user);
   }
 
   @Delete(':id')
-  @Roles('manager')
   remove(@Param('id') id: string, @CurrentUser() user: users) {
     return this.reposService.remove(id, user);
   }

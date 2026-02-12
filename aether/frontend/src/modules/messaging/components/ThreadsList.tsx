@@ -27,7 +27,7 @@ export function ThreadsList({
     if (!searchQuery.trim()) return true;
 
     const nameMatch = conv.user.username.toLowerCase().includes(searchQuery.toLowerCase());
-    const messageMatch = conv.lastMessage.content.toLowerCase().includes(searchQuery.toLowerCase());
+    const messageMatch = conv.lastMessage.content?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
 
     return nameMatch || messageMatch;
   });

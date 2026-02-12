@@ -7,9 +7,11 @@ import { MessagesModule } from '../messages/messages.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
 
+import { OrganizationsModule } from '../organizations/organizations.module';
+
 @Module({
-  imports: [PrismaModule, PassportModule, MessagesModule, NotificationsModule, EmailModule],
+  imports: [PrismaModule, PassportModule, MessagesModule, NotificationsModule, EmailModule, OrganizationsModule],
   controllers: [TasksController],
   providers: [TasksService],
 })
-export class TasksModule {}
+export class TasksModule { }

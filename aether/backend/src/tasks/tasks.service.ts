@@ -12,6 +12,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
 
 
+import { OrganizationsService } from '../organizations/organizations.service';
+
 @Injectable()
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
@@ -23,6 +25,7 @@ export class TasksService {
     private notificationsService: NotificationsService,
     private emailService: EmailService,
     private configService: ConfigService,
+    private organizationsService: OrganizationsService,
   ) {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
   }
@@ -213,29 +216,24 @@ export class TasksService {
       throw new BadRequestException('assignee_id is required');
     }
 
-    // Verify creator belongs to the organization
-    const userOrg = await this.prisma.user_organizations.findUnique({
-      where: {
-        user_id_organization_id: {
-          user_id: creator.id,
-          organization_id: dto.organization_id,
-        },
-      },
-    });
-
-    if (!userOrg) {
-      throw new ForbiddenException('You do not belong to this organization');
-    }
+    // Check organization access
+    const { role } = await this.organizationsService.checkAccess(creator, dto.organization_id, ['admin', 'manager', 'member']);
+    const isManager = role === 'admin' || role === 'manager' || role === 'global_manager';
 
     // Non-managers can only assign tasks to themselves
-    if (creator.role !== 'manager' && dto.assignee_id !== creator.id) {
+    if (!isManager && dto.assignee_id !== creator.id) {
       throw new ForbiddenException('You can only assign tasks to yourself');
     }
+
+    // Determine initial status based on role:
+    // - Managers: task starts as 'todo' (validated automatically)
+    // - Members: task starts as 'pending_validation' (needs manager approval)
+    const initialStatus = isManager ? (dto.status ?? 'todo') : 'pending_validation';
 
     const data: any = {
       title: dto.title,
       description: dto.description,
-      status: dto.status ?? 'pending',
+      status: initialStatus,
       due_date: dto.due_date ? new Date(dto.due_date) : undefined,
       repo_id: dto.repo_id || null,
       organization_id: dto.organization_id,
@@ -243,7 +241,7 @@ export class TasksService {
     };
 
     // If creator is manager -> task is already validated
-    if (creator.role === 'manager') {
+    if (isManager) {
       data.validated_by = creator.id;
     }
 
@@ -336,8 +334,20 @@ export class TasksService {
       },
     });
     if (!task) throw new NotFoundException('Task not found');
-    // Managers can view any task, regular users can only view their own
-    if (userRole !== 'manager' && task.assignee_id !== userId) {
+
+    // Check if user has manager access to the task's organization
+    if (task.organization_id) {
+      try {
+        await this.organizationsService.checkAccess({ id: userId, role: userRole }, task.organization_id, ['admin', 'manager']);
+        // If checkAccess passes, they are a manager/admin in that org (or global manager), so allow access
+        return task;
+      } catch (e) {
+        // Not a manager in that org, fall through to personal check
+      }
+    }
+
+    // Regular users can only view their own
+    if (task.assignee_id !== userId) {
       throw new ForbiddenException('Not your task');
     }
     return task;
@@ -377,20 +387,68 @@ export class TasksService {
 
   async validateTask(id: string, managerId: string) {
     const task = await this.prisma.tasks.findUnique({ where: { id } });
-    if (!task) throw new Error('Task not found');
+    if (!task) throw new NotFoundException('Task not found');
 
-    // Ya validada → no hacer nada
-    if (task.validated_by) {
-      throw new Error('Task already validated');
+    // Verify manager is admin in the task's organization
+    if (task.organization_id) {
+      await this.organizationsService.checkAccess({ id: managerId, role: '' }, task.organization_id, ['admin', 'manager']);
     }
 
-    // Registrar quién la validó
+    // Already validated → do nothing
+    if (task.validated_by) {
+      throw new BadRequestException('Task already validated');
+    }
+
+    // Update task: set validated_by and move status from pending_validation to todo
     return this.prisma.tasks.update({
       where: { id },
       data: {
         validated_by: managerId,
+        status: task.status === 'pending_validation' ? 'todo' : task.status,
+      },
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            avatar_color: true,
+          },
+        },
       },
     });
+  }
+
+  // Reject a task (manager only)
+  async rejectTask(id: string, managerId: string, reason?: string) {
+    const task = await this.prisma.tasks.findUnique({ where: { id } });
+    if (!task) throw new NotFoundException('Task not found');
+
+    // Verify manager is admin in the task's organization
+    if (task.organization_id) {
+      await this.organizationsService.checkAccess({ id: managerId, role: '' }, task.organization_id, ['admin', 'manager']);
+    }
+
+    // Only pending_validation tasks can be rejected
+    if (task.status !== 'pending_validation') {
+      throw new BadRequestException('Only pending validation tasks can be rejected');
+    }
+
+    // Create notification for assignee
+    if (task.assignee_id) {
+      await this.notificationsService.create({
+        user_id: task.assignee_id,
+        actor_id: managerId,
+        type: 'TASK_REJECTED',
+        title: 'Task Rejected',
+        content: reason || `Your task "${task.title}" was rejected`,
+        entity_id: task.id,
+        entity_type: 'task',
+      });
+    }
+
+    // Delete the task
+    return this.prisma.tasks.delete({ where: { id } });
   }
 
 
@@ -511,16 +569,22 @@ export class TasksService {
     const allTasks = await this.findAllByOrganization(organizationId, userId);
 
     const grouped = {
+      pending_validation: allTasks.filter((t) => t.status === 'pending_validation'),
+      todo: allTasks.filter((t) => t.status === 'todo'),
       pending: allTasks.filter((t) => t.status === 'pending'),
       in_progress: allTasks.filter((t) => t.status === 'in_progress'),
       done: allTasks.filter((t) => t.status === 'done'),
     };
 
     return {
+      pending_validation: grouped.pending_validation,
+      todo: grouped.todo,
       pending: grouped.pending,
       in_progress: grouped.in_progress,
       done: grouped.done,
       totals: {
+        pending_validation: grouped.pending_validation.length,
+        todo: grouped.todo.length,
         pending: grouped.pending.length,
         in_progress: grouped.in_progress.length,
         done: grouped.done.length,
@@ -529,13 +593,51 @@ export class TasksService {
     };
   }
 
+  // Get tasks pending validation for a manager
+  async getPendingValidationTasks(organizationId: string, managerId: string) {
+    // Verify user is admin in this organization
+    await this.organizationsService.checkAccess({ id: managerId, role: '' }, organizationId, ['admin', 'manager']);
+
+    return this.prisma.tasks.findMany({
+      where: {
+        organization_id: organizationId,
+        status: 'pending_validation',
+      },
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            avatar_color: true,
+          },
+        },
+        repos: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+  }
+
   async update(id: string, dto: any, user: any) {
     const task = await this.prisma.tasks.findUnique({ where: { id } });
     if (!task) throw new Error('Task not found');
 
-    // Solo manager o el usuario asignado puede modificar
-    if (user.role !== 'manager' && task.assignee_id !== user.id) {
-      throw new Error('No permission to modify this task');
+    // Only manager or assignee can modify
+    if (task.assignee_id !== user.id) {
+      // If not assignee, check if manager/admin of the org
+      if (task.organization_id) {
+        await this.organizationsService.checkAccess(user, task.organization_id, ['admin', 'manager']);
+      } else {
+        // Task without org (shouldnt happen but defensive coding) -> global manager check? or just forbidden
+        if (user.role !== 'manager') throw new ForbiddenException('No permission to modify this task');
+      }
     }
 
     return this.prisma.tasks.update({
@@ -727,6 +829,199 @@ export class TasksService {
     }
 
     return this.prisma.task_comments.delete({ where: { id: commentId } });
+  }
+
+  /**
+   * Get comprehensive analytics for the Manager Zone dashboard
+   * @param period - 'today' | 'week' | 'month' | 'quarter' | 'all'
+   */
+  async getAnalytics(organizationId: string, managerId: string, period?: string) {
+    // Verify user is manager in this organization
+    const userOrg = await this.prisma.user_organizations.findUnique({
+      where: {
+        user_id_organization_id: {
+          user_id: managerId,
+          organization_id: organizationId,
+        },
+      },
+    });
+
+    const role = userOrg?.role_in_org;
+    if (!userOrg || (role !== 'admin' && role !== 'manager')) {
+      throw new ForbiddenException('Only managers can view analytics');
+    }
+
+    // Calculate date filter based on period
+    const now = new Date();
+    let dateFilter: Date | undefined;
+
+    switch (period) {
+      case 'today':
+        dateFilter = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'week':
+        dateFilter = new Date(now);
+        dateFilter.setDate(now.getDate() - now.getDay()); // Start of current week
+        dateFilter.setHours(0, 0, 0, 0);
+        break;
+      case 'month':
+        dateFilter = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'quarter':
+        dateFilter = new Date(now);
+        dateFilter.setMonth(now.getMonth() - 3);
+        break;
+      case 'all':
+      default:
+        dateFilter = undefined;
+    }
+
+    // Build where clause with optional date filter
+    const whereClause: any = { organization_id: organizationId };
+    if (dateFilter) {
+      whereClause.created_at = { gte: dateFilter };
+    }
+
+    // Get all tasks for this organization (with date filter)
+    const allTasks = await this.prisma.tasks.findMany({
+      where: whereClause,
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: { id: true, username: true, avatar_color: true },
+        },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+
+    // Get team members
+    const teamMembers = await this.prisma.user_organizations.findMany({
+      where: { organization_id: organizationId },
+      include: {
+        users: {
+          select: { id: true, username: true, avatar_color: true },
+        },
+      },
+    });
+
+    // Calculate KPIs
+    const totalTasks = allTasks.length;
+    const completedTasks = allTasks.filter(t => t.status === 'done').length;
+    const inProgressTasks = allTasks.filter(t => t.status === 'in_progress').length;
+    const pendingValidation = allTasks.filter(t => t.status === 'pending_validation').length;
+    const todoTasks = allTasks.filter(t => t.status === 'todo').length;
+
+    // Calculate completion rate
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    // Calculate overdue tasks
+    const now = new Date();
+    const overdueTasks = allTasks.filter(t =>
+      t.due_date && new Date(t.due_date) < now && t.status !== 'done'
+    ).length;
+
+    // Team Velocity: Tasks completed per week (last 8 weeks)
+    const velocityData = [];
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      const completedThisWeek = allTasks.filter(t => {
+        if (t.status !== 'done' || !t.created_at) return false;
+        const createdAt = new Date(t.created_at);
+        return createdAt >= weekStart && createdAt < weekEnd;
+      }).length;
+
+      velocityData.push({
+        week: `W${8 - i}`,
+        completed: completedThisWeek,
+        weekStart: weekStart.toISOString().split('T')[0],
+      });
+    }
+
+    // Distribution by status
+    const statusDistribution = [
+      { name: 'Completed', value: completedTasks, color: '#10b981' },
+      { name: 'In Progress', value: inProgressTasks, color: '#3b82f6' },
+      { name: 'To Do', value: todoTasks, color: '#6b7280' },
+      { name: 'Pending Validation', value: pendingValidation, color: '#f59e0b' },
+    ].filter(s => s.value > 0);
+
+    // Individual performance: tasks per user
+    const performanceMap = new Map<string, { id: string; username: string; avatar_color: string; completed: number; inProgress: number; total: number }>();
+
+    for (const member of teamMembers) {
+      if (member.users) {
+        performanceMap.set(member.users.id, {
+          id: member.users.id,
+          username: member.users.username,
+          avatar_color: member.users.avatar_color || 'zinc',
+          completed: 0,
+          inProgress: 0,
+          total: 0,
+        });
+      }
+    }
+
+    for (const task of allTasks) {
+      if (task.assignee_id && performanceMap.has(task.assignee_id)) {
+        const user = performanceMap.get(task.assignee_id)!;
+        user.total++;
+        if (task.status === 'done') user.completed++;
+        if (task.status === 'in_progress') user.inProgress++;
+      }
+    }
+
+    const individualPerformance = Array.from(performanceMap.values())
+      .sort((a, b) => b.completed - a.completed)
+      .slice(0, 10);
+
+    // Project Health: On-time vs Overdue (by priority areas)
+    const healthData = [
+      {
+        name: 'On Track',
+        onTime: allTasks.filter(t => t.status !== 'done' && (!t.due_date || new Date(t.due_date) >= now)).length,
+        overdue: 0,
+      },
+      {
+        name: 'At Risk',
+        onTime: 0,
+        overdue: overdueTasks,
+      },
+    ];
+
+    // Recent activity: last 10 task updates
+    const recentTasks = allTasks
+      .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime())
+      .slice(0, 10)
+      .map(t => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        assignee: t.users_tasks_assignee_idTousers?.username || 'Unassigned',
+        created_at: t.created_at,
+      }));
+
+    return {
+      kpis: {
+        totalTasks,
+        completedTasks,
+        inProgressTasks,
+        pendingValidation,
+        todoTasks,
+        completionRate,
+        overdueTasks,
+        teamSize: teamMembers.length,
+      },
+      velocityData,
+      statusDistribution,
+      individualPerformance,
+      healthData,
+      recentTasks,
+    };
   }
 
   /**

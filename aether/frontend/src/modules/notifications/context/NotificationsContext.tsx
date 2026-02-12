@@ -188,7 +188,6 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const clearAll = useCallback(async () => {
     try {
       // Optimistic update
-      const prevNotifications = [...notifications];
       setNotifications([]);
       setUnreadCount(0);
       setTotalNotifications(0);

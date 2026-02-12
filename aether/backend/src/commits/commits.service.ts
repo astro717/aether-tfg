@@ -4,6 +4,8 @@ import { CreateCommitDto } from './dto/create-commit.dto';
 import { UpdateCommitDto } from './dto/update-commit.dto';
 import { GithubService } from '../github/github.service';
 
+import { OrganizationsService } from '../organizations/organizations.service';
+
 @Injectable()
 export class CommitsService {
   private readonly logger = new Logger(CommitsService.name);
@@ -14,7 +16,8 @@ export class CommitsService {
   constructor(
     private prisma: PrismaService,
     private githubService: GithubService,
-  ) {}
+    private organizationsService: OrganizationsService,
+  ) { }
 
   /**
    * Parse task references from a commit message
@@ -123,8 +126,14 @@ export class CommitsService {
     if (!commit) throw new NotFoundException('Commit not found');
 
     // Author can edit their own commits, managers can edit all
-    if (commit.author_login !== user.username && user.role !== 'manager') {
-      throw new ForbiddenException('You cannot edit this commit');
+    if (commit.author_login !== user.username) {
+      // Retrieve repo to check org
+      const repo = await this.prisma.repos.findUnique({ where: { id: commit.repo_id } });
+      if (repo?.organization_id) {
+        await this.organizationsService.checkAccess(user, repo.organization_id, ['admin', 'manager']);
+      } else {
+        if (user.role !== 'manager') throw new ForbiddenException('You cannot edit this commit');
+      }
     }
 
     return this.prisma.commits.update({
@@ -134,7 +143,15 @@ export class CommitsService {
   }
 
   async remove(sha: string, user: any) {
-    if (user.role !== 'manager') throw new ForbiddenException('Only managers can delete commits');
+    const commit = await this.prisma.commits.findUnique({ where: { sha } });
+    if (!commit) throw new NotFoundException('Commit not found');
+
+    const repo = await this.prisma.repos.findUnique({ where: { id: commit.repo_id } });
+    if (repo?.organization_id) {
+      await this.organizationsService.checkAccess(user, repo.organization_id, ['admin', 'manager']);
+    } else {
+      if (user.role !== 'manager') throw new ForbiddenException('Only managers can delete commits');
+    }
 
     return this.prisma.commits.delete({ where: { sha } });
   }

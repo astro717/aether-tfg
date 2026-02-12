@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { organizationApi } from '../api/organizationApi';
 import type { Organization } from '../api/organizationApi';
@@ -11,6 +11,7 @@ interface OrganizationContextType {
   loading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
+  isManager: boolean; // User is admin in current organization
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
@@ -71,6 +72,15 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     }
   }, [currentOrganization]);
 
+  // Compute if user is manager (admin or manager role) in current organization
+  const isManager = useMemo(() => {
+    // Global Manager Override
+    if (user?.role === 'manager') return true;
+
+    const role = currentOrganization?.role_in_org;
+    return role === 'admin' || role === 'manager';
+  }, [currentOrganization, user]);
+
   return (
     <OrganizationContext.Provider
       value={{
@@ -80,6 +90,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         loading: loading || authLoading,
         error,
         refetch: fetchOrganizations,
+        isManager,
       }}
     >
       {children}

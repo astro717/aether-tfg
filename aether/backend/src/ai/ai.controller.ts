@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -116,6 +116,28 @@ export class AiController {
       user,
       onlyCached === 'true',
       forceRegenerate === 'true',
+    );
+  }
+
+  /**
+   * Generate an AI-powered manager report
+   * POST /ai/manager-report
+   *
+   * Body:
+   *   - type: 'weekly_organization' | 'user_performance' | 'bottleneck_prediction'
+   *   - organizationId: UUID of the organization
+   *   - userId?: Optional user ID for user_performance reports
+   */
+  @Post('manager-report')
+  async generateManagerReport(
+    @Body() body: { type: string; organizationId: string; userId?: string },
+    @CurrentUser() user: users,
+  ) {
+    return this.aiService.generateManagerReport(
+      body.type,
+      body.organizationId,
+      body.userId,
+      user,
     );
   }
 }

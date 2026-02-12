@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, X, File as FileIcon, Image as ImageIcon } from "lucide-react";
-import type { CommentAttachment } from "../../dashboard/api/tasksApi";
+import { Download, X, File as FileIcon } from "lucide-react";
+
+interface CommentAttachment {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  file_size: number;
+}
 
 interface CommentCardProps {
   author: string;

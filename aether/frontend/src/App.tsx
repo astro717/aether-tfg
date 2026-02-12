@@ -14,6 +14,8 @@ import { TaskDetailsPage } from "./modules/tasks/pages/TaskDetailsPage";
 import { MainDashboardPage } from "./modules/dashboard/pages/MainDashboardPage";
 import { MessagingPage } from "./modules/messaging/pages/MessagingPage";
 import { SettingsPage } from "./modules/settings/pages/SettingsPage";
+import { ManagerZonePage } from "./modules/manager/pages/ManagerZonePage";
+import { ProtectedManagerRoute } from "./components/auth/ProtectedManagerRoute";
 import { OrganizationProvider } from "./modules/organization/context/OrganizationContext";
 import { AuthProvider } from "./modules/auth/context/AuthContext";
 import { ThemeProvider } from "./modules/settings/context/ThemeContext";
@@ -76,6 +78,18 @@ function App() {
                         <DashboardLayout>
                           <SettingsPage />
                         </DashboardLayout>
+                      }
+                    />
+
+                    {/* Manager Zone Route */}
+                    <Route
+                      path="/manager"
+                      element={
+                        <ProtectedManagerRoute>
+                          <DashboardLayout>
+                            <ManagerZonePage />
+                          </DashboardLayout>
+                        </ProtectedManagerRoute>
                       }
                     />
                   </Routes>

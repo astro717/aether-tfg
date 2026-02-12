@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
-import { Sidebar as SidebarIcon, Plus, Loader2, Settings } from "lucide-react";
+import { Sidebar as SidebarIcon, Plus, Loader2, Settings, Shield } from "lucide-react";
 import { Link, useLocation, useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../modules/auth/context/AuthContext";
+import { useOrganization } from "../../modules/organization/context/OrganizationContext";
 import { tasksApi, type Task } from "../../modules/dashboard/api/tasksApi";
 import { messagingApi, type Conversation } from "../../modules/messaging/api/messagingApi";
 import { CreateTaskModal } from "../../modules/tasks/components/CreateTaskModal";
@@ -50,11 +51,13 @@ function isTaskDismissed(taskId: string): boolean {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
     const { user } = useAuth();
+    const { isManager } = useOrganization();
     const navigate = useNavigate();
     const [myTasks, setMyTasks] = useState<Task[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
     const location = useLocation();
     const isSettingsActive = location.pathname === '/settings';
+    const isManagerActive = location.pathname === '/manager';
     const [searchParams] = useSearchParams();
     const activeUserId = searchParams.get("user");
 
@@ -83,8 +86,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         try {
             if (!silent) setTasksLoading(true);
             const tasks = await tasksApi.getMyTasks();
-            // Filter to show only pending and in_progress tasks (not done)
-            const activeTasks = tasks.filter(t => t.status !== 'done');
+            // Filter to show only active tasks (not done or pending_validation)
+            const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'pending_validation');
             setMyTasks(activeTasks);
 
             // Check for critical tasks (due in < 24h)
@@ -304,6 +307,65 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                         </div>
                     </div>
                 </div>
+
+                {/* Manager Zone Footer - Only visible to managers */}
+                {isManager && (
+                    <div className={`
+                        border-t border-gray-100 dark:border-zinc-800
+                        ${isCollapsed ? 'px-2 py-3' : 'px-4 py-4'}
+                    `}>
+                        <Link
+                            to="/manager"
+                            className={`
+                                w-full flex items-center group
+                                ${isCollapsed ? 'justify-center p-2.5' : 'px-3 py-2.5 gap-3'}
+                                rounded-xl transition-all duration-200
+                                cursor-pointer outline-none
+                                ${isManagerActive
+                                    ? 'bg-gradient-to-r from-emerald-500/15 to-teal-500/15 dark:from-emerald-500/25 dark:to-teal-500/25 border border-emerald-500/30 dark:border-emerald-500/40 shadow-sm'
+                                    : 'bg-gradient-to-r from-emerald-500/5 to-teal-500/5 dark:from-emerald-500/10 dark:to-teal-500/10 hover:from-emerald-500/10 hover:to-teal-500/10 dark:hover:from-emerald-500/20 dark:hover:to-teal-500/20 border border-transparent hover:border-emerald-500/20 dark:hover:border-emerald-500/30'
+                                }
+                            `}
+                        >
+                            <div className={`
+                                p-1.5 rounded-lg
+                                ${isManagerActive
+                                    ? 'bg-emerald-500/20 dark:bg-emerald-500/30'
+                                    : 'bg-emerald-500/10 dark:bg-emerald-500/20 group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-500/30'
+                                }
+                                transition-colors duration-200
+                            `}>
+                                <Shield
+                                    size={isCollapsed ? 18 : 16}
+                                    className={`
+                                        transition-colors duration-200
+                                        ${isManagerActive
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : 'text-emerald-600/80 dark:text-emerald-400/80 group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
+                                        }
+                                    `}
+                                />
+                            </div>
+                            {!isCollapsed && (
+                                <div className="flex flex-col flex-1 text-left">
+                                    <span className={`
+                                        font-semibold text-sm
+                                        transition-colors duration-200
+                                        ${isManagerActive
+                                            ? 'text-emerald-700 dark:text-emerald-300'
+                                            : 'text-emerald-700/90 dark:text-emerald-300/90 group-hover:text-emerald-700 dark:group-hover:text-emerald-300'
+                                        }
+                                    `}>
+                                        Manager Zone
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600/60 dark:text-emerald-400/60 font-medium">
+                                        Team & Validation
+                                    </span>
+                                </div>
+                            )}
+                        </Link>
+                    </div>
+                )}
             </aside>
 
             {/* Main Content Area */}

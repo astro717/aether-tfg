@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
     Plus,
-    Bot,
     Loader2,
     AlertCircle,
     ArrowLeft,
@@ -607,15 +606,3 @@ function CommentCard({
     );
 }
 
-function AICard({ title, className = "" }: { title: string; className?: string }) {
-    return (
-        <div className={`bg-white/30 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 cursor-pointer border border-gray-200 hover:bg-white/50 hover:border-gray-300 transition-all min-h-[120px] ${className}`}>
-            <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
-                <Bot size={18} className="text-gray-600" />
-            </div>
-            <h4 className="text-gray-700 font-medium text-sm leading-tight">
-                {title}
-            </h4>
-        </div>
-    );
-}

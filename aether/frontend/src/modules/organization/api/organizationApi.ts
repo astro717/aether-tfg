@@ -4,17 +4,21 @@ export interface Organization {
   id: string;
   name: string;
   created_at: string;
+  role_in_org?: 'admin' | 'manager' | 'member';
 }
 
 export interface OrganizationMember {
   id: string;
   username: string;
   email: string;
+  avatar_color?: string;
+  role_in_org?: 'admin' | 'manager' | 'member';
 }
 
 export interface OrganizationWithMembers extends Organization {
   user_organizations: Array<{
     users: OrganizationMember;
+    role_in_org?: string;
   }>;
 }
 
@@ -46,8 +50,32 @@ class OrganizationApi {
   }
 
   async getOrganizationMembers(organizationId: string): Promise<OrganizationMember[]> {
-    const org = await this.getOrganizationById(organizationId);
-    return org.user_organizations.map(uo => uo.users);
+    const response = await fetch(
+      `${API_BASE_URL}/organizations/${organizationId}/members`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) throw new Error('Failed to fetch organization members');
+    return response.json();
+  }
+
+  async changeUserRole(
+    organizationId: string,
+    userId: string,
+    role: 'admin' | 'manager' | 'member'
+  ): Promise<{ user: OrganizationMember; role_in_org: string }> {
+    const response = await fetch(
+      `${API_BASE_URL}/organizations/${organizationId}/users/${userId}/role`,
+      {
+        method: 'PATCH',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ role })
+      }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to change user role');
+    }
+    return response.json();
   }
 
   async createOrganization(name: string): Promise<Organization> {

@@ -31,7 +31,7 @@ export interface Task {
   repo_id: string | null;
   title: string;
   description: string | null;
-  status: 'pending' | 'in_progress' | 'done';
+  status: 'pending_validation' | 'todo' | 'pending' | 'in_progress' | 'done';
   assignee_id: string | null;
   start_date: string;
   due_date: string | null;
@@ -44,10 +44,14 @@ export interface Task {
 }
 
 export interface KanbanData {
+  pending_validation: Task[];
+  todo: Task[];
   pending: Task[];
   in_progress: Task[];
   done: Task[];
   totals: {
+    pending_validation: number;
+    todo: number;
     pending: number;
     in_progress: number;
     done: number;

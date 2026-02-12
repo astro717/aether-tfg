@@ -17,7 +17,7 @@ interface CreateTaskModalProps {
 
 export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalProps) {
   const { user } = useAuth();
-  const { currentOrganization } = useOrganization();
+  const { currentOrganization, isManager } = useOrganization();
   const { showToast } = useToast();
 
   // Form state
@@ -34,8 +34,6 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
   const [error, setError] = useState("");
 
   const titleInputRef = useRef<HTMLInputElement>(null);
-
-  const isManager = user?.role === "manager";
 
   // Focus title input when modal opens
   useEffect(() => {
@@ -137,8 +135,12 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
         organization_id: currentOrganization.id,
       });
 
-      // Show success toast
-      showToast("Task created successfully", "success");
+      // Show success toast - different message for members vs managers
+      if (isManager) {
+        showToast("Task created successfully", "success");
+      } else {
+        showToast("Task submitted for manager approval", "success");
+      }
 
       // Emit event for Kanban refresh
       taskEvents.emitTaskCreated();

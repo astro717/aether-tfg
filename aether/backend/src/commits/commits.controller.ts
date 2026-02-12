@@ -10,12 +10,12 @@ import { users } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 
 @Controller('commits')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class CommitsController {
   constructor(
     private readonly commitsService: CommitsService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   @Post()
   create(@Body() dto: CreateCommitDto, @CurrentUser() user: users) {
@@ -38,7 +38,6 @@ export class CommitsController {
   }
 
   @Delete(':id')
-  @Roles('manager')
   remove(@Param('sha') sha: string, @CurrentUser() user: users) {
     return this.commitsService.remove(sha, user);
   }

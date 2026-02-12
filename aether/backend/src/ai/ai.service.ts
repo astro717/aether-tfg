@@ -1152,4 +1152,241 @@ Required JSON structure:
 
     return { summary: result.summary, sections: result.sections, cached: false, timestamp: new Date() };
   }
+
+  /**
+   * Generate a comprehensive manager report for the Manager Zone
+   * Supports three report types:
+   * - weekly_organization: Weekly team productivity overview
+   * - user_performance: Individual or team performance analysis
+   * - bottleneck_prediction: AI-powered risk and blocker analysis
+   */
+  async generateManagerReport(
+    type: string,
+    organizationId: string,
+    userId: string | undefined,
+    user: any,
+  ): Promise<any> {
+    // Verify user is manager in this organization
+    const userOrg = await this.prisma.user_organizations.findUnique({
+      where: {
+        user_id_organization_id: {
+          user_id: user.id,
+          organization_id: organizationId,
+        },
+      },
+    });
+
+    const role = userOrg?.role_in_org;
+    if (!userOrg || (role !== 'admin' && role !== 'manager')) {
+      throw new NotFoundException('Only managers can generate reports');
+    }
+
+    // Gather analytics data for the report
+    const tasks = await this.prisma.tasks.findMany({
+      where: { organization_id: organizationId },
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: { id: true, username: true },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const teamMembers = await this.prisma.user_organizations.findMany({
+      where: { organization_id: organizationId },
+      include: {
+        users: {
+          select: { id: true, username: true },
+        },
+      },
+    });
+
+    // Calculate statistics
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+    const pendingValidation = tasks.filter(t => t.status === 'pending_validation').length;
+    const todoTasks = tasks.filter(t => t.status === 'todo').length;
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    const now = new Date();
+    const overdueTasks = tasks.filter(t =>
+      t.due_date && new Date(t.due_date) < now && t.status !== 'done'
+    );
+
+    // Calculate per-user stats
+    const userStats = new Map<string, { username: string; completed: number; inProgress: number; total: number }>();
+    for (const member of teamMembers) {
+      if (member.users) {
+        userStats.set(member.users.id, {
+          username: member.users.username,
+          completed: 0,
+          inProgress: 0,
+          total: 0,
+        });
+      }
+    }
+    for (const task of tasks) {
+      if (task.assignee_id && userStats.has(task.assignee_id)) {
+        const stats = userStats.get(task.assignee_id)!;
+        stats.total++;
+        if (task.status === 'done') stats.completed++;
+        if (task.status === 'in_progress') stats.inProgress++;
+      }
+    }
+
+    // Build the prompt based on report type
+    let prompt: string;
+    const baseContext = `
+ORGANIZATION ANALYTICS:
+- Total Tasks: ${totalTasks}
+- Completed: ${completedTasks} (${completionRate}% completion rate)
+- In Progress: ${inProgressTasks}
+- To Do: ${todoTasks}
+- Pending Validation: ${pendingValidation}
+- Overdue Tasks: ${overdueTasks.length}
+- Team Size: ${teamMembers.length}
+
+TEAM MEMBERS PERFORMANCE:
+${Array.from(userStats.values()).map(u => `- ${u.username}: ${u.completed} completed, ${u.inProgress} in progress, ${u.total} total`).join('\n')}
+
+OVERDUE TASKS:
+${overdueTasks.slice(0, 5).map(t => `- "${t.title}" (assigned to: ${t.users_tasks_assignee_idTousers?.username || 'Unassigned'})`).join('\n') || 'None'}
+
+RECENT TASKS (Last 10):
+${tasks.slice(0, 10).map(t => `- [${t.status}] "${t.title}" - ${t.users_tasks_assignee_idTousers?.username || 'Unassigned'}`).join('\n')}
+`;
+
+    switch (type) {
+      case 'weekly_organization':
+        prompt = `You are a senior project manager writing a weekly organization report.
+
+${baseContext}
+
+Write a comprehensive weekly report that includes:
+1. Executive Summary (2-3 sentences highlighting key achievements and concerns)
+2. Productivity Analysis (team velocity, completion trends)
+3. Current Workload Distribution (who's doing what, balance assessment)
+4. Upcoming Priorities (what should the team focus on next week)
+5. Recommendations (actionable suggestions for improvement)
+
+CRITICAL OUTPUT INSTRUCTIONS:
+- Return ONLY a raw JSON object, nothing else
+- Do NOT wrap the response in markdown code blocks
+- The response must start with { and end with }
+
+Required JSON structure:
+{
+  "summary": "Executive summary here",
+  "sections": [
+    {"title": "Productivity Analysis", "content": "Detailed analysis..."},
+    {"title": "Workload Distribution", "content": "Assessment..."},
+    {"title": "Upcoming Priorities", "content": "Focus areas..."},
+    {"title": "Recommendations", "content": "Suggestions..."}
+  ]
+}`;
+        break;
+
+      case 'user_performance':
+        const targetUser = userId ? userStats.get(userId) : null;
+        const performanceContext = targetUser
+          ? `\nFOCUS ON USER: ${targetUser.username}\n- Completed: ${targetUser.completed}\n- In Progress: ${targetUser.inProgress}\n- Total Assigned: ${targetUser.total}`
+          : '\nANALYZE ALL TEAM MEMBERS';
+
+        prompt = `You are a senior HR analyst writing a performance review.
+
+${baseContext}
+${performanceContext}
+
+Write a comprehensive performance analysis that includes:
+1. Executive Summary (key findings about ${targetUser ? targetUser.username : 'the team'})
+2. Productivity Metrics (task completion rates, efficiency)
+3. Strengths Identified (what's working well)
+4. Areas for Improvement (constructive feedback)
+5. Development Recommendations (actionable next steps)
+
+CRITICAL OUTPUT INSTRUCTIONS:
+- Return ONLY a raw JSON object, nothing else
+- Do NOT wrap the response in markdown code blocks
+- The response must start with { and end with }
+
+Required JSON structure:
+{
+  "summary": "Executive summary here",
+  "sections": [
+    {"title": "Productivity Metrics", "content": "Detailed metrics..."},
+    {"title": "Strengths Identified", "content": "Positive observations..."},
+    {"title": "Areas for Improvement", "content": "Constructive feedback..."},
+    {"title": "Development Recommendations", "content": "Next steps..."}
+  ]
+}`;
+        break;
+
+      case 'bottleneck_prediction':
+        prompt = `You are a senior project risk analyst identifying potential bottlenecks and risks.
+
+${baseContext}
+
+Analyze the data and predict potential bottlenecks:
+1. Executive Summary (key risks and concerns)
+2. Current Bottlenecks (tasks or areas blocking progress)
+3. Resource Constraints (overloaded team members, capacity issues)
+4. Risk Assessment (potential future problems)
+5. Mitigation Strategies (how to address identified risks)
+
+CRITICAL OUTPUT INSTRUCTIONS:
+- Return ONLY a raw JSON object, nothing else
+- Do NOT wrap the response in markdown code blocks
+- The response must start with { and end with }
+
+Required JSON structure:
+{
+  "summary": "Executive summary of risks here",
+  "sections": [
+    {"title": "Current Bottlenecks", "content": "Identified blockers..."},
+    {"title": "Resource Constraints", "content": "Capacity issues..."},
+    {"title": "Risk Assessment", "content": "Future concerns..."},
+    {"title": "Mitigation Strategies", "content": "Recommendations..."}
+  ]
+}`;
+        break;
+
+      default:
+        throw new NotFoundException('Invalid report type');
+    }
+
+    // Call Gemini
+    const aiResponse = await this.callGemini(prompt);
+
+    // Parse the response using failsafe method
+    const result = this.safeParseTaskReport(aiResponse);
+
+    // Save to ai_reports table for history
+    try {
+      await this.prisma.ai_reports.create({
+        data: {
+          type: `manager_${type}`,
+          content: JSON.stringify({
+            summary: result.summary,
+            sections: result.sections,
+            report_type: type,
+            organization_id: organizationId,
+            user_id: userId,
+          }),
+        },
+      });
+      this.logger.log(`Saved manager report: ${type} for org ${organizationId.substring(0, 8)}`);
+    } catch (cacheError) {
+      this.logger.warn(`Failed to save manager report:`, cacheError);
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      type,
+      summary: result.summary,
+      sections: result.sections,
+      created_at: new Date().toISOString(),
+      cached: false,
+    };
+  }
 }

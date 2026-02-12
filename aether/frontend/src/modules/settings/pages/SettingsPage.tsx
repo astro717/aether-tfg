@@ -36,7 +36,6 @@ import { useSettings } from "../context/SettingsContext";
 import { useNavigate } from "react-router-dom";
 import { changePassword, sendResetEmailToCurrentUser, updateProfile } from "../../auth/api/authApi";
 import { UserAvatar } from "../../../components/ui/UserAvatar";
-import { AVATAR_COLORS } from "../../../lib/avatarColors";
 
 type SettingsTab = "profile" | "appearance" | "notifications" | "security" | "integrations" | "ai";
 
@@ -1072,29 +1071,12 @@ function SessionItem({
     );
 }
 
-function SecurityLogItem({
-    action,
-    date,
-    time,
-}: {
-    action: string;
-    date: string;
-    time: string;
-}) {
-    return (
-        <div className="flex items-center justify-between py-3 border-b border-gray-50 dark:border-zinc-800 last:border-0">
-            <p className="text-sm font-medium text-gray-900 dark:text-white">{action}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{date} at {time}</p>
-        </div>
-    );
-}
-
 function SoundSelector({
     selected,
     onSelect,
     options,
     volume = 0.5,
-    isCritical = false,
+    isCritical: _isCritical = false,
 }: {
     selected: string;
     onSelect: (sound: string) => void;

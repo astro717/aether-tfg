@@ -4,6 +4,8 @@ import { CreateRepoDto } from './dto/create-repo.dto';
 import { UpdateRepoDto } from './dto/update-repo.dto';
 import { GithubService, GithubRepository } from '../github/github.service';
 
+import { OrganizationsService } from '../organizations/organizations.service';
+
 @Injectable()
 export class ReposService {
   private readonly logger = new Logger(ReposService.name);
@@ -11,11 +13,17 @@ export class ReposService {
   constructor(
     private prisma: PrismaService,
     private githubService: GithubService,
-  ) {}
+    private organizationsService: OrganizationsService,
+  ) { }
 
   async create(dto: CreateRepoDto, creator: any) {
-    if (creator.role !== 'manager') {
-      throw new ForbiddenException('Only managers can create repos');
+    if (dto.organization_id) {
+      await this.organizationsService.checkAccess(creator, dto.organization_id, ['admin', 'manager']);
+    } else {
+      // Personal repo? For now, allow regular users or restrict to global manager if that was the intent.
+      // The original code was: if (creator.role !== 'manager')
+      // Assuming we want to allow only Managers to create Repos generally:
+      if (creator.role !== 'manager') throw new ForbiddenException('Only managers can create repos');
     }
 
     return this.prisma.repos.create({
@@ -41,7 +49,12 @@ export class ReposService {
   }
 
   async update(id: string, dto: UpdateRepoDto, user: any) {
-    if (user.role !== 'manager') throw new ForbiddenException('Only managers can edit repos');
+    const repo = await this.findOne(id);
+    if (repo.organization_id) {
+      await this.organizationsService.checkAccess(user, repo.organization_id, ['admin', 'manager']);
+    } else {
+      if (user.role !== 'manager') throw new ForbiddenException('Only managers can edit repos');
+    }
 
     return this.prisma.repos.update({
       where: { id },
@@ -50,7 +63,12 @@ export class ReposService {
   }
 
   async remove(id: string, user: any) {
-    if (user.role !== 'manager') throw new ForbiddenException('Only managers can delete repos');
+    const repo = await this.findOne(id);
+    if (repo.organization_id) {
+      await this.organizationsService.checkAccess(user, repo.organization_id, ['admin', 'manager']);
+    } else {
+      if (user.role !== 'manager') throw new ForbiddenException('Only managers can delete repos');
+    }
 
     return this.prisma.repos.delete({ where: { id } });
   }
