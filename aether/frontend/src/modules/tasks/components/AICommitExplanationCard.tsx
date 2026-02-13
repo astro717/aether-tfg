@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Maximize2, X, Sparkles, CheckCircle2, Clock } from "lucide-react";
+import { Bot, Maximize2, X, Sparkles, CheckCircle2, Clock, Download } from "lucide-react";
 import { tasksApi, type CommitInTaskContextExplanation } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
 import { useSettings } from "../../settings/context/SettingsContext";
+import { generateCommitExplanationPDF } from "../../../utils/pdfGenerator";
 
 interface AICommitExplanationCardProps {
   taskId: string;
@@ -281,18 +282,27 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
               {explanation.explanation}
             </p>
 
-            {/* Footer with timestamp and regenerate */}
+            {/* Footer with timestamp and actions */}
             <div className="mt-3 pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between">
               <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
                 <Clock size={10} className="text-gray-400 dark:text-gray-500" />
                 Generated {formatTimeAgo(explanation.timestamp)}
               </span>
-              <button
-                onClick={handleRegenerateClick}
-                className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-              >
-                Regenerate
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => generateCommitExplanationPDF(explanation)}
+                  className="text-[10px] text-purple-500 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors flex items-center gap-1"
+                >
+                  <Download size={10} />
+                  PDF
+                </button>
+                <button
+                  onClick={handleRegenerateClick}
+                  className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                >
+                  Regenerate
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -441,12 +451,21 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
                   <span className="ml-1 text-[10px] text-blue-500">(cached)</span>
                 )}
               </span>
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => generateCommitExplanationPDF(explanation)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl shadow-sm hover:from-purple-600 hover:to-blue-600 transition-all"
+                >
+                  <Download size={14} />
+                  Download PDF
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

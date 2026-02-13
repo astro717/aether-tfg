@@ -1154,17 +1154,273 @@ Required JSON structure:
   }
 
   /**
+   * HELPER: Calculate Investment Profile - Classifies tasks by type
+   * Analyzes task titles/descriptions to infer: Feature, Bug, Chore
+   * @param tasks - Array of tasks to analyze
+   * @param userId - Optional user ID to filter tasks for individual analysis
+   */
+  private calculateInvestmentProfile(tasks: any[], userId?: string): {
+    labels: string[];
+    datasets: Array<{ label: string; data: number[]; color: string }>;
+  } {
+    // Filter tasks by user if userId is provided
+    const filteredTasks = userId
+      ? tasks.filter(t => t.assignee_id === userId)
+      : tasks;
+
+    const categories = { features: 0, bugs: 0, chores: 0 };
+
+    for (const task of filteredTasks) {
+      const text = `${task.title} ${task.description || ''}`.toLowerCase();
+      if (text.match(/\b(fix|bug|issue|error|defect)\b/)) {
+        categories.bugs++;
+      } else if (text.match(/\b(feat|feature|add|new|implement|create)\b/)) {
+        categories.features++;
+      } else {
+        categories.chores++;
+      }
+    }
+
+    const total = filteredTasks.length || 1;
+    return {
+      labels: ['Features', 'Bugs', 'Chores'],
+      datasets: [
+        {
+          label: 'Task Distribution',
+          data: [
+            Math.round((categories.features / total) * 100),
+            Math.round((categories.bugs / total) * 100),
+            Math.round((categories.chores / total) * 100),
+          ],
+          color: '#8b5cf6', // Purple
+        },
+      ],
+    };
+  }
+
+  /**
+   * HELPER: Calculate DORA Metrics Lite
+   * - Deployment Frequency: Commits/PRs merged (approximation)
+   * - Lead Time: Average time from creation to done
+   */
+  private calculateDoraMetrics(tasks: any[]): {
+    deploymentFrequency: number;
+    leadTimeAvg: number;
+    sparklineData: number[];
+  } {
+    const completedTasks = tasks.filter(t => t.status === 'done');
+    const deploymentFrequency = completedTasks.length;
+
+    // Calculate lead time (days from created_at to when status became 'done')
+    const leadTimes = completedTasks
+      .filter(t => t.created_at)
+      .map(t => {
+        // Approximation: use created_at to now (ideally we'd track status change timestamps)
+        const created = new Date(t.created_at).getTime();
+        const now = Date.now();
+        return (now - created) / (1000 * 60 * 60 * 24); // days
+      });
+
+    const leadTimeAvg = leadTimes.length > 0
+      ? Math.round(leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length)
+      : 0;
+
+    // Sparkline: last 10 completed tasks' lead times
+    const sparklineData = leadTimes.slice(-10);
+
+    return { deploymentFrequency, leadTimeAvg, sparklineData };
+  }
+
+  /**
+   * HELPER: Generate Cumulative Flow Diagram Data
+   * Reconstructs historical daily state distribution
+   * NOTE: This is an approximation based on current data. Ideally needs a task_history table.
+   */
+  private generateCFDData(tasks: any[]): {
+    dates: string[];
+    todo: number[];
+    in_progress: number[];
+    pending_validation: number[];
+    done: number[];
+  } {
+    // For V1, we'll create a snapshot based on current status
+    // In production, you'd query task_history for actual historical data
+    const now = new Date();
+    const dates: string[] = [];
+    const todo: number[] = [];
+    const in_progress: number[] = [];
+    const pending_validation: number[] = [];
+    const done: number[] = [];
+
+    // Generate last 30 days
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      dates.push(date.toISOString().split('T')[0]);
+
+      // Approximate distribution (in real impl, query historical snapshots)
+      const dayFactor = 1 - (i / 30); // Simulate progress over time
+      todo.push(Math.round(tasks.filter(t => t.status === 'todo').length * (1 - dayFactor * 0.5)));
+      in_progress.push(Math.round(tasks.filter(t => t.status === 'in_progress').length * dayFactor));
+      pending_validation.push(Math.round(tasks.filter(t => t.status === 'pending_validation').length * dayFactor));
+      done.push(Math.round(tasks.filter(t => t.status === 'done').length * dayFactor));
+    }
+
+    return { dates, todo, in_progress, pending_validation, done };
+  }
+
+  /**
+   * HELPER: Calculate Radar Metrics for Code Review
+   * Analyzes commit and PR data (if available)
+   * @param organizationId - Organization ID to fetch commits from
+   * @param userId - Optional user ID to calculate individual metrics
+   */
+  private async calculateRadarMetrics(organizationId: string, userId?: string): Promise<{
+    user: string;
+    metrics: {
+      reviewSpeed: number;
+      codeQuality: number;
+      collaboration: number;
+      throughput: number;
+      consistency: number;
+    };
+  }> {
+    // Fetch recent commits for the organization
+    const allCommits = await this.prisma.commits.findMany({
+      where: {
+        repos: {
+          organization_id: organizationId,
+        },
+      },
+      take: 100,
+      orderBy: { committed_at: 'desc' },
+    });
+
+    // If userId is provided, filter commits by that user
+    let commits = allCommits;
+    let userName = 'Team Average';
+
+    if (userId) {
+      // Fetch user info
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: { username: true, github_login: true },
+      });
+
+      if (user) {
+        userName = user.username;
+        // Filter commits by github login
+        if (user.github_login) {
+          commits = allCommits.filter(c => c.author_login === user.github_login);
+        }
+      }
+    }
+
+    // Calculate metrics (0-100 scale)
+    const reviewSpeed = Math.min(100, commits.length * 2); // More commits = faster
+    const codeQuality = 75; // Placeholder - would analyze code_analysis scores
+    const collaboration = Math.min(100, new Set(commits.map(c => c.author_login)).size * 10);
+    const throughput = Math.min(100, commits.length);
+    const consistency = 80; // Placeholder - would analyze commit frequency variance
+
+    return {
+      user: userName,
+      metrics: { reviewSpeed, codeQuality, collaboration, throughput, consistency },
+    };
+  }
+
+  /**
+   * HELPER: Calculate Cycle Time Scatterplot Data
+   * X-axis: Date, Y-axis: Days to complete
+   * @param tasks - Array of tasks to analyze
+   * @param userId - Optional user ID to filter tasks for individual analysis
+   */
+  private calculateCycleTime(tasks: any[], userId?: string): Array<{ date: string; days: number; taskTitle: string }> {
+    // Filter tasks by user if userId is provided
+    const filteredTasks = userId
+      ? tasks.filter(t => t.assignee_id === userId)
+      : tasks;
+
+    return filteredTasks
+      .filter(t => t.status === 'done' && t.created_at)
+      .map(t => {
+        const created = new Date(t.created_at).getTime();
+        const completed = Date.now(); // Approximation
+        const days = Math.round((completed - created) / (1000 * 60 * 60 * 24));
+        return {
+          date: new Date(t.created_at).toISOString().split('T')[0],
+          days,
+          taskTitle: t.title,
+        };
+      })
+      .slice(-50); // Last 50 completed tasks
+  }
+
+  /**
+   * HELPER: Calculate Throughput Trend with Moving Average
+   * Tasks completed per week for the last 8 weeks
+   * @param tasks - Array of tasks to analyze
+   * @param userId - Optional user ID to filter tasks for individual analysis
+   */
+  private calculateThroughput(tasks: any[], userId?: string): {
+    weeks: string[];
+    completed: number[];
+    movingAverage: number[];
+  } {
+    // Filter tasks by user if userId is provided
+    const filteredTasks = userId
+      ? tasks.filter(t => t.assignee_id === userId)
+      : tasks;
+
+    const now = new Date();
+    const weeks: string[] = [];
+    const completed: number[] = [];
+
+    // Generate last 8 weeks
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - (i * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      weeks.push(`Week ${8 - i}`);
+
+      const weekTasks = filteredTasks.filter(t => {
+        if (t.status !== 'done' || !t.created_at) return false;
+        const taskDate = new Date(t.created_at);
+        return taskDate >= weekStart && taskDate < weekEnd;
+      });
+
+      completed.push(weekTasks.length);
+    }
+
+    // Calculate 3-week moving average
+    const movingAverage = completed.map((_, idx, arr) => {
+      if (idx < 2) return arr[idx];
+      const sum = arr[idx] + arr[idx - 1] + arr[idx - 2];
+      return Math.round(sum / 3);
+    });
+
+    return { weeks, completed, movingAverage };
+  }
+
+  /**
    * Generate a comprehensive manager report for the Manager Zone
    * Supports three report types:
    * - weekly_organization: Weekly team productivity overview
    * - user_performance: Individual or team performance analysis
    * - bottleneck_prediction: AI-powered risk and blocker analysis
+   *
+   * Implements caching based on (organization_id, type, period, userId)
+   * NOW with chartData for advanced visualizations
    */
   async generateManagerReport(
     type: string,
     organizationId: string,
     userId: string | undefined,
     user: any,
+    period: string,
+    forceRegenerate: boolean = false,
   ): Promise<any> {
     // Verify user is manager in this organization
     const userOrg = await this.prisma.user_organizations.findUnique({
@@ -1181,6 +1437,49 @@ Required JSON structure:
       throw new NotFoundException('Only managers can generate reports');
     }
 
+    // CACHE LOGIC: Check if a report already exists for these exact parameters
+    if (!forceRegenerate) {
+      const cachedReport = await this.prisma.ai_reports.findFirst({
+        where: {
+          organization_id: organizationId,
+          type: `manager_${type}`,
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      // Validate cache hit by checking metadata
+      if (cachedReport && cachedReport.content && cachedReport.metadata) {
+        try {
+          const metadata = cachedReport.metadata as { period?: string; target_user_id?: string };
+
+          // Cache hit conditions:
+          // 1. Period must match
+          // 2. If userId is provided, it must match target_user_id in metadata
+          // 3. If userId is undefined, target_user_id should also be undefined/null
+          const periodMatches = metadata.period === period;
+          const userMatches = userId
+            ? metadata.target_user_id === userId
+            : !metadata.target_user_id;
+
+          if (periodMatches && userMatches) {
+            this.logger.log(`Cache HIT for manager report ${type} (org: ${organizationId.substring(0, 8)}, period: ${period})`);
+            const parsed = JSON.parse(cachedReport.content);
+            return {
+              ...parsed,
+              chartData: parsed.chartData || null, // ✅ RETURN CACHED CHART DATA
+              cached: true,
+              timestamp: cachedReport.created_at || new Date(),
+            };
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to parse cached manager report metadata:`, error);
+        }
+      }
+    }
+
+    // Cache MISS or force regenerate - Generate new report
+    this.logger.log(`Generating manager report ${type} for org ${organizationId.substring(0, 8)}, period: ${period}`);
+
     // Gather analytics data for the report
     const tasks = await this.prisma.tasks.findMany({
       where: { organization_id: organizationId },
@@ -1191,6 +1490,52 @@ Required JSON structure:
       },
       orderBy: { created_at: 'desc' },
     });
+
+    // ============ PHASE A: CALCULATE CHART DATA (CONDITIONAL BY REPORT TYPE) ============
+    this.logger.log(`Calculating chart data for ${type} report...`);
+
+    const chartData: any = {};
+
+    // Calculate only the charts needed for each report type
+    switch (type) {
+      case 'weekly_organization':
+        // Weekly reports focus on team metrics and workflow
+        chartData.dora = this.calculateDoraMetrics(tasks);
+        chartData.investment = this.calculateInvestmentProfile(tasks);
+        chartData.throughput = this.calculateThroughput(tasks);
+        chartData.cfd = this.generateCFDData(tasks);
+        this.logger.log('Weekly organization charts: DORA, Investment, Throughput, CFD');
+        break;
+
+      case 'user_performance':
+        // Performance reports focus on individual metrics
+        chartData.radar = await this.calculateRadarMetrics(organizationId, userId);
+        chartData.cycleTime = this.calculateCycleTime(tasks, userId);
+        chartData.throughput = this.calculateThroughput(tasks, userId);
+        chartData.investment = this.calculateInvestmentProfile(tasks, userId);
+        this.logger.log('User performance charts: Radar, CycleTime, Throughput, Investment');
+        break;
+
+      case 'bottleneck_prediction':
+        // Bottleneck reports focus on risk indicators
+        chartData.cfd = this.generateCFDData(tasks);
+        chartData.cycleTime = this.calculateCycleTime(tasks);
+        chartData.investment = this.calculateInvestmentProfile(tasks);
+        chartData.dora = this.calculateDoraMetrics(tasks);
+        this.logger.log('Bottleneck prediction charts: CFD, CycleTime, Investment, DORA');
+        break;
+
+      default:
+        this.logger.warn(`Unknown report type: ${type}, calculating all charts as fallback`);
+        chartData.investment = this.calculateInvestmentProfile(tasks);
+        chartData.dora = this.calculateDoraMetrics(tasks);
+        chartData.cfd = this.generateCFDData(tasks);
+        chartData.radar = await this.calculateRadarMetrics(organizationId);
+        chartData.cycleTime = this.calculateCycleTime(tasks);
+        chartData.throughput = this.calculateThroughput(tasks);
+    }
+
+    this.logger.log('Chart data calculated successfully');
 
     const teamMembers = await this.prisma.user_organizations.findMany({
       where: { organization_id: organizationId },
@@ -1361,21 +1706,25 @@ Required JSON structure:
     // Parse the response using failsafe method
     const result = this.safeParseTaskReport(aiResponse);
 
-    // Save to ai_reports table for history
+    // Save to ai_reports table for history with organization_id, metadata, and chartData
     try {
       await this.prisma.ai_reports.create({
         data: {
+          organization_id: organizationId,
           type: `manager_${type}`,
           content: JSON.stringify({
             summary: result.summary,
             sections: result.sections,
             report_type: type,
-            organization_id: organizationId,
-            user_id: userId,
+            chartData, // ✅ PERSIST CHART DATA
           }),
+          metadata: {
+            period,
+            target_user_id: userId || null,
+          },
         },
       });
-      this.logger.log(`Saved manager report: ${type} for org ${organizationId.substring(0, 8)}`);
+      this.logger.log(`Saved manager report with chart data: ${type} for org ${organizationId.substring(0, 8)}, period: ${period}`);
     } catch (cacheError) {
       this.logger.warn(`Failed to save manager report:`, cacheError);
     }
@@ -1385,8 +1734,10 @@ Required JSON structure:
       type,
       summary: result.summary,
       sections: result.sections,
+      chartData, // ✅ RETURN CHART DATA TO FRONTEND
       created_at: new Date().toISOString(),
       cached: false,
+      timestamp: new Date(),
     };
   }
 }

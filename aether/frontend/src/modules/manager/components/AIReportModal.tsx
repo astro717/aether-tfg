@@ -10,9 +10,22 @@ import {
   ChevronRight,
   Copy,
   Check,
+  CheckCircle,
+  RefreshCw,
+  Download,
+  BarChart3,
 } from 'lucide-react';
 import { useOrganization } from '../../organization/context/OrganizationContext';
-import { managerApi, type AIReport, type AIReportRequest } from '../api/managerApi';
+import { managerApi, type AIReport, type AIReportRequest, type ReportAvailability } from '../api/managerApi';
+import { generateManagerReportPDF } from '../../../utils/pdfGenerator';
+import {
+  RadarMetricChart,
+  CFDAreaChart,
+  ScatterCycleChart,
+  InvestmentProfileChart,
+  DoraMetricsPanel,
+  ThroughputChart,
+} from '../../../components/charts';
 
 interface AIReportModalProps {
   isOpen: boolean;
@@ -20,6 +33,13 @@ interface AIReportModalProps {
 }
 
 type ReportType = 'weekly_organization' | 'user_performance' | 'bottleneck_prediction';
+type PeriodType = 'week' | 'month' | 'quarter';
+
+const PERIOD_OPTIONS: { value: PeriodType; label: string }[] = [
+  { value: 'week', label: 'This Week' },
+  { value: 'month', label: 'This Month' },
+  { value: 'quarter', label: 'Last 3 Months' },
+];
 
 interface ReportOption {
   type: ReportType;
@@ -57,16 +77,37 @@ const reportOptions: ReportOption[] = [
   },
 ];
 
+// Helper function to generate period identifier
+function getPeriodIdentifier(periodType: PeriodType): string {
+  const now = new Date();
+
+  if (periodType === 'week') {
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const days = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
+    const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+    return `${now.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
+  } else if (periodType === 'month') {
+    return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+  } else if (periodType === 'quarter') {
+    const quarter = Math.floor(now.getMonth() / 3) + 1;
+    return `${now.getFullYear()}-Q${quarter}`;
+  }
+  return 'all';
+}
+
 export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
   const { currentOrganization } = useOrganization();
   const [selectedType, setSelectedType] = useState<ReportType | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('week');
   const [teamMembers, setTeamMembers] = useState<Array<{ id: string; username: string; avatar_color: string; role_in_org: string }>>([]);
   const [report, setReport] = useState<AIReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [availableReports, setAvailableReports] = useState<ReportAvailability[]>([]);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   // Animation state
   useEffect(() => {
@@ -92,16 +133,49 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
     }
   }, [isOpen, currentOrganization?.id]);
 
-  const handleGenerateReport = async () => {
+  // Check report availability when parameters change
+  useEffect(() => {
+    const checkAvailability = async () => {
+      if (!currentOrganization?.id || !selectedPeriod) return;
+
+      setCheckingAvailability(true);
+      try {
+        const period = getPeriodIdentifier(selectedPeriod);
+        const result = await managerApi.checkReportAvailability(currentOrganization.id, period);
+        setAvailableReports(result.available);
+      } catch (err) {
+        console.error('Failed to check availability:', err);
+        setAvailableReports([]);
+      } finally {
+        setCheckingAvailability(false);
+      }
+    };
+
+    checkAvailability();
+  }, [currentOrganization?.id, selectedPeriod]);
+
+  // Helper to check if current selection has an existing report
+  const hasExistingReport = (): boolean => {
+    if (!selectedType) return false;
+    return availableReports.some(
+      r => r.type === selectedType &&
+      (selectedType === 'user_performance' ? r.userId === selectedUserId : !r.userId)
+    );
+  };
+
+  const handleGenerateReport = async (forceRegenerate: boolean = false) => {
     if (!selectedType || !currentOrganization?.id) return;
 
     setLoading(true);
     setError(null);
 
     try {
+      const period = getPeriodIdentifier(selectedPeriod);
       const request: AIReportRequest = {
         type: selectedType,
         organizationId: currentOrganization.id,
+        period,
+        forceRegenerate,
         ...(selectedType === 'user_performance' && selectedUserId ? { userId: selectedUserId } : {}),
       };
 
@@ -121,6 +195,26 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!report || !selectedType || !currentOrganization) return;
+
+    const reportOption = reportOptions.find(o => o.type === selectedType);
+    const reportTypeName = reportOption?.title || 'Report';
+    const periodLabel = PERIOD_OPTIONS.find(p => p.value === selectedPeriod)?.label || selectedPeriod;
+
+    try {
+      await generateManagerReportPDF(
+        report,
+        currentOrganization.name,
+        periodLabel,
+        reportTypeName
+      );
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      setError('Failed to generate PDF. Please try again.');
+    }
   };
 
 
@@ -221,41 +315,87 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
         <div className="px-8 py-6 max-h-[60vh] overflow-y-auto">
           {!report ? (
             <>
-              {/* Report Type Selection */}
+              {/* Period Selection */}
               <div className="space-y-4 mb-6">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  Select Report Type
+                  Select Time Period
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {reportOptions.map((option) => (
+                <div className="flex gap-2">
+                  {PERIOD_OPTIONS.map((option) => (
                     <button
-                      key={option.type}
-                      onClick={() => {
-                        setSelectedType(option.type);
-                        if (option.type !== 'user_performance') {
-                          setSelectedUserId(null);
-                        }
-                      }}
+                      key={option.value}
+                      onClick={() => setSelectedPeriod(option.value)}
                       className={`
-                        relative p-5 rounded-2xl text-left
-                        transition-all duration-300
-                        ${selectedType === option.type
-                          ? 'bg-gradient-to-br ' + option.gradient + ' text-white shadow-lg scale-[1.02]'
-                          : 'bg-gray-50 dark:bg-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-700'
+                        px-4 py-2 rounded-xl text-sm font-medium
+                        transition-all duration-200
+                        ${selectedPeriod === option.value
+                          ? 'bg-blue-500 text-white shadow-md'
+                          : 'bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700'
                         }
                       `}
                     >
-                      <div className={`mb-3 ${selectedType === option.type ? 'text-white' : option.color}`}>
-                        {option.icon}
-                      </div>
-                      <h4 className={`font-semibold mb-1 ${selectedType === option.type ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
-                        {option.title}
-                      </h4>
-                      <p className={`text-xs ${selectedType === option.type ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
-                        {option.description}
-                      </p>
+                      {option.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Report Type Selection */}
+              <div className="space-y-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                    Select Report Type
+                  </h3>
+                  {checkingAvailability && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Checking availability...
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {reportOptions.map((option) => {
+                    const reportExists = selectedType === option.type && hasExistingReport();
+                    return (
+                      <button
+                        key={option.type}
+                        onClick={() => {
+                          setSelectedType(option.type);
+                          if (option.type !== 'user_performance') {
+                            setSelectedUserId(null);
+                          }
+                        }}
+                        className={`
+                          relative p-5 rounded-2xl text-left
+                          transition-all duration-300
+                          ${selectedType === option.type
+                            ? 'bg-gradient-to-br ' + option.gradient + ' text-white shadow-lg scale-[1.02]'
+                            : 'bg-gray-50 dark:bg-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-700'
+                          }
+                        `}
+                      >
+                        {reportExists && (
+                          <div className="absolute top-3 right-3">
+                            <CheckCircle className="w-5 h-5 text-green-400" />
+                          </div>
+                        )}
+                        <div className={`mb-3 ${selectedType === option.type ? 'text-white' : option.color}`}>
+                          {option.icon}
+                        </div>
+                        <h4 className={`font-semibold mb-1 ${selectedType === option.type ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
+                          {option.title}
+                        </h4>
+                        <p className={`text-xs ${selectedType === option.type ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
+                          {option.description}
+                        </p>
+                        {reportExists && selectedType === option.type && (
+                          <p className="text-xs mt-2 text-white/90 font-medium">
+                            ✓ Report available
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -316,15 +456,29 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                     <FileText className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {reportOptions.find(o => o.type === selectedType)?.title}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        {reportOptions.find(o => o.type === selectedType)?.title}
+                      </h3>
+                      {report.cached && (
+                        <span className="px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 text-xs font-medium">
+                          Cached
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Generated just now
+                      {report.cached ? 'Retrieved from cache' : 'Generated just now'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDownloadPDF}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 transition-all shadow-md hover:shadow-lg text-sm font-medium"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download PDF
+                  </button>
                   <button
                     onClick={handleCopyReport}
                     className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors text-sm"
@@ -350,6 +504,95 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                   {formatReportContent(report.summary)}
                 </div>
               </div>
+
+              {/* Advanced Charts Section - Conditional rendering by report type */}
+              {report.chartData && (
+                <div className="space-y-6 animate-in fade-in-0 slide-in-from-bottom-2 duration-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white">
+                      <BarChart3 className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Data Visualizations & Metrics
+                    </h3>
+                  </div>
+
+                  {/* Weekly Organization Report Charts */}
+                  {selectedType === 'weekly_organization' && (
+                    <>
+                      {/* DORA Metrics Panel */}
+                      {report.chartData.dora && (
+                        <DoraMetricsPanel data={report.chartData.dora} />
+                      )}
+
+                      {/* Two-column layout for Investment & Throughput */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {report.chartData.investment && (
+                          <InvestmentProfileChart data={report.chartData.investment} />
+                        )}
+                        {report.chartData.throughput && (
+                          <ThroughputChart data={report.chartData.throughput} />
+                        )}
+                      </div>
+
+                      {/* CFD Area Chart */}
+                      {report.chartData.cfd && (
+                        <CFDAreaChart data={report.chartData.cfd} />
+                      )}
+                    </>
+                  )}
+
+                  {/* User Performance Report Charts */}
+                  {selectedType === 'user_performance' && (
+                    <>
+                      {/* Radar Metrics */}
+                      {report.chartData.radar && (
+                        <RadarMetricChart data={report.chartData.radar} />
+                      )}
+
+                      {/* Two-column layout for Cycle Time & Throughput */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
+                          <ScatterCycleChart data={report.chartData.cycleTime} />
+                        )}
+                        {report.chartData.throughput && (
+                          <ThroughputChart data={report.chartData.throughput} />
+                        )}
+                      </div>
+
+                      {/* Investment Profile */}
+                      {report.chartData.investment && (
+                        <InvestmentProfileChart data={report.chartData.investment} />
+                      )}
+                    </>
+                  )}
+
+                  {/* Bottleneck Prediction Report Charts */}
+                  {selectedType === 'bottleneck_prediction' && (
+                    <>
+                      {/* CFD Area Chart */}
+                      {report.chartData.cfd && (
+                        <CFDAreaChart data={report.chartData.cfd} />
+                      )}
+
+                      {/* Two-column layout for Cycle Time & Investment */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
+                          <ScatterCycleChart data={report.chartData.cycleTime} />
+                        )}
+                        {report.chartData.investment && (
+                          <InvestmentProfileChart data={report.chartData.investment} />
+                        )}
+                      </div>
+
+                      {/* DORA Metrics Panel */}
+                      {report.chartData.dora && (
+                        <DoraMetricsPanel data={report.chartData.dora} />
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Sections */}
               {report.sections?.map((section, index) => (
@@ -377,30 +620,49 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Powered by Aether AI - Reports are generated based on your organization's data
               </p>
-              <button
-                onClick={handleGenerateReport}
-                disabled={!selectedType || loading}
-                className={`
-                  flex items-center gap-2 px-6 py-3 rounded-xl font-semibold
-                  transition-all duration-300
-                  ${selectedType && !loading
-                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.02]'
-                    : 'bg-gray-200 dark:bg-zinc-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  }
-                `}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5" />
-                    Generate Report
-                  </>
+              <div className="flex items-center gap-3">
+                {hasExistingReport() && (
+                  <button
+                    onClick={() => handleGenerateReport(true)}
+                    disabled={!selectedType || loading}
+                    className={`
+                      flex items-center gap-2 px-4 py-3 rounded-xl font-medium text-sm
+                      transition-all duration-300
+                      ${selectedType && !loading
+                        ? 'bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-zinc-600'
+                        : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                      }
+                    `}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Regenerate
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={() => handleGenerateReport(false)}
+                  disabled={!selectedType || loading}
+                  className={`
+                    flex items-center gap-2 px-6 py-3 rounded-xl font-semibold
+                    transition-all duration-300
+                    ${selectedType && !loading
+                      ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.02]'
+                      : 'bg-gray-200 dark:bg-zinc-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                    }
+                  `}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      {hasExistingReport() ? 'View Existing Report' : 'Generate Report'}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

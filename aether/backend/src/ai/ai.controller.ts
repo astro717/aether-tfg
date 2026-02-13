@@ -127,10 +127,18 @@ export class AiController {
    *   - type: 'weekly_organization' | 'user_performance' | 'bottleneck_prediction'
    *   - organizationId: UUID of the organization
    *   - userId?: Optional user ID for user_performance reports
+   *   - period: Period identifier (e.g., 'YYYY-W##' for weeks, 'YYYY-MM-DD:YYYY-MM-DD' for ranges)
+   *   - forceRegenerate?: Force new report generation, bypassing cache
    */
   @Post('manager-report')
   async generateManagerReport(
-    @Body() body: { type: string; organizationId: string; userId?: string },
+    @Body() body: {
+      type: string;
+      organizationId: string;
+      userId?: string;
+      period: string;
+      forceRegenerate?: boolean;
+    },
     @CurrentUser() user: users,
   ) {
     return this.aiService.generateManagerReport(
@@ -138,6 +146,71 @@ export class AiController {
       body.organizationId,
       body.userId,
       user,
+      body.period,
+      body.forceRegenerate || false,
     );
+  }
+
+  /**
+   * Check availability of existing manager reports
+   * GET /ai/manager-report/availability
+   *
+   * Query params:
+   *   - organizationId: UUID of the organization
+   *   - period: Period identifier
+   */
+  @Get('manager-report/availability')
+  async checkManagerReportAvailability(
+    @Query('organizationId') organizationId: string,
+    @Query('period') period: string,
+    @CurrentUser() user: users,
+  ) {
+    // Verify user is manager in this organization
+    const userOrg = await this.aiService['prisma'].user_organizations.findUnique({
+      where: {
+        user_id_organization_id: {
+          user_id: user.id,
+          organization_id: organizationId,
+        },
+      },
+    });
+
+    const role = userOrg?.role_in_org;
+    if (!userOrg || (role !== 'admin' && role !== 'manager')) {
+      return { available: [] };
+    }
+
+    // Find all existing reports for this org and period
+    const reports = await this.aiService['prisma'].ai_reports.findMany({
+      where: {
+        organization_id: organizationId,
+        type: {
+          startsWith: 'manager_',
+        },
+      },
+      select: {
+        type: true,
+        metadata: true,
+        created_at: true,
+      },
+    });
+
+    // Filter by period and format response
+    const available = reports
+      .filter(r => {
+        if (!r.metadata || !r.type) return false;
+        const metadata = r.metadata as { period?: string; target_user_id?: string };
+        return metadata.period === period;
+      })
+      .map(r => {
+        const metadata = r.metadata as { period?: string; target_user_id?: string };
+        return {
+          type: r.type!.replace('manager_', ''),
+          userId: metadata.target_user_id || null,
+          createdAt: r.created_at,
+        };
+      });
+
+    return { available };
   }
 }

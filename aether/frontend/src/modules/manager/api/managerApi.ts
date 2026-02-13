@@ -55,6 +55,8 @@ export interface AIReportRequest {
   type: 'weekly_organization' | 'user_performance' | 'bottleneck_prediction';
   userId?: string;
   organizationId: string;
+  period: string; // Format: 'YYYY-W##' for weeks or 'YYYY-MM-DD:YYYY-MM-DD' for ranges
+  forceRegenerate?: boolean;
 }
 
 export interface AIReport {
@@ -65,6 +67,47 @@ export interface AIReport {
   sections: Array<{ title: string; content: string }>;
   created_at: string;
   cached: boolean;
+  timestamp?: Date;
+  chartData?: {
+    investment?: {
+      labels: string[];
+      datasets: Array<{ label: string; data: number[]; color: string }>;
+    };
+    dora?: {
+      deploymentFrequency: number;
+      leadTimeAvg: number;
+      sparklineData: number[];
+    };
+    cfd?: {
+      dates: string[];
+      todo: number[];
+      in_progress: number[];
+      pending_validation: number[];
+      done: number[];
+    };
+    radar?: {
+      user: string;
+      metrics: {
+        reviewSpeed: number;
+        codeQuality: number;
+        collaboration: number;
+        throughput: number;
+        consistency: number;
+      };
+    };
+    cycleTime?: Array<{ date: string; days: number; taskTitle: string }>;
+    throughput?: {
+      weeks: string[];
+      completed: number[];
+      movingAverage: number[];
+    };
+  };
+}
+
+export interface ReportAvailability {
+  type: string;
+  userId: string | null;
+  createdAt: Date;
 }
 
 class ManagerApi {
@@ -154,6 +197,18 @@ class ManagerApi {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || 'Failed to fetch team members');
+    }
+    return response.json();
+  }
+
+  async checkReportAvailability(organizationId: string, period: string): Promise<{ available: ReportAvailability[] }> {
+    const response = await fetch(
+      `${API_BASE_URL}/ai/manager-report/availability?organizationId=${organizationId}&period=${period}`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to check report availability');
     }
     return response.json();
   }

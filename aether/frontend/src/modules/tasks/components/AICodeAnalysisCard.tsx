@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock, GitCommit } from "lucide-react";
+import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock, GitCommit, Download } from "lucide-react";
 import { tasksApi, type CodeAnalysisResult } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
 import { useSettings } from "../../settings/context/SettingsContext";
+import { generateCodeAnalysisPDF } from "../../../utils/pdfGenerator";
 
 interface AICodeAnalysisCardProps {
     taskId?: string;
@@ -220,7 +221,7 @@ export function AICodeAnalysisCard({ commitSha, className = "" }: AICodeAnalysis
                             {analysis.summary}
                         </p>
 
-                        {/* Footer with timestamp, commit SHA, and regenerate */}
+                        {/* Footer with timestamp, commit SHA, and actions */}
                         <div className="mt-3 pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
@@ -233,12 +234,21 @@ export function AICodeAnalysisCard({ commitSha, className = "" }: AICodeAnalysis
                                     {commitSha.substring(0, 7)}
                                 </span>
                             </div>
-                            <button
-                                onClick={handleRegenerateClick}
-                                className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
-                            >
-                                Re-scan
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => generateCodeAnalysisPDF(analysis, commitSha)}
+                                    className="text-[10px] text-amber-500 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors flex items-center gap-1"
+                                >
+                                    <Download size={10} />
+                                    PDF
+                                </button>
+                                <button
+                                    onClick={handleRegenerateClick}
+                                    className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                                >
+                                    Re-scan
+                                </button>
+                            </div>
                         </div>
                     </motion.div>
                 )}
@@ -376,9 +386,18 @@ function AnalysisModal({ isOpen, onClose, analysis, commitSha }: { isOpen: boole
                                     <span className="ml-1 text-[10px] text-amber-500">(cached)</span>
                                 )}
                             </span>
-                            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700 hover:text-gray-900 dark:hover:text-white transition-colors">
-                                Close
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => generateCodeAnalysisPDF(analysis, commitSha)}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl shadow-sm hover:from-amber-600 hover:to-orange-600 transition-all"
+                                >
+                                    <Download size={14} />
+                                    Download PDF
+                                </button>
+                                <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700 hover:text-gray-900 dark:hover:text-white transition-colors">
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </motion.div>
                 </div>
