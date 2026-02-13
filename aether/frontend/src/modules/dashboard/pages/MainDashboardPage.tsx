@@ -5,11 +5,9 @@ import { OrganizationView } from "../components/OrganizationView";
 import { PersonalView } from "../components/PersonalView";
 import { OrganizationSwitcher } from "../../organization/components/OrganizationSwitcher";
 import { CreateTaskModal } from "../../tasks/components/CreateTaskModal";
-import { useAuth } from "../../auth/context/AuthContext";
 import { useOrganization } from "../../organization/context/OrganizationContext";
 
 export function MainDashboardPage() {
-    const { user } = useAuth();
     const [view, setView] = useState<"personal" | "org">("org");
     const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
 

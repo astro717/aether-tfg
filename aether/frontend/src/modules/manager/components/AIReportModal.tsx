@@ -123,6 +123,49 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+
+  const formatBoldText = (text: string) => {
+    if (!text) return null;
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return (
+          <strong key={index} className="font-bold text-gray-900 dark:text-white">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
+      return part;
+    });
+  };
+
+  const formatReportContent = (text: string) => {
+    if (!text) return null;
+    // Split by numbered list items (e.g. "1. ", "2. ")
+    // We use a lookahead to keep the number with the item
+    const parts = text.split(/(?=\b\d+\.\s)/g);
+
+    // If no numbering found or just one part, render normally with bold formatting
+    if (parts.length <= 1) {
+      return formatBoldText(text);
+    }
+
+    return (
+      <div className="space-y-3">
+        {parts.map((part, index) => {
+          const trimmedPart = part.trim();
+          if (!trimmedPart) return null;
+
+          return (
+            <div key={index} className={trimmedPart.match(/^\d+\.\s/) ? "pl-2" : ""}>
+              {formatBoldText(trimmedPart)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (!isVisible) return null;
 
   return (
@@ -303,9 +346,9 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                   Executive Summary
                 </h4>
-                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {report.summary}
-                </p>
+                <div className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {formatReportContent(report.summary)}
+                </div>
               </div>
 
               {/* Sections */}
@@ -318,9 +361,9 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                     <ChevronRight className="w-4 h-4 text-blue-500" />
                     {section.title}
                   </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                    {section.content}
-                  </p>
+                  <div className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                    {formatReportContent(section.content)}
+                  </div>
                 </div>
               ))}
             </div>

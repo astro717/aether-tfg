@@ -103,7 +103,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
         </div>
         <p className="text-gray-600 dark:text-gray-400">{error}</p>
         <button
-          onClick={fetchAnalytics}
+          onClick={() => fetchAnalytics()}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
@@ -137,7 +137,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
                 key={option.value}
                 onClick={() => handlePeriodChange(option.value)}
                 className={`
-                  px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200
+                  px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200
                   ${selectedPeriod === option.value
                     ? 'bg-blue-500 text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-700'

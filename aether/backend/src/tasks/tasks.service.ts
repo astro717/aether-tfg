@@ -913,8 +913,7 @@ export class TasksService {
     // Calculate completion rate
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    // Calculate overdue tasks
-    const now = new Date();
+    // Calculate overdue tasks (reuse 'now' from above)
     const overdueTasks = allTasks.filter(t =>
       t.due_date && new Date(t.due_date) < now && t.status !== 'done'
     ).length;

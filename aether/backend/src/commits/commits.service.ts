@@ -128,9 +128,13 @@ export class CommitsService {
     // Author can edit their own commits, managers can edit all
     if (commit.author_login !== user.username) {
       // Retrieve repo to check org
-      const repo = await this.prisma.repos.findUnique({ where: { id: commit.repo_id } });
-      if (repo?.organization_id) {
-        await this.organizationsService.checkAccess(user, repo.organization_id, ['admin', 'manager']);
+      if (commit.repo_id) {
+        const repo = await this.prisma.repos.findUnique({ where: { id: commit.repo_id } });
+        if (repo?.organization_id) {
+          await this.organizationsService.checkAccess(user, repo.organization_id, ['admin', 'manager']);
+        } else {
+          if (user.role !== 'manager') throw new ForbiddenException('You cannot edit this commit');
+        }
       } else {
         if (user.role !== 'manager') throw new ForbiddenException('You cannot edit this commit');
       }
@@ -146,9 +150,13 @@ export class CommitsService {
     const commit = await this.prisma.commits.findUnique({ where: { sha } });
     if (!commit) throw new NotFoundException('Commit not found');
 
-    const repo = await this.prisma.repos.findUnique({ where: { id: commit.repo_id } });
-    if (repo?.organization_id) {
-      await this.organizationsService.checkAccess(user, repo.organization_id, ['admin', 'manager']);
+    if (commit.repo_id) {
+      const repo = await this.prisma.repos.findUnique({ where: { id: commit.repo_id } });
+      if (repo?.organization_id) {
+        await this.organizationsService.checkAccess(user, repo.organization_id, ['admin', 'manager']);
+      } else {
+        if (user.role !== 'manager') throw new ForbiddenException('Only managers can delete commits');
+      }
     } else {
       if (user.role !== 'manager') throw new ForbiddenException('Only managers can delete commits');
     }
