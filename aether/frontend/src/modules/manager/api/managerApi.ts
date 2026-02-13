@@ -69,22 +69,60 @@ export interface AIReport {
   cached: boolean;
   timestamp?: Date;
   chartData?: {
+    // The Pulse - KPI Cards with Sparklines
+    pulse?: {
+      velocityStability: {
+        value: number;
+        sparkline: number[];
+      };
+      cycleTime: {
+        value: number;
+        sparkline: number[];
+      };
+      reviewEfficiency: {
+        value: number;
+        sparkline: number[];
+      };
+      riskScore: {
+        value: number;
+        sparkline: number[];
+      };
+    };
+    // Investment Distribution
     investment?: {
       labels: string[];
       datasets: Array<{ label: string; data: number[]; color: string }>;
     };
+    // DORA Metrics (Legacy - keeping for backward compatibility)
     dora?: {
       deploymentFrequency: number;
       leadTimeAvg: number;
+      velocityStability: number;
       sparklineData: number[];
+      cycleTimeSparkline: number[];
+      reviewEfficiencySparkline: number[];
     };
-    cfd?: {
-      dates: string[];
-      todo: number[];
-      in_progress: number[];
-      pending_validation: number[];
-      done: number[];
+    // Smooth CFD (Updated format)
+    cfd?: Array<{
+      date: string;
+      done: number;
+      review: number;
+      in_progress: number;
+      todo: number;
+    }>;
+    // Workload Heatmap
+    heatmap?: {
+      users: string[];
+      days: string[];
+      data: number[][];
     };
+    // Predictive Burndown with Uncertainty Cone
+    burndown?: {
+      real: Array<{ day: number; tasks: number }>;
+      ideal: Array<{ day: number; tasks: number }>;
+      projection: Array<{ day: number; optimistic: number; pessimistic: number }>;
+    };
+    // Radar Metrics (User Performance)
     radar?: {
       user: string;
       metrics: {
@@ -95,7 +133,9 @@ export interface AIReport {
         consistency: number;
       };
     };
+    // Cycle Time Scatter
     cycleTime?: Array<{ date: string; days: number; taskTitle: string }>;
+    // Throughput Trend
     throughput?: {
       weeks: string[];
       completed: number[];

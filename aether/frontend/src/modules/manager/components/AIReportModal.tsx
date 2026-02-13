@@ -20,12 +20,16 @@ import { managerApi, type AIReport, type AIReportRequest, type ReportAvailabilit
 import { generateManagerReportPDF } from '../../../utils/pdfGenerator';
 import {
   RadarMetricChart,
-  CFDAreaChart,
   ScatterCycleChart,
-  InvestmentProfileChart,
-  DoraMetricsPanel,
   ThroughputChart,
 } from '../../../components/charts';
+import {
+  SparklineCard,
+  SmoothCFDChart,
+  InvestmentSunburst,
+  WorkloadHeatmap,
+  PredictiveBurndownChart,
+} from './charts';
 
 interface AIReportModalProps {
   isOpen: boolean;
@@ -520,24 +524,78 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                   {/* Weekly Organization Report Charts */}
                   {selectedType === 'weekly_organization' && (
                     <>
-                      {/* DORA Metrics Panel */}
-                      {report.chartData.dora && (
-                        <DoraMetricsPanel data={report.chartData.dora} />
+                      {/* The Pulse - KPI Cards with Sparklines */}
+                      {report.chartData.pulse && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <SparklineCard
+                            title="Velocity Stability"
+                            value={report.chartData.pulse.velocityStability.value}
+                            unit="%"
+                            sparklineData={report.chartData.pulse.velocityStability.sparkline}
+                            color="blue"
+                            subtitle="SD/Variance"
+                          />
+                          <SparklineCard
+                            title="Cycle Time"
+                            value={report.chartData.pulse.cycleTime.value}
+                            unit="days"
+                            sparklineData={report.chartData.pulse.cycleTime.sparkline}
+                            color="green"
+                            subtitle="Avg In Progress → Done"
+                          />
+                          <SparklineCard
+                            title="Review Efficiency"
+                            value={report.chartData.pulse.reviewEfficiency.value}
+                            unit="hrs"
+                            sparklineData={report.chartData.pulse.reviewEfficiency.sparkline}
+                            color="amber"
+                            subtitle="Time in Review"
+                          />
+                          <SparklineCard
+                            title="AI Risk Score"
+                            value={report.chartData.pulse.riskScore.value}
+                            unit="/100"
+                            sparklineData={[]}
+                            color={report.chartData.pulse.riskScore.value > 60 ? 'red' : report.chartData.pulse.riskScore.value > 30 ? 'amber' : 'green'}
+                            subtitle="Probability of delay"
+                          />
+                        </div>
                       )}
 
-                      {/* Two-column layout for Investment & Throughput */}
+                      {/* Smooth CFD Chart */}
+                      {report.chartData.cfd && (
+                        <SmoothCFDChart
+                          data={report.chartData.cfd}
+                          title="Cumulative Flow Diagram"
+                          subtitle="Task flow through stages over time"
+                        />
+                      )}
+
+                      {/* Two-column layout for Investment & Burndown */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {report.chartData.investment && (
-                          <InvestmentProfileChart data={report.chartData.investment} />
+                          <InvestmentSunburst
+                            data={report.chartData.investment}
+                            title="Investment Distribution"
+                            subtitle="Task allocation by category"
+                          />
                         )}
-                        {report.chartData.throughput && (
-                          <ThroughputChart data={report.chartData.throughput} />
+                        {report.chartData.burndown && (
+                          <PredictiveBurndownChart
+                            data={report.chartData.burndown}
+                            title="Predictive Burndown"
+                            subtitle="AI-powered completion forecast"
+                          />
                         )}
                       </div>
 
-                      {/* CFD Area Chart */}
-                      {report.chartData.cfd && (
-                        <CFDAreaChart data={report.chartData.cfd} />
+                      {/* Workload Heatmap */}
+                      {report.chartData.heatmap && (
+                        <WorkloadHeatmap
+                          data={report.chartData.heatmap}
+                          title="Team Workload Heatmap"
+                          subtitle="Activity intensity per team member"
+                        />
                       )}
                     </>
                   )}
@@ -562,7 +620,11 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
 
                       {/* Investment Profile */}
                       {report.chartData.investment && (
-                        <InvestmentProfileChart data={report.chartData.investment} />
+                        <InvestmentSunburst
+                          data={report.chartData.investment}
+                          title="Task Distribution"
+                          subtitle="Individual work allocation"
+                        />
                       )}
                     </>
                   )}
@@ -570,25 +632,84 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                   {/* Bottleneck Prediction Report Charts */}
                   {selectedType === 'bottleneck_prediction' && (
                     <>
-                      {/* CFD Area Chart */}
-                      {report.chartData.cfd && (
-                        <CFDAreaChart data={report.chartData.cfd} />
+                      {/* The Pulse - Risk Indicators */}
+                      {report.chartData.pulse && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <SparklineCard
+                            title="AI Risk Score"
+                            value={report.chartData.pulse.riskScore.value}
+                            unit="/100"
+                            sparklineData={[]}
+                            color={report.chartData.pulse.riskScore.value > 60 ? 'red' : report.chartData.pulse.riskScore.value > 30 ? 'amber' : 'green'}
+                            subtitle="Delay probability"
+                          />
+                          <SparklineCard
+                            title="Cycle Time"
+                            value={report.chartData.pulse.cycleTime.value}
+                            unit="days"
+                            sparklineData={report.chartData.pulse.cycleTime.sparkline}
+                            color="amber"
+                            subtitle="Current throughput"
+                          />
+                          <SparklineCard
+                            title="Review Queue"
+                            value={report.chartData.pulse.reviewEfficiency.value}
+                            unit="hrs"
+                            sparklineData={report.chartData.pulse.reviewEfficiency.sparkline}
+                            color="purple"
+                            subtitle="Avg review time"
+                          />
+                          <SparklineCard
+                            title="Velocity"
+                            value={report.chartData.pulse.velocityStability.value}
+                            unit="%"
+                            sparklineData={report.chartData.pulse.velocityStability.sparkline}
+                            color="blue"
+                            subtitle="Stability score"
+                          />
+                        </div>
                       )}
 
-                      {/* Two-column layout for Cycle Time & Investment */}
+                      {/* Smooth CFD */}
+                      {report.chartData.cfd && (
+                        <SmoothCFDChart
+                          data={report.chartData.cfd}
+                          title="Flow Analysis"
+                          subtitle="Identify bottlenecks in your pipeline"
+                        />
+                      )}
+
+                      {/* Two-column layout for Heatmap & Burndown */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
-                          <ScatterCycleChart data={report.chartData.cycleTime} />
+                        {report.chartData.heatmap && (
+                          <WorkloadHeatmap
+                            data={report.chartData.heatmap}
+                            title="Resource Utilization"
+                            subtitle="Team capacity analysis"
+                          />
                         )}
-                        {report.chartData.investment && (
-                          <InvestmentProfileChart data={report.chartData.investment} />
+                        {report.chartData.burndown && (
+                          <PredictiveBurndownChart
+                            data={report.chartData.burndown}
+                            title="Risk Forecast"
+                            subtitle="Completion probability"
+                          />
                         )}
                       </div>
 
-                      {/* DORA Metrics Panel */}
-                      {report.chartData.dora && (
-                        <DoraMetricsPanel data={report.chartData.dora} />
-                      )}
+                      {/* Investment & Cycle Time */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {report.chartData.investment && (
+                          <InvestmentSunburst
+                            data={report.chartData.investment}
+                            title="Work Distribution"
+                            subtitle="Identify imbalances"
+                          />
+                        )}
+                        {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
+                          <ScatterCycleChart data={report.chartData.cycleTime} />
+                        )}
+                      </div>
                     </>
                   )}
                 </div>

@@ -1199,14 +1199,56 @@ Required JSON structure:
   }
 
   /**
-   * HELPER: Calculate DORA Metrics Lite
+   * HELPER: Calculate AI Risk Score (0-100)
+   * Algorithm: Based on % completion vs time remaining + blockers + overdue
+   * Higher score = Higher risk of delays
+   */
+  private calculateRiskScore(tasks: any[], organizationId: string): number {
+    const now = Date.now();
+
+    // Factor 1: Tasks with due dates approaching or overdue
+    const tasksWithDueDate = tasks.filter(t => t.due_date && t.status !== 'done');
+    const overdueTasks = tasksWithDueDate.filter(t => new Date(t.due_date).getTime() < now);
+    const approachingDeadline = tasksWithDueDate.filter(t => {
+      const daysUntilDue = (new Date(t.due_date).getTime() - now) / (1000 * 60 * 60 * 24);
+      return daysUntilDue > 0 && daysUntilDue <= 7;
+    });
+
+    // Factor 2: WIP (Work In Progress) saturation
+    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const pendingValidation = tasks.filter(t => t.status === 'pending_validation').length;
+    const totalActive = inProgress + pendingValidation;
+    const wipSaturation = Math.min(100, (totalActive / Math.max(tasks.length * 0.3, 1)) * 100);
+
+    // Factor 3: Completion rate
+    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    const completionRate = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 100;
+    const completionRisk = 100 - completionRate;
+
+    // Calculate weighted risk score
+    const overdueWeight = overdueTasks.length * 15; // Each overdue task adds 15 points
+    const approachingWeight = approachingDeadline.length * 8; // Each approaching deadline adds 8 points
+    const wipWeight = wipSaturation * 0.3; // WIP saturation contributes 30%
+    const completionWeight = completionRisk * 0.4; // Completion risk contributes 40%
+
+    const riskScore = Math.min(100, overdueWeight + approachingWeight + wipWeight + completionWeight);
+
+    return Math.round(riskScore);
+  }
+
+  /**
+   * HELPER: Calculate DORA Metrics Lite + Sparklines for Velocity
    * - Deployment Frequency: Commits/PRs merged (approximation)
    * - Lead Time: Average time from creation to done
+   * - Velocity Stability: Standard deviation of weekly completion
    */
   private calculateDoraMetrics(tasks: any[]): {
     deploymentFrequency: number;
     leadTimeAvg: number;
+    velocityStability: number;
     sparklineData: number[];
+    cycleTimeSparkline: number[];
+    reviewEfficiencySparkline: number[];
   } {
     const completedTasks = tasks.filter(t => t.status === 'done');
     const deploymentFrequency = completedTasks.length;
@@ -1225,48 +1267,243 @@ Required JSON structure:
       ? Math.round(leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length)
       : 0;
 
-    // Sparkline: last 10 completed tasks' lead times
-    const sparklineData = leadTimes.slice(-10);
+    // Velocity Stability: Calculate weekly completion variance
+    const weeklyCounts: number[] = [];
+    const now = new Date();
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - (i * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
 
-    return { deploymentFrequency, leadTimeAvg, sparklineData };
+      const weekTasks = completedTasks.filter(t => {
+        if (!t.created_at) return false;
+        const taskDate = new Date(t.created_at);
+        return taskDate >= weekStart && taskDate < weekEnd;
+      });
+      weeklyCounts.push(weekTasks.length);
+    }
+
+    const mean = weeklyCounts.reduce((a, b) => a + b, 0) / weeklyCounts.length;
+    const variance = weeklyCounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / weeklyCounts.length;
+    const stdDev = Math.sqrt(variance);
+    const velocityStability = mean > 0 ? Math.round((1 - stdDev / mean) * 100) : 50; // Higher = more stable
+
+    // Sparklines
+    const sparklineData = weeklyCounts.slice(-10);
+    const cycleTimeSparkline = leadTimes.slice(-10);
+
+    // Review Efficiency: Approximate time in pending_validation
+    const pendingTasks = tasks.filter(t => t.status === 'pending_validation');
+    const reviewEfficiencySparkline = pendingTasks.slice(-10).map(t => {
+      const created = new Date(t.created_at).getTime();
+      const now = Date.now();
+      return (now - created) / (1000 * 60 * 60); // hours
+    });
+
+    return {
+      deploymentFrequency,
+      leadTimeAvg,
+      velocityStability,
+      sparklineData,
+      cycleTimeSparkline,
+      reviewEfficiencySparkline,
+    };
   }
 
   /**
-   * HELPER: Generate Cumulative Flow Diagram Data
-   * Reconstructs historical daily state distribution
+   * HELPER: Generate Smooth Cumulative Flow Diagram Data
+   * Reconstructs historical daily state distribution with CUMULATIVE stacking
+   * Uses monotone interpolation for smooth curves (handled by Recharts)
    * NOTE: This is an approximation based on current data. Ideally needs a task_history table.
    */
-  private generateCFDData(tasks: any[]): {
-    dates: string[];
-    todo: number[];
-    in_progress: number[];
-    pending_validation: number[];
-    done: number[];
-  } {
-    // For V1, we'll create a snapshot based on current status
-    // In production, you'd query task_history for actual historical data
+  private generateSmoothCFD(tasks: any[]): Array<{
+    date: string;
+    done: number;
+    review: number;
+    in_progress: number;
+    todo: number;
+  }> {
     const now = new Date();
-    const dates: string[] = [];
-    const todo: number[] = [];
-    const in_progress: number[] = [];
-    const pending_validation: number[] = [];
-    const done: number[] = [];
+    const data: Array<{ date: string; done: number; review: number; in_progress: number; todo: number }> = [];
 
-    // Generate last 30 days
+    // Generate last 30 days with cumulative stacking
     for (let i = 29; i >= 0; i--) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
-      dates.push(date.toISOString().split('T')[0]);
+      const dateStr = date.toISOString().split('T')[0];
 
-      // Approximate distribution (in real impl, query historical snapshots)
-      const dayFactor = 1 - (i / 30); // Simulate progress over time
-      todo.push(Math.round(tasks.filter(t => t.status === 'todo').length * (1 - dayFactor * 0.5)));
-      in_progress.push(Math.round(tasks.filter(t => t.status === 'in_progress').length * dayFactor));
-      pending_validation.push(Math.round(tasks.filter(t => t.status === 'pending_validation').length * dayFactor));
-      done.push(Math.round(tasks.filter(t => t.status === 'done').length * dayFactor));
+      // Simulate progress over time (dayFactor increases as we approach current day)
+      const dayFactor = 1 - (i / 30);
+
+      // Calculate cumulative values (bottom to top stacking)
+      const doneCount = Math.round(tasks.filter(t => t.status === 'done').length * dayFactor);
+      const reviewCount = Math.round(tasks.filter(t => t.status === 'pending_validation').length * dayFactor);
+      const inProgressCount = Math.round(tasks.filter(t => t.status === 'in_progress').length * dayFactor);
+      const todoCount = Math.round(tasks.filter(t => t.status === 'todo').length * (1 - dayFactor * 0.5));
+
+      data.push({
+        date: dateStr,
+        done: doneCount,
+        review: reviewCount,
+        in_progress: inProgressCount,
+        todo: todoCount,
+      });
     }
 
-    return { dates, todo, in_progress, pending_validation, done };
+    return data;
+  }
+
+  /**
+   * HELPER: Analyze Workload Heatmap (GitHub-style)
+   * Generates a matrix of activity intensity per user per day
+   * @param organizationId - Organization to analyze
+   * @param tasks - Array of tasks
+   */
+  private async analyzeWorkloadHeatmap(organizationId: string, tasks: any[]): Promise<{
+    users: string[];
+    days: string[];
+    data: number[][];
+  }> {
+    // Get all team members
+    const teamMembers = await this.prisma.user_organizations.findMany({
+      where: { organization_id: organizationId },
+      include: {
+        users: {
+          select: { id: true, username: true, github_login: true },
+        },
+      },
+    });
+
+    // Get recent commits for activity tracking
+    const commits = await this.prisma.commits.findMany({
+      where: {
+        repos: {
+          organization_id: organizationId,
+        },
+      },
+      take: 500,
+      orderBy: { committed_at: 'desc' },
+    });
+
+    // Generate last 14 days
+    const now = new Date();
+    const days: string[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      days.push(date.toISOString().split('T')[0]);
+    }
+
+    // Build heatmap matrix
+    const users: string[] = [];
+    const data: number[][] = [];
+
+    for (const member of teamMembers) {
+      if (!member.users) continue;
+
+      users.push(member.users.username);
+      const userActivity: number[] = [];
+
+      for (const day of days) {
+        const dayStart = new Date(day);
+        const dayEnd = new Date(day);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+
+        // Count commits for this user on this day
+        const userCommits = commits.filter(c => {
+          if (!member.users?.github_login || !c.committed_at) return false;
+          const commitDate = new Date(c.committed_at);
+          return (
+            c.author_login === member.users.github_login &&
+            commitDate >= dayStart &&
+            commitDate < dayEnd
+          );
+        });
+
+        // Count task movements (approximation: tasks assigned to this user)
+        const userTasks = tasks.filter(t => {
+          if (t.assignee_id !== member.users?.id) return false;
+          if (!t.created_at) return false;
+          const taskDate = new Date(t.created_at);
+          return taskDate >= dayStart && taskDate < dayEnd;
+        });
+
+        // Activity score: commits + task movements (weighted)
+        const activityScore = userCommits.length * 3 + userTasks.length * 2;
+        userActivity.push(activityScore);
+      }
+
+      data.push(userActivity);
+    }
+
+    return { users, days, data };
+  }
+
+  /**
+   * HELPER: Project Burndown with Uncertainty Cone
+   * Generates predictive burndown chart with optimistic/pessimistic scenarios
+   * @param tasks - Array of tasks to analyze
+   */
+  private projectBurndownCone(tasks: any[]): {
+    real: Array<{ day: number; tasks: number }>;
+    ideal: Array<{ day: number; tasks: number }>;
+    projection: Array<{ day: number; optimistic: number; pessimistic: number }>;
+  } {
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    const remainingTasks = totalTasks - completedTasks;
+
+    // Calculate historical burndown (last 14 days)
+    const now = new Date();
+    const real: Array<{ day: number; tasks: number }> = [];
+
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dayStart = date;
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      // Count tasks not yet completed at that point (approximation)
+      const dayFactor = i / 14;
+      const tasksRemaining = Math.round(remainingTasks + completedTasks * dayFactor);
+
+      real.push({ day: 14 - i, tasks: tasksRemaining });
+    }
+
+    // Calculate ideal burndown (straight line from current to zero)
+    const ideal: Array<{ day: number; tasks: number }> = [];
+    const daysToComplete = 14; // Assume 2-week sprint
+    for (let day = 0; day <= daysToComplete; day++) {
+      const tasksLeft = Math.round(remainingTasks * (1 - day / daysToComplete));
+      ideal.push({ day: 14 + day, tasks: tasksLeft });
+    }
+
+    // Calculate projection cone (optimistic and pessimistic scenarios)
+    const projection: Array<{ day: number; optimistic: number; pessimistic: number }> = [];
+
+    // Calculate velocity (tasks completed per day on average)
+    const avgVelocity = real.length > 1
+      ? (real[0].tasks - real[real.length - 1].tasks) / real.length
+      : 1;
+
+    const optimisticVelocity = avgVelocity * 1.3; // 30% faster
+    const pessimisticVelocity = avgVelocity * 0.7; // 30% slower
+
+    for (let day = 14; day <= 28; day++) {
+      const daysAhead = day - 14;
+      const optimisticRemaining = Math.max(0, remainingTasks - optimisticVelocity * daysAhead);
+      const pessimisticRemaining = Math.max(0, remainingTasks - pessimisticVelocity * daysAhead);
+
+      projection.push({
+        day,
+        optimistic: Math.round(optimisticRemaining),
+        pessimistic: Math.round(pessimisticRemaining),
+      });
+    }
+
+    return { real, ideal, projection };
   }
 
   /**
@@ -1496,15 +1733,41 @@ Required JSON structure:
 
     const chartData: any = {};
 
+    // Calculate Risk Score (used in all report types for "The Pulse")
+    const riskScore = this.calculateRiskScore(tasks, organizationId);
+
+    // Calculate DORA metrics with sparklines (used in most reports)
+    const doraMetrics = this.calculateDoraMetrics(tasks);
+
+    // Build "The Pulse" KPI Cards with sparklines
+    chartData.pulse = {
+      velocityStability: {
+        value: doraMetrics.velocityStability,
+        sparkline: doraMetrics.sparklineData,
+      },
+      cycleTime: {
+        value: doraMetrics.leadTimeAvg,
+        sparkline: doraMetrics.cycleTimeSparkline,
+      },
+      reviewEfficiency: {
+        value: Math.round(doraMetrics.reviewEfficiencySparkline.reduce((a, b) => a + b, 0) / Math.max(doraMetrics.reviewEfficiencySparkline.length, 1)),
+        sparkline: doraMetrics.reviewEfficiencySparkline,
+      },
+      riskScore: {
+        value: riskScore,
+        sparkline: [], // Risk score is a single value, no sparkline
+      },
+    };
+
     // Calculate only the charts needed for each report type
     switch (type) {
       case 'weekly_organization':
         // Weekly reports focus on team metrics and workflow
-        chartData.dora = this.calculateDoraMetrics(tasks);
+        chartData.cfd = this.generateSmoothCFD(tasks);
         chartData.investment = this.calculateInvestmentProfile(tasks);
-        chartData.throughput = this.calculateThroughput(tasks);
-        chartData.cfd = this.generateCFDData(tasks);
-        this.logger.log('Weekly organization charts: DORA, Investment, Throughput, CFD');
+        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks);
+        chartData.burndown = this.projectBurndownCone(tasks);
+        this.logger.log('Weekly organization charts: CFD, Investment, Heatmap, Burndown');
         break;
 
       case 'user_performance':
@@ -1518,21 +1781,23 @@ Required JSON structure:
 
       case 'bottleneck_prediction':
         // Bottleneck reports focus on risk indicators
-        chartData.cfd = this.generateCFDData(tasks);
+        chartData.cfd = this.generateSmoothCFD(tasks);
         chartData.cycleTime = this.calculateCycleTime(tasks);
         chartData.investment = this.calculateInvestmentProfile(tasks);
-        chartData.dora = this.calculateDoraMetrics(tasks);
-        this.logger.log('Bottleneck prediction charts: CFD, CycleTime, Investment, DORA');
+        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks);
+        chartData.burndown = this.projectBurndownCone(tasks);
+        this.logger.log('Bottleneck prediction charts: CFD, CycleTime, Investment, Heatmap, Burndown');
         break;
 
       default:
         this.logger.warn(`Unknown report type: ${type}, calculating all charts as fallback`);
         chartData.investment = this.calculateInvestmentProfile(tasks);
-        chartData.dora = this.calculateDoraMetrics(tasks);
-        chartData.cfd = this.generateCFDData(tasks);
+        chartData.cfd = this.generateSmoothCFD(tasks);
         chartData.radar = await this.calculateRadarMetrics(organizationId);
         chartData.cycleTime = this.calculateCycleTime(tasks);
         chartData.throughput = this.calculateThroughput(tasks);
+        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks);
+        chartData.burndown = this.projectBurndownCone(tasks);
     }
 
     this.logger.log('Chart data calculated successfully');
