@@ -6,6 +6,7 @@ import { useAuth } from "../../modules/auth/context/AuthContext";
 import { useOrganization } from "../../modules/organization/context/OrganizationContext";
 import { tasksApi, type Task } from "../../modules/dashboard/api/tasksApi";
 import { messagingApi, type Conversation } from "../../modules/messaging/api/messagingApi";
+import { managerApi } from "../../modules/manager/api/managerApi";
 import { CreateTaskModal } from "../../modules/tasks/components/CreateTaskModal";
 import { SidebarSearch } from "./SidebarSearch";
 import { NotificationsPopover } from "../../modules/notifications/components/NotificationsPopover";
@@ -51,7 +52,7 @@ function isTaskDismissed(taskId: string): boolean {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
     const { user } = useAuth();
-    const { isManager } = useOrganization();
+    const { isManager, currentOrganization } = useOrganization();
     const navigate = useNavigate();
     const [myTasks, setMyTasks] = useState<Task[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
@@ -77,6 +78,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const [hasDismissedCritical, setHasDismissedCritical] = useState(false);
     const { playNotificationSound } = useNotifications();
 
+    // Manager validation badge state
+    const [pendingValidationCount, setPendingValidationCount] = useState(0);
+
     const fetchMyTasks = useCallback(async (silent = false) => {
         if (!user) {
             setTasksLoading(false);
@@ -86,8 +90,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         try {
             if (!silent) setTasksLoading(true);
             const tasks = await tasksApi.getMyTasks();
-            // Filter to show only active tasks (not done or pending_validation)
-            const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'pending_validation');
+            // Filter to show only active tasks (not done, but including pending_validation)
+            const activeTasks = tasks.filter(t => t.status !== 'done');
             setMyTasks(activeTasks);
 
             // Check for critical tasks (due in < 24h)
@@ -118,6 +122,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     useEffect(() => {
         fetchMyTasks();
     }, [fetchMyTasks]);
+
+    // Fetch pending validation count for managers
+    const fetchPendingValidationCount = useCallback(async (silent = false) => {
+        if (!isManager || !currentOrganization?.id) return;
+
+        try {
+            const pendingTasks = await managerApi.getPendingValidationTasks(currentOrganization.id);
+            setPendingValidationCount(pendingTasks.length);
+        } catch (err) {
+            if (!silent) {
+                console.error('Error fetching pending validation count:', err);
+            }
+        }
+    }, [isManager, currentOrganization?.id]);
+
+    useEffect(() => {
+        if (isManager) {
+            fetchPendingValidationCount();
+        }
+    }, [fetchPendingValidationCount, isManager]);
 
     // Fetch conversations (initial + polling)
     const fetchConversations = useCallback(async (silent = false) => {
@@ -258,6 +282,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                         active={location.pathname === `/tasks/${task.id}`}
                                         hasDot
                                         dotColor={getPriorityDotColor(task.due_date)}
+                                        isPending={task.status === 'pending_validation'}
                                         isCollapsed={isCollapsed}
                                     />
                                 ))
@@ -327,40 +352,64 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                 }
                             `}
                         >
-                            <div className={`
-                                p-1.5 rounded-lg
-                                ${isManagerActive
-                                    ? 'bg-emerald-500/20 dark:bg-emerald-500/30'
-                                    : 'bg-emerald-500/10 dark:bg-emerald-500/20 group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-500/30'
-                                }
-                                transition-colors duration-200
-                            `}>
-                                <Shield
-                                    size={isCollapsed ? 18 : 16}
-                                    className={`
-                                        transition-colors duration-200
-                                        ${isManagerActive
-                                            ? 'text-emerald-600 dark:text-emerald-400'
-                                            : 'text-emerald-600/80 dark:text-emerald-400/80 group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
-                                        }
-                                    `}
-                                />
+                            <div className="relative">
+                                <div className={`
+                                    p-1.5 rounded-lg
+                                    ${isManagerActive
+                                        ? 'bg-emerald-500/20 dark:bg-emerald-500/30'
+                                        : 'bg-emerald-500/10 dark:bg-emerald-500/20 group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-500/30'
+                                    }
+                                    transition-colors duration-200
+                                `}>
+                                    <Shield
+                                        size={isCollapsed ? 18 : 16}
+                                        className={`
+                                            transition-colors duration-200
+                                            ${isManagerActive
+                                                ? 'text-emerald-600 dark:text-emerald-400'
+                                                : 'text-emerald-600/80 dark:text-emerald-400/80 group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
+                                            }
+                                        `}
+                                    />
+                                </div>
+                                {isCollapsed && pendingValidationCount > 0 && (
+                                    <div className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white text-[9px] font-bold border-2 border-[#FCFCFD] dark:border-[#18181B]">
+                                        {pendingValidationCount}
+                                    </div>
+                                )}
                             </div>
                             {!isCollapsed && (
-                                <div className="flex flex-col flex-1 text-left">
-                                    <span className={`
-                                        font-semibold text-sm
-                                        transition-colors duration-200
-                                        ${isManagerActive
-                                            ? 'text-emerald-700 dark:text-emerald-300'
-                                            : 'text-emerald-700/90 dark:text-emerald-300/90 group-hover:text-emerald-700 dark:group-hover:text-emerald-300'
-                                        }
-                                    `}>
-                                        Manager Zone
-                                    </span>
-                                    <span className="text-[10px] text-emerald-600/60 dark:text-emerald-400/60 font-medium">
-                                        Team & Validation
-                                    </span>
+                                <div className="flex items-center flex-1 text-left gap-2">
+                                    <div className="flex flex-col flex-1">
+                                        <span className={`
+                                            font-semibold text-sm
+                                            transition-colors duration-200
+                                            ${isManagerActive
+                                                ? 'text-emerald-700 dark:text-emerald-300'
+                                                : 'text-emerald-700/90 dark:text-emerald-300/90 group-hover:text-emerald-700 dark:group-hover:text-emerald-300'
+                                            }
+                                        `}>
+                                            Manager Zone
+                                        </span>
+                                        <span className="text-[10px] text-emerald-600/60 dark:text-emerald-400/60 font-medium">
+                                            Team & Validation
+                                        </span>
+                                    </div>
+                                    {pendingValidationCount > 0 && (
+                                        <div className={`
+                                            flex items-center justify-center
+                                            min-w-[20px] h-[20px] px-1.5
+                                            rounded-full
+                                            text-[11px] font-bold
+                                            transition-colors duration-200
+                                            ${isManagerActive
+                                                ? 'bg-emerald-600 dark:bg-emerald-500 text-white'
+                                                : 'bg-emerald-500/90 dark:bg-emerald-500/80 text-white group-hover:bg-emerald-600 dark:group-hover:bg-emerald-500'
+                                            }
+                                        `}>
+                                            {pendingValidationCount}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </Link>
@@ -428,6 +477,7 @@ function TaskItem({
     active = false,
     hasDot = false,
     dotColor = "",
+    isPending = false,
     onClick,
     isCollapsed = false,
 }: {
@@ -436,6 +486,7 @@ function TaskItem({
     active?: boolean;
     hasDot?: boolean;
     dotColor?: string;
+    isPending?: boolean;
     onClick?: () => void;
     isCollapsed?: boolean;
 }) {
@@ -448,13 +499,17 @@ function TaskItem({
                 className={`
                     w-full flex items-center justify-center py-3 rounded-xl transition-all
                     ${active ? "bg-[#E6E8EB] dark:bg-zinc-800 shadow-sm" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}
+                    ${isPending ? "opacity-60" : ""}
                 `}
-                title={label}
+                title={`${label}${isPending ? " (Pending Validation)" : ""}`}
             >
                 {hasDot && (
                     <div
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: dotColor }}
+                        className={`w-2.5 h-2.5 rounded-full ${isPending ? "border-2" : ""}`}
+                        style={isPending
+                            ? { borderColor: dotColor, backgroundColor: 'transparent' }
+                            : { backgroundColor: dotColor }
+                        }
                     />
                 )}
             </Link>
@@ -469,13 +524,20 @@ function TaskItem({
             className={`
                 w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all
                 ${active ? "bg-[#E6E8EB] dark:bg-zinc-800 text-gray-900 dark:text-white shadow-sm" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800/50"}
+                ${isPending ? "opacity-60 italic" : ""}
             `}
         >
-            <span className="truncate flex-1 pr-3">{label}</span>
+            <span className="truncate flex-1 pr-3">
+                {label}
+                {isPending && <span className="text-xs ml-2 font-normal">(Pending)</span>}
+            </span>
             {hasDot && (
                 <div
-                    className="w-2 h-2 rounded-full flex-shrink-0 mr-0.5"
-                    style={{ backgroundColor: dotColor }}
+                    className={`w-2 h-2 rounded-full flex-shrink-0 mr-0.5 ${isPending ? "border-2" : ""}`}
+                    style={isPending
+                        ? { borderColor: dotColor, backgroundColor: 'transparent' }
+                        : { backgroundColor: dotColor }
+                    }
                 />
             )}
         </Link>

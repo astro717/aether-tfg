@@ -49,6 +49,41 @@ export interface AnalyticsData {
     assignee: string;
     created_at: string;
   }>;
+  // PREMIUM CHARTS: Enhanced visualizations for Analytics Dashboard
+  premiumCharts?: {
+    // Smooth CFD (Cumulative Flow Diagram)
+    cfd: Array<{
+      date: string;
+      done: number;
+      review: number;
+      in_progress: number;
+      todo: number;
+    }>;
+    // Investment Distribution (Task Classification)
+    investment: {
+      labels: string[];
+      datasets: Array<{ label: string; data: number[]; color: string }>;
+    };
+    // Workload Heatmap (GitHub-style activity matrix)
+    heatmap: {
+      users: string[];
+      days: string[];
+      data: number[][];
+    };
+    // Predictive Burndown with Uncertainty Cone
+    burndown: {
+      real: Array<{ day: number; tasks: number }>;
+      ideal: Array<{ day: number; tasks: number }>;
+      projection: Array<{ day: number; optimistic: number; pessimistic: number }>;
+    };
+    // Sparklines for KPI Cards
+    sparklines: {
+      completionRate: number[];
+      velocity: number[];
+      cycleTime: number[];
+      riskScore: number[];
+    };
+  };
 }
 
 export interface AIReportRequest {

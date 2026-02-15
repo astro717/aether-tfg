@@ -1,25 +1,17 @@
 import { useState, useEffect } from 'react';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   BarChart,
   Bar,
   Legend,
 } from 'recharts';
 import {
-  CheckCircle,
-  Clock,
   Users,
   AlertTriangle,
-  TrendingUp,
   ListTodo,
   ClipboardCheck,
   Loader2,
@@ -29,15 +21,13 @@ import {
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { managerApi, type AnalyticsData } from '../api/managerApi';
 import { StatCard } from './StatCard';
-
-const CHART_COLORS = {
-  primary: '#3b82f6',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  purple: '#8b5cf6',
-  gray: '#6b7280',
-};
+import {
+  SparklineCard,
+  SmoothCFDChart,
+  InvestmentSunburst,
+  WorkloadHeatmap,
+  PredictiveBurndownChart,
+} from './charts';
 
 interface AnalyticsDashboardProps {
   onOpenAIReport: () => void;
@@ -115,10 +105,10 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
 
   if (!analytics) return null;
 
-  const { kpis, velocityData, statusDistribution, individualPerformance } = analytics;
+  const { kpis, velocityData, individualPerformance } = analytics;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header with Period Selector and AI Button */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -167,41 +157,51 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
         </div>
       </div>
 
-      {/* KPI Grid */}
+      {/* Hero KPIs with Sparklines */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Tasks"
-          value={kpis.totalTasks}
-          subtitle={PERIOD_OPTIONS.find(p => p.value === selectedPeriod)?.label || 'All time'}
-          icon={<ListTodo className="w-5 h-5" />}
-          color="blue"
-        />
-        <StatCard
-          title="Completed"
+        <SparklineCard
+          title="Completed Tasks"
           value={kpis.completedTasks}
-          subtitle={`${kpis.completionRate}% completion rate`}
-          icon={<CheckCircle className="w-5 h-5" />}
+          sparklineData={analytics.premiumCharts?.sparklines?.completionRate || []}
           color="green"
           trend={kpis.completionRate >= 70 ? 'up' : kpis.completionRate >= 40 ? 'neutral' : 'down'}
-          trendValue={`${kpis.completionRate}%`}
+          subtitle={`${kpis.completionRate}% completion rate`}
         />
-        <StatCard
-          title="In Progress"
-          value={kpis.inProgressTasks}
-          subtitle="Active work"
-          icon={<Clock className="w-5 h-5" />}
+        <SparklineCard
+          title="Velocity"
+          value={velocityData.length > 0 ? velocityData[velocityData.length - 1].completed : 0}
+          unit="tasks/week"
+          sparklineData={analytics.premiumCharts?.sparklines?.velocity || []}
+          color="blue"
+          subtitle="Weekly throughput"
+        />
+        <SparklineCard
+          title="Cycle Time"
+          value={analytics.premiumCharts?.sparklines?.cycleTime?.[analytics.premiumCharts.sparklines.cycleTime.length - 1]
+            ? Math.round(analytics.premiumCharts.sparklines.cycleTime[analytics.premiumCharts.sparklines.cycleTime.length - 1])
+            : 0}
+          unit="days"
+          sparklineData={analytics.premiumCharts?.sparklines?.cycleTime || []}
           color="amber"
+          subtitle="Time to complete"
         />
-        <StatCard
-          title="Pending Validation"
-          value={kpis.pendingValidation}
-          subtitle="Needs review"
-          icon={<ClipboardCheck className="w-5 h-5" />}
-          color="purple"
+        <SparklineCard
+          title="Risk Score"
+          value={analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0}
+          sparklineData={[]}
+          color={
+            (analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0) > 70 ? 'red' :
+              (analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0) > 40 ? 'amber' : 'green'
+          }
+          trend={
+            (analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0) < 30 ? 'up' :
+              (analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0) < 70 ? 'neutral' : 'down'
+          }
+          subtitle={kpis.overdueTasks > 0 ? `${kpis.overdueTasks} overdue` : 'On track'}
         />
       </div>
 
-      {/* Secondary KPIs */}
+      {/* Supporting KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           title="Team Size"
@@ -218,6 +218,13 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
           color="blue"
         />
         <StatCard
+          title="Pending Validation"
+          value={kpis.pendingValidation}
+          subtitle="Needs review"
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          color="purple"
+        />
+        <StatCard
           title="Overdue"
           value={kpis.overdueTasks}
           subtitle="Needs attention"
@@ -226,104 +233,30 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
           trend={kpis.overdueTasks > 0 ? 'down' : 'up'}
           trendValue={kpis.overdueTasks > 0 ? 'At risk' : 'On track'}
         />
-        <StatCard
-          title="Velocity"
-          value={velocityData.length > 0 ? velocityData[velocityData.length - 1].completed : 0}
-          subtitle="Tasks this week"
-          icon={<TrendingUp className="w-5 h-5" />}
-          color="green"
-        />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Team Velocity Chart */}
-        <div className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-            Team Velocity
-          </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            Tasks completed per week
-          </p>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={velocityData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
-                <XAxis
-                  dataKey="week"
-                  tick={{ fill: '#6b7280', fontSize: 12 }}
-                  axisLine={{ stroke: '#374151', opacity: 0.2 }}
-                />
-                <YAxis
-                  tick={{ fill: '#6b7280', fontSize: 12 }}
-                  axisLine={{ stroke: '#374151', opacity: 0.2 }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(24, 24, 27, 0.9)',
-                    border: 'none',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                  }}
-                  labelStyle={{ color: '#fff' }}
-                  itemStyle={{ color: '#10b981' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="completed"
-                  stroke={CHART_COLORS.success}
-                  strokeWidth={3}
-                  dot={{ fill: CHART_COLORS.success, strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, fill: CHART_COLORS.success }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Status Distribution Chart */}
-        <div className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-            Task Distribution
-          </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            By current status
-          </p>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusDistribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={4}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                  labelLine={{ stroke: '#6b7280', strokeWidth: 1 }}
-                >
-                  {statusDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(24, 24, 27, 0.9)',
-                    border: 'none',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                  }}
-                  labelStyle={{ color: '#fff' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {/* Primary Charts: Flow + Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-[50_50%] gap-6">
+        {analytics.premiumCharts?.cfd && (
+          <SmoothCFDChart data={analytics.premiumCharts.cfd} />
+        )}
+        {analytics.premiumCharts?.investment && (
+          <InvestmentSunburst data={analytics.premiumCharts.investment} />
+        )}
       </div>
 
-      {/* Individual Performance */}
-      <div className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm">
+      {/* Secondary Charts: Heatmap + Burndown */}
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+        {analytics.premiumCharts?.heatmap && (
+          <WorkloadHeatmap data={analytics.premiumCharts.heatmap} />
+        )}
+        {analytics.premiumCharts?.burndown && (
+          <PredictiveBurndownChart data={analytics.premiumCharts.burndown} />
+        )}
+      </div>
+
+      {/* Individual Performance - Enhanced with Gradients */}
+      <div className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md transition-all">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
           Individual Performance
         </h3>
@@ -337,6 +270,16 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
               layout="vertical"
               margin={{ left: 20, right: 20 }}
             >
+              <defs>
+                <linearGradient id="colorCompleted" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.8} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={1} />
+                </linearGradient>
+                <linearGradient id="colorInProgress" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.8} />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity={1} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
               <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 12 }} />
               <YAxis
@@ -358,13 +301,13 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
               <Bar
                 dataKey="completed"
                 name="Completed"
-                fill={CHART_COLORS.success}
+                fill="url(#colorCompleted)"
                 radius={[0, 4, 4, 0]}
               />
               <Bar
                 dataKey="inProgress"
                 name="In Progress"
-                fill={CHART_COLORS.warning}
+                fill="url(#colorInProgress)"
                 radius={[0, 4, 4, 0]}
               />
             </BarChart>

@@ -62,6 +62,7 @@ export class TasksService {
           assignee_id: {
             not: null,
           },
+          is_archived: false,
         },
         select: {
           id: true,
@@ -290,6 +291,7 @@ export class TasksService {
     const pageSize = Math.min(100, Math.max(1, opts?.pageSize ?? 20));
     const where: Prisma.tasksWhereInput = {
       assignee_id: userId,
+      is_archived: false,
       ...(opts?.status ? { status: opts.status } : {}),
       ...(opts?.q
         ? {
@@ -400,7 +402,7 @@ export class TasksService {
     }
 
     // Update task: set validated_by and move status from pending_validation to todo
-    return this.prisma.tasks.update({
+    const updatedTask = await this.prisma.tasks.update({
       where: { id },
       data: {
         validated_by: managerId,
@@ -417,6 +419,21 @@ export class TasksService {
         },
       },
     });
+
+    // Create notification for assignee (if assignee != manager)
+    if (task.assignee_id && task.assignee_id !== managerId) {
+      await this.notificationsService.create({
+        user_id: task.assignee_id,
+        actor_id: managerId,
+        type: 'TASK_VALIDATED',
+        title: 'Task Approved',
+        content: `Your task "${task.title}" has been approved.`,
+        entity_id: task.id,
+        entity_type: 'task',
+      });
+    }
+
+    return updatedTask;
   }
 
   // Reject a task (manager only)
@@ -455,8 +472,8 @@ export class TasksService {
 
   async findAllByRole(user: any) {
     const where = user.role === 'manager'
-      ? {}
-      : { assignee_id: user.id };
+      ? { is_archived: false }
+      : { assignee_id: user.id, is_archived: false };
 
     return this.prisma.tasks.findMany({
       where,
@@ -485,7 +502,7 @@ export class TasksService {
   // Returns only tasks assigned to the user (for sidebar) - regardless of role
   async findMyTasks(userId: string) {
     return this.prisma.tasks.findMany({
-      where: { assignee_id: userId },
+      where: { assignee_id: userId, is_archived: false },
       include: {
         users_tasks_assignee_idTousers: {
           select: {
@@ -535,12 +552,14 @@ export class TasksService {
     // Get tasks that either:
     // 1. Have organization_id matching directly, OR
     // 2. Have a repo that belongs to this organization
+    // 3. Exclude archived tasks by default
     return this.prisma.tasks.findMany({
       where: {
         OR: [
           { organization_id: organizationId },
           { repo_id: { in: repoIds } },
         ],
+        is_archived: false,
       },
       include: {
         users_tasks_assignee_idTousers: {
@@ -602,6 +621,7 @@ export class TasksService {
       where: {
         organization_id: organizationId,
         status: 'pending_validation',
+        is_archived: false,
       },
       include: {
         users_tasks_assignee_idTousers: {
@@ -877,7 +897,7 @@ export class TasksService {
     }
 
     // Build where clause with optional date filter
-    const whereClause: any = { organization_id: organizationId };
+    const whereClause: any = { organization_id: organizationId, is_archived: false };
     if (dateFilter) {
       whereClause.created_at = { gte: dateFilter };
     }
@@ -1004,6 +1024,39 @@ export class TasksService {
         created_at: t.created_at,
       }));
 
+    // PREMIUM ANALYTICS: Calculate enhanced metrics and charts
+    const doraMetrics = this.calculateDoraMetrics(allTasks);
+    const riskScore = this.calculateRiskScore(allTasks, organizationId);
+    const cfdData = this.generateSmoothCFD(allTasks);
+    const investmentData = this.calculateInvestmentProfile(allTasks);
+    const heatmapData = await this.analyzeWorkloadHeatmap(organizationId, allTasks);
+    const burndownData = this.projectBurndownCone(allTasks);
+
+    // Generate sparklines for KPI cards
+    const completionRateSparkline: number[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      const weekCompleted = allTasks.filter(t => {
+        if (t.status !== 'done' || !t.created_at) return false;
+        const createdAt = new Date(t.created_at);
+        return createdAt >= weekStart && createdAt < weekEnd;
+      }).length;
+
+      const weekTotal = allTasks.filter(t => {
+        if (!t.created_at) return false;
+        const createdAt = new Date(t.created_at);
+        return createdAt >= weekStart && createdAt < weekEnd;
+      }).length;
+
+      const weekRate = weekTotal > 0 ? Math.round((weekCompleted / weekTotal) * 100) : 0;
+      completionRateSparkline.push(weekRate);
+    }
+
     return {
       kpis: {
         totalTasks,
@@ -1020,7 +1073,448 @@ export class TasksService {
       individualPerformance,
       healthData,
       recentTasks,
+      // PREMIUM CHARTS: Enhanced visualizations
+      premiumCharts: {
+        cfd: cfdData,
+        investment: investmentData,
+        heatmap: heatmapData,
+        burndown: burndownData,
+        sparklines: {
+          completionRate: completionRateSparkline,
+          velocity: doraMetrics.sparklineData,
+          cycleTime: doraMetrics.cycleTimeSparkline,
+          riskScore: [riskScore], // Single value for now, could add historical tracking
+        },
+      },
     };
+  }
+
+  /**
+   * PREMIUM ANALYTICS HELPERS
+   * Methods below are used to generate premium chart data for Analytics Dashboard
+   * Copied and adapted from ai.service.ts for reusability
+   */
+
+  /**
+   * HELPER: Calculate Investment Profile (Task Classification)
+   * Classifies tasks into Features, Bugs, and Chores based on title/description
+   */
+  private calculateInvestmentProfile(tasks: any[], userId?: string): {
+    labels: string[];
+    datasets: Array<{ label: string; data: number[]; color: string }>;
+  } {
+    // Filter tasks by user if userId is provided
+    const filteredTasks = userId
+      ? tasks.filter(t => t.assignee_id === userId)
+      : tasks;
+
+    const categories = { features: 0, bugs: 0, chores: 0 };
+
+    for (const task of filteredTasks) {
+      const text = `${task.title} ${task.description || ''}`.toLowerCase();
+      if (text.match(/\b(fix|bug|issue|error|defect)\b/)) {
+        categories.bugs++;
+      } else if (text.match(/\b(feat|feature|add|new|implement|create)\b/)) {
+        categories.features++;
+      } else {
+        categories.chores++;
+      }
+    }
+
+    const total = filteredTasks.length || 1;
+    return {
+      labels: ['Features', 'Bugs', 'Chores'],
+      datasets: [
+        {
+          label: 'Task Distribution',
+          data: [
+            Math.round((categories.features / total) * 100),
+            Math.round((categories.bugs / total) * 100),
+            Math.round((categories.chores / total) * 100),
+          ],
+          color: '#8b5cf6', // Purple
+        },
+      ],
+    };
+  }
+
+  /**
+   * HELPER: Calculate AI Risk Score (0-100)
+   * Algorithm: Based on % completion vs time remaining + blockers + overdue
+   * Higher score = Higher risk of delays
+   */
+  private calculateRiskScore(tasks: any[], organizationId: string): number {
+    const now = Date.now();
+
+    // Factor 1: Tasks with due dates approaching or overdue
+    const tasksWithDueDate = tasks.filter(t => t.due_date && t.status !== 'done');
+    const overdueTasks = tasksWithDueDate.filter(t => new Date(t.due_date).getTime() < now);
+    const approachingDeadline = tasksWithDueDate.filter(t => {
+      const daysUntilDue = (new Date(t.due_date).getTime() - now) / (1000 * 60 * 60 * 24);
+      return daysUntilDue > 0 && daysUntilDue <= 7;
+    });
+
+    // Factor 2: WIP (Work In Progress) saturation
+    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const pendingValidation = tasks.filter(t => t.status === 'pending_validation').length;
+    const totalActive = inProgress + pendingValidation;
+    const wipSaturation = Math.min(100, (totalActive / Math.max(tasks.length * 0.3, 1)) * 100);
+
+    // Factor 3: Completion rate
+    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    const completionRate = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 100;
+    const completionRisk = 100 - completionRate;
+
+    // Calculate weighted risk score
+    const overdueWeight = overdueTasks.length * 15; // Each overdue task adds 15 points
+    const approachingWeight = approachingDeadline.length * 8; // Each approaching deadline adds 8 points
+    const wipWeight = wipSaturation * 0.3; // WIP saturation contributes 30%
+    const completionWeight = completionRisk * 0.4; // Completion risk contributes 40%
+
+    const riskScore = Math.min(100, overdueWeight + approachingWeight + wipWeight + completionWeight);
+
+    return Math.round(riskScore);
+  }
+
+  /**
+   * HELPER: Calculate DORA Metrics Lite + Sparklines for Velocity
+   * - Deployment Frequency: Commits/PRs merged (approximation)
+   * - Lead Time: Average time from creation to done
+   * - Velocity Stability: Standard deviation of weekly completion
+   */
+  private calculateDoraMetrics(tasks: any[]): {
+    deploymentFrequency: number;
+    leadTimeAvg: number;
+    velocityStability: number;
+    sparklineData: number[];
+    cycleTimeSparkline: number[];
+    reviewEfficiencySparkline: number[];
+  } {
+    const completedTasks = tasks.filter(t => t.status === 'done');
+    const deploymentFrequency = completedTasks.length;
+
+    // Calculate lead time (days from created_at to when status became 'done')
+    const leadTimes = completedTasks
+      .filter(t => t.created_at)
+      .map(t => {
+        // Approximation: use created_at to now (ideally we'd track status change timestamps)
+        const created = new Date(t.created_at).getTime();
+        const now = Date.now();
+        return (now - created) / (1000 * 60 * 60 * 24); // days
+      });
+
+    const leadTimeAvg = leadTimes.length > 0
+      ? Math.round(leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length)
+      : 0;
+
+    // Velocity Stability: Calculate weekly completion variance
+    const weeklyCounts: number[] = [];
+    const now = new Date();
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - (i * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      const weekTasks = completedTasks.filter(t => {
+        if (!t.created_at) return false;
+        const taskDate = new Date(t.created_at);
+        return taskDate >= weekStart && taskDate < weekEnd;
+      });
+      weeklyCounts.push(weekTasks.length);
+    }
+
+    const mean = weeklyCounts.reduce((a, b) => a + b, 0) / weeklyCounts.length;
+    const variance = weeklyCounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / weeklyCounts.length;
+    const stdDev = Math.sqrt(variance);
+    const velocityStability = mean > 0 ? Math.round((1 - stdDev / mean) * 100) : 50; // Higher = more stable
+
+    // Sparklines
+    const sparklineData = weeklyCounts.slice(-10);
+    const cycleTimeSparkline = leadTimes.slice(-10);
+
+    // Review Efficiency: Approximate time in pending_validation
+    const pendingTasks = tasks.filter(t => t.status === 'pending_validation');
+    const reviewEfficiencySparkline = pendingTasks.slice(-10).map(t => {
+      const created = new Date(t.created_at).getTime();
+      const now = Date.now();
+      return (now - created) / (1000 * 60 * 60); // hours
+    });
+
+    return {
+      deploymentFrequency,
+      leadTimeAvg,
+      velocityStability,
+      sparklineData,
+      cycleTimeSparkline,
+      reviewEfficiencySparkline,
+    };
+  }
+
+  /**
+   * HELPER: Generate Smooth Cumulative Flow Diagram Data
+   * Reconstructs historical daily state distribution with CUMULATIVE stacking
+   * Uses monotone interpolation for smooth curves (handled by Recharts)
+   * NOTE: This is an approximation based on current data. Ideally needs a task_history table.
+   */
+  private generateSmoothCFD(tasks: any[]): Array<{
+    date: string;
+    done: number;
+    review: number;
+    in_progress: number;
+    todo: number;
+  }> {
+    const now = new Date();
+    const data: Array<{ date: string; done: number; review: number; in_progress: number; todo: number }> = [];
+
+    // Generate last 30 days with cumulative stacking
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      // Simulate progress over time (dayFactor increases as we approach current day)
+      const dayFactor = 1 - (i / 30);
+
+      // Calculate cumulative values (bottom to top stacking)
+      const doneCount = Math.round(tasks.filter(t => t.status === 'done').length * dayFactor);
+      const reviewCount = Math.round(tasks.filter(t => t.status === 'pending_validation').length * dayFactor);
+      const inProgressCount = Math.round(tasks.filter(t => t.status === 'in_progress').length * dayFactor);
+      const todoCount = Math.round(tasks.filter(t => t.status === 'todo').length * (1 - dayFactor * 0.5));
+
+      data.push({
+        date: dateStr,
+        done: doneCount,
+        review: reviewCount,
+        in_progress: inProgressCount,
+        todo: todoCount,
+      });
+    }
+
+    return data;
+  }
+
+  /**
+   * HELPER: Analyze Workload Heatmap (GitHub-style)
+   * Generates a matrix of activity intensity per user per day
+   * @param organizationId - Organization to analyze
+   * @param tasks - Array of tasks
+   */
+  private async analyzeWorkloadHeatmap(organizationId: string, tasks: any[]): Promise<{
+    users: string[];
+    days: string[];
+    data: number[][];
+  }> {
+    // Get all team members
+    const teamMembers = await this.prisma.user_organizations.findMany({
+      where: { organization_id: organizationId },
+      include: {
+        users: {
+          select: { id: true, username: true, github_login: true },
+        },
+      },
+    });
+
+    // Get recent commits for activity tracking
+    const commits = await this.prisma.commits.findMany({
+      where: {
+        repos: {
+          organization_id: organizationId,
+        },
+      },
+      take: 500,
+      orderBy: { committed_at: 'desc' },
+    });
+
+    // Generate last 14 days
+    const now = new Date();
+    const days: string[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      days.push(date.toISOString().split('T')[0]);
+    }
+
+    // Build heatmap matrix
+    const users: string[] = [];
+    const data: number[][] = [];
+
+    for (const member of teamMembers) {
+      if (!member.users) continue;
+
+      users.push(member.users.username);
+      const userActivity: number[] = [];
+
+      for (const day of days) {
+        const dayStart = new Date(day);
+        const dayEnd = new Date(day);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+
+        // Count commits for this user on this day
+        const userCommits = commits.filter(c => {
+          if (!member.users?.github_login || !c.committed_at) return false;
+          const commitDate = new Date(c.committed_at);
+          return (
+            c.author_login === member.users.github_login &&
+            commitDate >= dayStart &&
+            commitDate < dayEnd
+          );
+        });
+
+        // Count task movements (approximation: tasks assigned to this user)
+        const userTasks = tasks.filter(t => {
+          if (t.assignee_id !== member.users?.id) return false;
+          if (!t.created_at) return false;
+          const taskDate = new Date(t.created_at);
+          return taskDate >= dayStart && taskDate < dayEnd;
+        });
+
+        // Activity score: commits + task movements (weighted)
+        const activityScore = userCommits.length * 3 + userTasks.length * 2;
+        userActivity.push(activityScore);
+      }
+
+      data.push(userActivity);
+    }
+
+    return { users, days, data };
+  }
+
+  /**
+   * HELPER: Project Burndown with Uncertainty Cone
+   * Generates predictive burndown chart with optimistic/pessimistic scenarios
+   * @param tasks - Array of tasks to analyze
+   */
+  private projectBurndownCone(tasks: any[]): {
+    real: Array<{ day: number; tasks: number }>;
+    ideal: Array<{ day: number; tasks: number }>;
+    projection: Array<{ day: number; optimistic: number; pessimistic: number }>;
+  } {
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    const remainingTasks = totalTasks - completedTasks;
+
+    // Calculate historical burndown (last 14 days)
+    const now = new Date();
+    const real: Array<{ day: number; tasks: number }> = [];
+
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dayStart = date;
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      // Count tasks not yet completed at that point (approximation)
+      const dayFactor = i / 14;
+      const tasksRemaining = Math.round(remainingTasks + completedTasks * dayFactor);
+
+      real.push({ day: 14 - i, tasks: tasksRemaining });
+    }
+
+    // Calculate ideal burndown (straight line from current to zero)
+    const ideal: Array<{ day: number; tasks: number }> = [];
+    const daysToComplete = 14; // Assume 2-week sprint
+    for (let day = 0; day <= daysToComplete; day++) {
+      const tasksLeft = Math.round(remainingTasks * (1 - day / daysToComplete));
+      ideal.push({ day: 14 + day, tasks: tasksLeft });
+    }
+
+    // Calculate projection cone (optimistic and pessimistic scenarios)
+    const projection: Array<{ day: number; optimistic: number; pessimistic: number }> = [];
+
+    // Calculate velocity (tasks completed per day on average)
+    const avgVelocity = real.length > 1
+      ? (real[0].tasks - real[real.length - 1].tasks) / real.length
+      : 1;
+
+    const optimisticVelocity = avgVelocity * 1.3; // 30% faster
+    const pessimisticVelocity = avgVelocity * 0.7; // 30% slower
+
+    for (let day = 14; day <= 28; day++) {
+      const daysAhead = day - 14;
+      const optimisticRemaining = Math.max(0, remainingTasks - optimisticVelocity * daysAhead);
+      const pessimisticRemaining = Math.max(0, remainingTasks - pessimisticVelocity * daysAhead);
+
+      projection.push({
+        day,
+        optimistic: Math.round(optimisticRemaining),
+        pessimistic: Math.round(pessimisticRemaining),
+      });
+    }
+
+    return { real, ideal, projection };
+  }
+
+  /**
+   * Archive a single task (soft delete)
+   * Only managers or the task assignee can archive a task
+   */
+  async archiveTask(taskId: string, userId: string, userRole?: string) {
+    const task = await this.prisma.tasks.findUnique({ where: { id: taskId } });
+    if (!task) throw new NotFoundException('Task not found');
+
+    // Check permissions: Only managers or the assignee can archive
+    let isManager = false;
+    if (task.organization_id) {
+      try {
+        await this.organizationsService.checkAccess(
+          { id: userId, role: userRole },
+          task.organization_id,
+          ['admin', 'manager']
+        );
+        isManager = true;
+      } catch (e) {
+        // Not a manager, continue to assignee check
+      }
+    }
+
+    // If not a manager, must be the assignee
+    if (!isManager && task.assignee_id !== userId) {
+      throw new ForbiddenException('Only managers or assignees can archive tasks');
+    }
+
+    // Archive the task
+    return this.prisma.tasks.update({
+      where: { id: taskId },
+      data: { is_archived: true },
+    });
+  }
+
+  /**
+   * Archive all completed (done) tasks in an organization
+   * Only managers can perform this action
+   */
+  async archiveAllDone(organizationId: string, userId: string, userRole?: string) {
+    // Verify user is manager in this organization
+    await this.organizationsService.checkAccess(
+      { id: userId, role: userRole },
+      organizationId,
+      ['admin', 'manager']
+    );
+
+    // Get all repos in organization
+    const orgRepos = await this.prisma.repos.findMany({
+      where: { organization_id: organizationId },
+      select: { id: true },
+    });
+
+    const repoIds = orgRepos.map((r) => r.id);
+
+    // Archive all done tasks in this organization
+    const result = await this.prisma.tasks.updateMany({
+      where: {
+        OR: [
+          { organization_id: organizationId },
+          { repo_id: { in: repoIds } },
+        ],
+        status: 'done',
+        is_archived: false,
+      },
+      data: { is_archived: true },
+    });
+
+    return { archived: result.count };
   }
 
   /**

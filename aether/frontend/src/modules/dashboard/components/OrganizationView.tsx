@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Flame, AlertTriangle, MessageCircle, Loader2 } from "lucide-react";
+import { Check, Flame, AlertTriangle, MessageCircle, Loader2, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   DndContext,
@@ -36,6 +36,7 @@ export function OrganizationView() {
   const { data, loading, error, refetch, setData } = useKanbanData(currentOrganization?.id);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -169,6 +170,48 @@ export function OrganizationView() {
     }
   };
 
+  const handleClearDone = async () => {
+    if (!currentOrganization || !isManager) {
+      setPermissionError("Only managers can archive all done tasks.");
+      setTimeout(() => setPermissionError(null), 3000);
+      return;
+    }
+
+    if (!data?.done || data.done.length === 0) return;
+
+    // Confirmation dialog
+    const confirmMessage = `Archive all ${data.done.length} completed task${data.done.length > 1 ? 's' : ''}? They will be hidden from the board but preserved in the database.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setIsClearing(true);
+    try {
+      const result = await tasksApi.archiveAllDone(currentOrganization.id);
+
+      // Optimistic update: clear done tasks from local state
+      setData({
+        ...data,
+        done: [],
+        totals: {
+          ...data.totals,
+          done: 0,
+        },
+      });
+
+      // Show success message
+      setPermissionError(`✓ Archived ${result.archived} task${result.archived > 1 ? 's' : ''} successfully`);
+      setTimeout(() => setPermissionError(null), 3000);
+
+      // Refetch to ensure consistency
+      setTimeout(() => refetch(true), 1000);
+    } catch (err) {
+      console.error('Failed to archive done tasks:', err);
+      setPermissionError('Failed to archive tasks. Please try again.');
+      setTimeout(() => setPermissionError(null), 3000);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -253,6 +296,8 @@ export function OrganizationView() {
               width="w-full"
               contentOffset="pl-[120px]"
               tasks={data.done}
+              onClearDone={isManager ? handleClearDone : undefined}
+              isClearing={isClearing}
             />
           </div>
         </div>
@@ -274,6 +319,8 @@ function KanbanColumn({
   total,
   width = "w-[350px]",
   contentOffset = "",
+  onClearDone,
+  isClearing,
 }: {
   id: ColumnId;
   title: string;
@@ -281,6 +328,8 @@ function KanbanColumn({
   total: number;
   width?: string;
   contentOffset?: string;
+  onClearDone?: () => void;
+  isClearing?: boolean;
 }) {
   return (
     <SortableContext
@@ -293,7 +342,21 @@ function KanbanColumn({
         data-column-id={id}
       >
         <h3 className={`text-gray-500 dark:text-gray-300 font-medium mb-3 text-lg tracking-wide flex items-center justify-between ${contentOffset}`}>
-          {title}
+          <span>{title}</span>
+          {onClearDone && tasks.length > 0 && (
+            <button
+              onClick={onClearDone}
+              disabled={isClearing}
+              className="ml-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Archive all completed tasks"
+            >
+              {isClearing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+            </button>
+          )}
         </h3>
 
         <DroppableArea id={id} contentOffset={contentOffset}>

@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Download,
   BarChart3,
+  ArrowLeft,
 } from 'lucide-react';
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { managerApi, type AIReport, type AIReportRequest, type ReportAvailability } from '../api/managerApi';
@@ -99,6 +100,63 @@ function getPeriodIdentifier(periodType: PeriodType): string {
   return 'all';
 }
 
+// Helper function to get dynamic report title
+function getReportTitle(type: ReportType, period: PeriodType): string {
+  const baseOption = reportOptions.find(o => o.type === type);
+  if (!baseOption) return 'Report';
+
+  if (type === 'weekly_organization') {
+    switch (period) {
+      case 'week':
+        return 'Weekly Organization Report';
+      case 'month':
+        return 'Monthly Organization Report';
+      case 'quarter':
+        return 'Quarterly Organization Report';
+      default:
+        return baseOption.title;
+    }
+  }
+
+  return baseOption.title;
+}
+
+// Helper function to get readable date range
+function getDateRangeString(period: PeriodType): string {
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+
+  let start: Date;
+  let end: Date;
+
+  switch (period) {
+    case 'week': {
+      // Assuming week starts on Monday
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      start = new Date(now.setDate(diff));
+      end = new Date(now);
+      end.setDate(start.getDate() + 6);
+      break;
+    }
+    case 'month': {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      break;
+    }
+    case 'quarter': {
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      start = new Date(now.getFullYear(), currentQuarter * 3, 1);
+      end = new Date(now.getFullYear(), (currentQuarter * 3) + 3, 0);
+      break;
+    }
+    default:
+      return '';
+  }
+
+  return `${start.toLocaleDateString('en-US', options)} - ${end.toLocaleDateString('en-US', options)}`;
+}
+
 export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
   const { currentOrganization } = useOrganization();
   const [selectedType, setSelectedType] = useState<ReportType | null>(null);
@@ -112,6 +170,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [availableReports, setAvailableReports] = useState<ReportAvailability[]>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Animation state
   useEffect(() => {
@@ -163,7 +222,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
     if (!selectedType) return false;
     return availableReports.some(
       r => r.type === selectedType &&
-      (selectedType === 'user_performance' ? r.userId === selectedUserId : !r.userId)
+        (selectedType === 'user_performance' ? r.userId === selectedUserId : !r.userId)
     );
   };
 
@@ -204,6 +263,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
   const handleDownloadPDF = async () => {
     if (!report || !selectedType || !currentOrganization) return;
 
+    setDownloadingPdf(true);
     const reportOption = reportOptions.find(o => o.type === selectedType);
     const reportTypeName = reportOption?.title || 'Report';
     const periodLabel = PERIOD_OPTIONS.find(p => p.value === selectedPeriod)?.label || selectedPeriod;
@@ -218,6 +278,8 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
     } catch (error) {
       console.error('Failed to generate PDF:', error);
       setError('Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -283,7 +345,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
       {/* Modal Content */}
       <div
         className={`
-          relative w-full max-w-4xl max-h-[90vh] mx-4
+          relative w-full max-w-6xl max-h-[90vh] mx-4
           bg-white dark:bg-zinc-900
           rounded-3xl shadow-2xl
           overflow-hidden
@@ -301,6 +363,15 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
           </button>
 
           <div className="flex items-center gap-4">
+            {report && (
+              <button
+                onClick={() => setReport(null)}
+                className="p-2 -ml-2 mr-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-white/50 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800/50 transition-all"
+                title="Back to options"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/30">
               <Sparkles className="w-6 h-6" />
             </div>
@@ -316,7 +387,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
         </div>
 
         {/* Body */}
-        <div className="px-8 py-6 max-h-[60vh] overflow-y-auto">
+        <div className="px-8 py-6 max-h-[75vh] overflow-y-auto">
           {!report ? (
             <>
               {/* Period Selection */}
@@ -360,6 +431,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {reportOptions.map((option) => {
                     const reportExists = selectedType === option.type && hasExistingReport();
+                    const title = getReportTitle(option.type, selectedPeriod);
                     return (
                       <button
                         key={option.type}
@@ -387,7 +459,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                           {option.icon}
                         </div>
                         <h4 className={`font-semibold mb-1 ${selectedType === option.type ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
-                          {option.title}
+                          {title}
                         </h4>
                         <p className={`text-xs ${selectedType === option.type ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
                           {option.description}
@@ -462,7 +534,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-900 dark:text-white">
-                        {reportOptions.find(o => o.type === selectedType)?.title}
+                        {reportOptions.find(o => o.type === selectedType) && selectedType ? getReportTitle(selectedType, selectedPeriod) : ''}
                       </h3>
                       {report.cached && (
                         <span className="px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 text-xs font-medium">
@@ -470,18 +542,39 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {report.cached ? 'Retrieved from cache' : 'Generated just now'}
-                    </p>
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-xs font-medium text-gray-900 dark:text-gray-300">
+                        {getDateRangeString(selectedPeriod)}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {report.cached ? 'Retrieved from cache' : 'Generated just now'}
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleDownloadPDF}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 transition-all shadow-md hover:shadow-lg text-sm font-medium"
+                    disabled={downloadingPdf}
+                    className={`
+                      flex items-center gap-2 px-3 py-2 rounded-xl text-white shadow-md transition-all text-sm font-medium
+                      ${downloadingPdf
+                        ? 'bg-gradient-to-r from-purple-400 to-blue-400 cursor-not-allowed opacity-90'
+                        : 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 hover:shadow-lg'
+                      }
+                    `}
                   >
-                    <Download className="w-4 h-4" />
-                    Download PDF
+                    {downloadingPdf ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Generating PDF...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        Download PDF
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={handleCopyReport}

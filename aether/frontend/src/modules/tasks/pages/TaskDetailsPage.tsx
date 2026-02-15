@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
     Plus,
     Loader2,
@@ -9,7 +9,8 @@ import {
     CheckCheck,
     RefreshCw,
     Clock,
-    GitCommit
+    GitCommit,
+    Archive
 } from "lucide-react";
 import { tasksApi, type Task, type TaskComment, type CommitDiff } from "../../dashboard/api/tasksApi";
 import { useAuth } from "../../auth/context/AuthContext";
@@ -24,6 +25,7 @@ import { AITaskReportCard } from "../components/AITaskReportCard";
 
 export function TaskDetailsPage() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const { taskId } = useParams<{ taskId: string }>();
     const [task, setTask] = useState<Task | null>(null);
     const [comments, setComments] = useState<TaskComment[]>([]);
@@ -35,6 +37,7 @@ export function TaskDetailsPage() {
     const [isLinkCommitModalOpen, setIsLinkCommitModalOpen] = useState(false);
     const [copied, setCopied] = useState(false);
     const [isRefreshingCommits, setIsRefreshingCommits] = useState(false);
+    const [isArchiving, setIsArchiving] = useState(false);
 
     // Commit selection state
     const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
@@ -59,6 +62,26 @@ export function TaskDetailsPage() {
             navigator.clipboard.writeText(`#${task.readable_id}`);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    const handleArchiveTask = async () => {
+        if (!task || !taskId) return;
+
+        // Confirmation dialog
+        const confirmMessage = `Archive task "${task.title}"? It will be hidden from the board but preserved in the database.`;
+        if (!window.confirm(confirmMessage)) return;
+
+        setIsArchiving(true);
+        try {
+            await tasksApi.archiveTask(taskId);
+            // Navigate back to dashboard after successful archive
+            navigate('/dashboard');
+        } catch (err) {
+            console.error('Failed to archive task:', err);
+            alert('Failed to archive task. Please try again.');
+        } finally {
+            setIsArchiving(false);
         }
     };
 
@@ -286,13 +309,34 @@ export function TaskDetailsPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 mt-2">
+                        <div className="flex items-center gap-3 mt-2">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${task.status === 'done' ? 'bg-green-100 text-green-700' :
                                 task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
                                     'bg-gray-100 text-gray-700'
                                 }`}>
                                 {task.status.replace('_', ' ').toUpperCase()}
                             </span>
+                            {/* Archive Button - only show for assignee or manager */}
+                            {(user?.id === task.assignee_id || user?.role === 'manager' || user?.role === 'admin') && (
+                                <button
+                                    onClick={handleArchiveTask}
+                                    disabled={isArchiving}
+                                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-gray-600 hover:text-orange-600 bg-white/50 hover:bg-orange-50 dark:bg-white/10 dark:hover:bg-orange-500/10 rounded-full border border-gray-200 dark:border-white/20 hover:border-orange-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Archive this task"
+                                >
+                                    {isArchiving ? (
+                                        <>
+                                            <Loader2 size={14} className="animate-spin" />
+                                            <span>Archiving...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Archive size={14} />
+                                            <span>Archive</span>
+                                        </>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
 

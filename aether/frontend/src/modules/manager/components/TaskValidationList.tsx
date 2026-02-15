@@ -4,6 +4,7 @@ import { managerApi, type PendingTask } from '../api/managerApi';
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { useToast } from '../../../components/ui/Toast';
+import { TaskValidationModal } from './TaskValidationModal';
 
 interface TaskValidationListProps {
   onTaskValidated?: () => void;
@@ -15,6 +16,8 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
   const [tasks, setTasks] = useState<PendingTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<PendingTask | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     if (!currentOrganization) return;
@@ -42,6 +45,11 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
       setTasks(prev => prev.filter(t => t.id !== taskId));
       showToast('Task approved successfully', 'success');
       onTaskValidated?.();
+      // Close modal if it's open
+      if (isModalOpen && selectedTask?.id === taskId) {
+        setIsModalOpen(false);
+        setSelectedTask(null);
+      }
     } catch (error) {
       console.error('Error validating task:', error);
       showToast(error instanceof Error ? error.message : 'Failed to approve task', 'error');
@@ -57,12 +65,27 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
       setTasks(prev => prev.filter(t => t.id !== taskId));
       showToast('Task rejected', 'success');
       onTaskValidated?.();
+      // Close modal if it's open
+      if (isModalOpen && selectedTask?.id === taskId) {
+        setIsModalOpen(false);
+        setSelectedTask(null);
+      }
     } catch (error) {
       console.error('Error rejecting task:', error);
       showToast(error instanceof Error ? error.message : 'Failed to reject task', 'error');
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const openModal = (task: PendingTask) => {
+    setSelectedTask(task);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedTask(null);
   };
 
   const formatDate = (dateStr?: string) => {
@@ -106,6 +129,7 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
         {tasks.map((task) => (
           <div
             key={task.id}
+            onClick={() => openModal(task)}
             className="
               relative overflow-hidden rounded-2xl
               bg-white/60 dark:bg-zinc-900/60
@@ -115,6 +139,7 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
               p-5 transition-all duration-200
               hover:shadow-xl hover:shadow-black/10 dark:hover:shadow-black/30
               hover:border-white/30 dark:hover:border-zinc-600/50
+              cursor-pointer
             "
           >
             {/* Task Header */}
@@ -138,7 +163,10 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
               {/* Actions */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={() => handleReject(task.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleReject(task.id);
+                  }}
                   disabled={actionLoading === task.id}
                   className="
                     p-2.5 rounded-xl
@@ -157,7 +185,10 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
                   )}
                 </button>
                 <button
-                  onClick={() => handleValidate(task.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleValidate(task.id);
+                  }}
                   disabled={actionLoading === task.id}
                   className="
                     p-2.5 rounded-xl
@@ -216,6 +247,16 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
           </div>
         ))}
       </div>
+
+      {/* Task Validation Modal */}
+      <TaskValidationModal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        task={selectedTask}
+        onValidate={handleValidate}
+        onReject={handleReject}
+        isLoading={actionLoading !== null}
+      />
     </div>
   );
 }

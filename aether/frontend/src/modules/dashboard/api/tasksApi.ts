@@ -38,6 +38,7 @@ export interface Task {
   validated_by: string | null;
   created_at: string;
   comments: string | null;
+  is_archived?: boolean;
   users_tasks_assignee_idTousers?: User;
   repos?: Repo;
   task_commits?: TaskCommit[];
@@ -379,6 +380,38 @@ class TasksApi {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       const message = errorData.message || 'Failed to sync commits';
+      throw new Error(message);
+    }
+    return response.json();
+  }
+
+  async archiveTask(taskId: string): Promise<Task> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/${taskId}/archive`,
+      {
+        method: 'PATCH',
+        headers: this.getAuthHeaders(),
+      }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || 'Failed to archive task';
+      throw new Error(message);
+    }
+    return response.json();
+  }
+
+  async archiveAllDone(organizationId: string): Promise<{ archived: number }> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/organization/${organizationId}/archive-done`,
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || 'Failed to archive done tasks';
       throw new Error(message);
     }
     return response.json();

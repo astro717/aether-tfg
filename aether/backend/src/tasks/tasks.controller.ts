@@ -99,6 +99,23 @@ export class TasksController {
     return this.tasksService.remove(id);
   }
 
+  // Archive endpoints
+  @Patch(':id/archive')
+  async archiveTask(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.archiveTask(id, user.id, user.role);
+  }
+
+  @Post('organization/:organizationId/archive-done')
+  async archiveAllDone(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.archiveAllDone(organizationId, user.id, user.role);
+  }
+
   // Comment endpoints
   @Get(':id/comments')
   async getComments(@Param('id', new ParseUUIDPipe()) id: string) {
