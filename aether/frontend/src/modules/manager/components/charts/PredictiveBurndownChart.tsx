@@ -25,15 +25,34 @@ interface BurndownData {
 
 interface PredictiveBurndownChartProps {
   data: BurndownData;
+  period?: 'today' | 'week' | 'month' | 'quarter' | 'all';
   title?: string;
   subtitle?: string;
 }
 
 export function PredictiveBurndownChart({
   data,
+  period = 'week',
   title = 'Predictive Burndown',
   subtitle = 'Historical progress with AI projection',
 }: PredictiveBurndownChartProps) {
+  // Period-aware axis label
+  const getAxisLabel = () => {
+    switch (period) {
+      case 'today':
+        return 'Hour';
+      case 'week':
+        return 'Day';
+      case 'month':
+        return 'Day';
+      case 'quarter':
+        return 'Week';
+      case 'all':
+        return 'Month';
+      default:
+        return 'Period';
+    }
+  };
   // Combine all data points for the chart
   // Days 0-13: Historical (real)
   // Days 14-28: Projection (ideal + uncertainty cone)
@@ -86,7 +105,7 @@ export function PredictiveBurndownChart({
               dataKey="day"
               tick={{ fill: '#6b7280', fontSize: 11 }}
               axisLine={{ stroke: '#374151', opacity: 0.2 }}
-              label={{ value: 'Sprint Day', position: 'insideBottom', offset: -5, fill: '#6b7280', fontSize: 12 }}
+              label={{ value: getAxisLabel(), position: 'insideBottom', offset: -5, fill: '#6b7280', fontSize: 12 }}
             />
 
             <YAxis

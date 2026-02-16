@@ -25,6 +25,7 @@ import { useAuth } from "../../auth/context/AuthContext";
 import { tasksApi, type Task } from "../api/tasksApi";
 import { taskEvents } from "../../../lib/taskEvents";
 import { UserAvatar } from "../../../components/ui/UserAvatar";
+import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 
 // ... existing code ...
 
@@ -37,6 +38,7 @@ export function OrganizationView() {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -170,7 +172,7 @@ export function OrganizationView() {
     }
   };
 
-  const handleClearDone = async () => {
+  const handleClearDone = () => {
     if (!currentOrganization || !isManager) {
       setPermissionError("Only managers can archive all done tasks.");
       setTimeout(() => setPermissionError(null), 3000);
@@ -179,9 +181,12 @@ export function OrganizationView() {
 
     if (!data?.done || data.done.length === 0) return;
 
-    // Confirmation dialog
-    const confirmMessage = `Archive all ${data.done.length} completed task${data.done.length > 1 ? 's' : ''}? They will be hidden from the board but preserved in the database.`;
-    if (!window.confirm(confirmMessage)) return;
+    // Show confirmation dialog
+    setShowArchiveDialog(true);
+  };
+
+  const confirmClearDone = async () => {
+    if (!currentOrganization || !data) return;
 
     setIsClearing(true);
     try {
@@ -307,6 +312,19 @@ export function OrganizationView() {
       <DragOverlay>
         {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
       </DragOverlay>
+
+      {/* Archive Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showArchiveDialog}
+        onClose={() => setShowArchiveDialog(false)}
+        onConfirm={confirmClearDone}
+        title="Archive Completed Tasks"
+        message={`Archive all ${data?.done?.length || 0} completed task${(data?.done?.length || 0) > 1 ? 's' : ''}? They will be hidden from the board but preserved in the database.`}
+        confirmLabel="OK"
+        cancelLabel="Cancel"
+        variant="warning"
+        isLoading={isClearing}
+      />
     </DndContext>
   );
 }

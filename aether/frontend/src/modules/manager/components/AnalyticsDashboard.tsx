@@ -238,7 +238,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
       {/* Primary Charts: Flow + Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-[50_50%] gap-6">
         {analytics.premiumCharts?.cfd && (
-          <SmoothCFDChart data={analytics.premiumCharts.cfd} />
+          <SmoothCFDChart data={analytics.premiumCharts.cfd} period={selectedPeriod} />
         )}
         {analytics.premiumCharts?.investment && (
           <InvestmentSunburst data={analytics.premiumCharts.investment} />
@@ -251,7 +251,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
           <WorkloadHeatmap data={analytics.premiumCharts.heatmap} />
         )}
         {analytics.premiumCharts?.burndown && (
-          <PredictiveBurndownChart data={analytics.premiumCharts.burndown} />
+          <PredictiveBurndownChart data={analytics.premiumCharts.burndown} period={selectedPeriod} />
         )}
       </div>
 

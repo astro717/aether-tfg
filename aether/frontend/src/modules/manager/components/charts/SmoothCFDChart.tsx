@@ -16,6 +16,7 @@ interface CFDDataPoint {
 
 interface SmoothCFDChartProps {
   data: CFDDataPoint[];
+  period?: 'today' | 'week' | 'month' | 'quarter' | 'all';
   title?: string;
   subtitle?: string;
 }
@@ -52,7 +53,62 @@ const CFD_LAYERS = [
   },
 ];
 
-export function SmoothCFDChart({ data, title = 'Cumulative Flow Diagram', subtitle }: SmoothCFDChartProps) {
+export function SmoothCFDChart({ data, period = 'week', title = 'Cumulative Flow Diagram', subtitle }: SmoothCFDChartProps) {
+  // Period-aware XAxis formatter
+  const formatXAxis = (value: string) => {
+    try {
+      const date = new Date(value);
+
+      switch (period) {
+        case 'today':
+          // Show hours: "09:00", "14:00"
+          return `${date.getHours().toString().padStart(2, '0')}:00`;
+
+        case 'week':
+          // Show days: "Mon", "Tue"
+          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          return dayNames[date.getDay()];
+
+        case 'month':
+          // Show date: "2/15"
+          return `${date.getMonth() + 1}/${date.getDate()}`;
+
+        case 'quarter':
+          // Show week number: "W1", "W2"
+          const weekOfQuarter = Math.ceil((date.getDate() + 1) / 7);
+          return `W${weekOfQuarter}`;
+
+        case 'all':
+          // Show month: "Jan", "Feb"
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return monthNames[date.getMonth()];
+
+        default:
+          return `${date.getMonth() + 1}/${date.getDate()}`;
+      }
+    } catch {
+      return value;
+    }
+  };
+
+  // Period-aware tooltip label formatter
+  const formatTooltipLabel = (value: any) => {
+    try {
+      const dateValue = String(value);
+      const date = new Date(dateValue);
+
+      if (period === 'today') {
+        // Full date with time: "Feb 15, 09:00 AM"
+        return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+      }
+
+      // Full date: "February 15, 2026"
+      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    } catch {
+      return String(value);
+    }
+  };
+
   return (
     <div
       className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm"
@@ -84,10 +140,7 @@ export function SmoothCFDChart({ data, title = 'Cumulative Flow Diagram', subtit
               dataKey="date"
               tick={{ fill: '#6b7280', fontSize: 11 }}
               axisLine={{ stroke: '#374151', opacity: 0.2 }}
-              tickFormatter={(value) => {
-                const date = new Date(value);
-                return `${date.getMonth() + 1}/${date.getDate()}`;
-              }}
+              tickFormatter={formatXAxis}
             />
 
             <YAxis
@@ -106,7 +159,7 @@ export function SmoothCFDChart({ data, title = 'Cumulative Flow Diagram', subtit
               }}
               labelStyle={{ color: '#fff', fontWeight: 'bold', marginBottom: '8px' }}
               itemStyle={{ color: '#fff', fontSize: '12px', padding: '4px 0' }}
-              labelFormatter={(value) => new Date(value).toLocaleDateString()}
+              labelFormatter={formatTooltipLabel}
             />
 
             {/* Stacked Areas (bottom to top: Done -> Review -> In Progress -> To Do) */}

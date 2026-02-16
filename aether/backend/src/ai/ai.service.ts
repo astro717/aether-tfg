@@ -1154,6 +1154,85 @@ Required JSON structure:
   }
 
   /**
+   * HELPER: Get Time Buckets for Period-Aware Visualizations
+   * Returns an array of timestamps/labels based on the selected period
+   * @param period - 'today' | 'week' | 'month' | 'quarter' | 'all'
+   */
+  private getTimeBuckets(period: string): { timestamps: Date[]; labels: string[]; granularity: string } {
+    const now = new Date();
+    const timestamps: Date[] = [];
+    const labels: string[] = [];
+    let granularity = 'day';
+
+    switch (period) {
+      case 'today':
+        // Hourly buckets (last 24 hours: 00:00, 01:00, ..., 23:00)
+        granularity = 'hour';
+        for (let hour = 0; hour < 24; hour++) {
+          const bucket = new Date(now);
+          bucket.setHours(hour, 0, 0, 0);
+          timestamps.push(bucket);
+          labels.push(`${hour.toString().padStart(2, '0')}:00`);
+        }
+        break;
+
+      case 'week':
+        // Daily buckets (last 7 days: Mon, Tue, Wed, ...)
+        granularity = 'day';
+        for (let i = 6; i >= 0; i--) {
+          const bucket = new Date(now);
+          bucket.setDate(bucket.getDate() - i);
+          bucket.setHours(0, 0, 0, 0);
+          timestamps.push(bucket);
+          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          labels.push(dayNames[bucket.getDay()]);
+        }
+        break;
+
+      case 'month':
+        // Daily buckets (last 30 days: 1, 5, 10, 15, 20, 25, 30)
+        granularity = 'day';
+        for (let i = 29; i >= 0; i--) {
+          const bucket = new Date(now);
+          bucket.setDate(bucket.getDate() - i);
+          bucket.setHours(0, 0, 0, 0);
+          timestamps.push(bucket);
+          labels.push(`${bucket.getMonth() + 1}/${bucket.getDate()}`);
+        }
+        break;
+
+      case 'quarter':
+        // Weekly buckets (last ~13 weeks: Week 1, Week 2, ...)
+        granularity = 'week';
+        for (let i = 12; i >= 0; i--) {
+          const bucket = new Date(now);
+          bucket.setDate(bucket.getDate() - (i * 7));
+          bucket.setHours(0, 0, 0, 0);
+          timestamps.push(bucket);
+          labels.push(`W${13 - i}`);
+        }
+        break;
+
+      case 'all':
+      default:
+        // Monthly buckets (last 12 months)
+        granularity = 'month';
+        for (let i = 11; i >= 0; i--) {
+          const bucket = new Date(now);
+          bucket.setMonth(bucket.getMonth() - i);
+          bucket.setDate(1);
+          bucket.setHours(0, 0, 0, 0);
+          timestamps.push(bucket);
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          labels.push(monthNames[bucket.getMonth()]);
+        }
+        break;
+    }
+
+    return { timestamps, labels, granularity };
+  }
+
+  /**
    * HELPER: Calculate Investment Profile - Classifies tasks by type
    * Analyzes task titles/descriptions to infer: Feature, Bug, Chore
    * @param tasks - Array of tasks to analyze
@@ -1312,35 +1391,40 @@ Required JSON structure:
   }
 
   /**
-   * HELPER: Generate Smooth Cumulative Flow Diagram Data
-   * Reconstructs historical daily state distribution with CUMULATIVE stacking
+   * HELPER: Generate Smooth Cumulative Flow Diagram Data (Period-Aware)
+   * Reconstructs historical state distribution with CUMULATIVE stacking
    * Uses monotone interpolation for smooth curves (handled by Recharts)
+   * @param period - 'today' | 'week' | 'month' | 'quarter' | 'all'
    * NOTE: This is an approximation based on current data. Ideally needs a task_history table.
    */
-  private generateSmoothCFD(tasks: any[]): Array<{
+  private generateSmoothCFD(tasks: any[], period: string = 'week'): Array<{
     date: string;
     done: number;
     review: number;
     in_progress: number;
     todo: number;
   }> {
-    const now = new Date();
+    const { timestamps } = this.getTimeBuckets(period);
     const data: Array<{ date: string; done: number; review: number; in_progress: number; todo: number }> = [];
 
-    // Generate last 30 days with cumulative stacking
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
+    const totalBuckets = timestamps.length;
 
-      // Simulate progress over time (dayFactor increases as we approach current day)
-      const dayFactor = 1 - (i / 30);
+    for (let i = 0; i < timestamps.length; i++) {
+      const timestamp = timestamps[i];
+
+      // Use ISO string for today (hourly), otherwise use date only
+      const dateStr = period === 'today'
+        ? timestamp.toISOString()
+        : timestamp.toISOString().split('T')[0];
+
+      // Simulate progress over time (progressFactor increases as we approach current time)
+      const progressFactor = i / Math.max(totalBuckets - 1, 1);
 
       // Calculate cumulative values (bottom to top stacking)
-      const doneCount = Math.round(tasks.filter(t => t.status === 'done').length * dayFactor);
-      const reviewCount = Math.round(tasks.filter(t => t.status === 'pending_validation').length * dayFactor);
-      const inProgressCount = Math.round(tasks.filter(t => t.status === 'in_progress').length * dayFactor);
-      const todoCount = Math.round(tasks.filter(t => t.status === 'todo').length * (1 - dayFactor * 0.5));
+      const doneCount = Math.round(tasks.filter(t => t.status === 'done').length * progressFactor);
+      const reviewCount = Math.round(tasks.filter(t => t.status === 'pending_validation').length * progressFactor);
+      const inProgressCount = Math.round(tasks.filter(t => t.status === 'in_progress').length * progressFactor);
+      const todoCount = Math.round(tasks.filter(t => t.status === 'todo').length * (1 - progressFactor * 0.5));
 
       data.push({
         date: dateStr,
@@ -1355,12 +1439,13 @@ Required JSON structure:
   }
 
   /**
-   * HELPER: Analyze Workload Heatmap (GitHub-style)
-   * Generates a matrix of activity intensity per user per day
+   * HELPER: Analyze Workload Heatmap (GitHub-style, Period-Aware)
+   * Generates a matrix of activity intensity per user per time period
    * @param organizationId - Organization to analyze
    * @param tasks - Array of tasks
+   * @param period - 'today' | 'week' | 'month' | 'quarter' | 'all'
    */
-  private async analyzeWorkloadHeatmap(organizationId: string, tasks: any[]): Promise<{
+  private async analyzeWorkloadHeatmap(organizationId: string, tasks: any[], period: string = 'week'): Promise<{
     users: string[];
     days: string[];
     data: number[][];
@@ -1386,13 +1471,19 @@ Required JSON structure:
       orderBy: { committed_at: 'desc' },
     });
 
-    // Generate last 14 days
-    const now = new Date();
+    // Get period-aware time buckets
+    const { timestamps, labels, granularity } = this.getTimeBuckets(period);
     const days: string[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      days.push(date.toISOString().split('T')[0]);
+
+    // Format labels based on granularity
+    for (let i = 0; i < timestamps.length; i++) {
+      if (granularity === 'hour') {
+        days.push(labels[i]);
+      } else if (granularity === 'day') {
+        days.push(timestamps[i].toISOString().split('T')[0]);
+      } else {
+        days.push(labels[i]);
+      }
     }
 
     // Build heatmap matrix
@@ -1405,19 +1496,29 @@ Required JSON structure:
       users.push(member.users.username);
       const userActivity: number[] = [];
 
-      for (const day of days) {
-        const dayStart = new Date(day);
-        const dayEnd = new Date(day);
-        dayEnd.setDate(dayEnd.getDate() + 1);
+      for (let i = 0; i < timestamps.length; i++) {
+        const bucketStart = timestamps[i];
+        const bucketEnd = new Date(bucketStart);
 
-        // Count commits for this user on this day
+        // Determine bucket end based on granularity
+        if (granularity === 'hour') {
+          bucketEnd.setHours(bucketEnd.getHours() + 1);
+        } else if (granularity === 'day') {
+          bucketEnd.setDate(bucketEnd.getDate() + 1);
+        } else if (granularity === 'week') {
+          bucketEnd.setDate(bucketEnd.getDate() + 7);
+        } else if (granularity === 'month') {
+          bucketEnd.setMonth(bucketEnd.getMonth() + 1);
+        }
+
+        // Count commits for this user in this bucket
         const userCommits = commits.filter(c => {
           if (!member.users?.github_login || !c.committed_at) return false;
           const commitDate = new Date(c.committed_at);
           return (
             c.author_login === member.users.github_login &&
-            commitDate >= dayStart &&
-            commitDate < dayEnd
+            commitDate >= bucketStart &&
+            commitDate < bucketEnd
           );
         });
 
@@ -1426,7 +1527,7 @@ Required JSON structure:
           if (t.assignee_id !== member.users?.id) return false;
           if (!t.created_at) return false;
           const taskDate = new Date(t.created_at);
-          return taskDate >= dayStart && taskDate < dayEnd;
+          return taskDate >= bucketStart && taskDate < bucketEnd;
         });
 
         // Activity score: commits + task movements (weighted)
@@ -1441,11 +1542,12 @@ Required JSON structure:
   }
 
   /**
-   * HELPER: Project Burndown with Uncertainty Cone
+   * HELPER: Project Burndown with Uncertainty Cone (Period-Aware)
    * Generates predictive burndown chart with optimistic/pessimistic scenarios
    * @param tasks - Array of tasks to analyze
+   * @param period - 'today' | 'week' | 'month' | 'quarter' | 'all'
    */
-  private projectBurndownCone(tasks: any[]): {
+  private projectBurndownCone(tasks: any[], period: string = 'week'): {
     real: Array<{ day: number; tasks: number }>;
     ideal: Array<{ day: number; tasks: number }>;
     projection: Array<{ day: number; optimistic: number; pessimistic: number }>;
@@ -1454,47 +1556,64 @@ Required JSON structure:
     const completedTasks = tasks.filter(t => t.status === 'done').length;
     const remainingTasks = totalTasks - completedTasks;
 
-    // Calculate historical burndown (last 14 days)
-    const now = new Date();
+    // Determine historical and projection periods based on selected period
+    let historicalPeriods = 14;
+    let projectionPeriods = 14;
+
+    switch (period) {
+      case 'today':
+        historicalPeriods = 12;
+        projectionPeriods = 12;
+        break;
+      case 'week':
+        historicalPeriods = 7;
+        projectionPeriods = 7;
+        break;
+      case 'month':
+        historicalPeriods = 15;
+        projectionPeriods = 15;
+        break;
+      case 'quarter':
+        historicalPeriods = 13;
+        projectionPeriods = 13;
+        break;
+      case 'all':
+        historicalPeriods = 12;
+        projectionPeriods = 6;
+        break;
+    }
+
+    // Calculate historical burndown
     const real: Array<{ day: number; tasks: number }> = [];
 
-    for (let i = 13; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dayStart = date;
-      const dayEnd = new Date(dayStart);
-      dayEnd.setDate(dayEnd.getDate() + 1);
+    for (let i = historicalPeriods - 1; i >= 0; i--) {
+      const progressFactor = i / historicalPeriods;
+      const tasksRemaining = Math.round(remainingTasks + completedTasks * progressFactor);
 
-      // Count tasks not yet completed at that point (approximation)
-      const dayFactor = i / 14;
-      const tasksRemaining = Math.round(remainingTasks + completedTasks * dayFactor);
-
-      real.push({ day: 14 - i, tasks: tasksRemaining });
+      real.push({ day: historicalPeriods - i - 1, tasks: tasksRemaining });
     }
 
     // Calculate ideal burndown (straight line from current to zero)
     const ideal: Array<{ day: number; tasks: number }> = [];
-    const daysToComplete = 14; // Assume 2-week sprint
-    for (let day = 0; day <= daysToComplete; day++) {
-      const tasksLeft = Math.round(remainingTasks * (1 - day / daysToComplete));
-      ideal.push({ day: 14 + day, tasks: tasksLeft });
+    for (let day = 0; day <= projectionPeriods; day++) {
+      const tasksLeft = Math.round(remainingTasks * (1 - day / projectionPeriods));
+      ideal.push({ day: historicalPeriods + day - 1, tasks: tasksLeft });
     }
 
     // Calculate projection cone (optimistic and pessimistic scenarios)
     const projection: Array<{ day: number; optimistic: number; pessimistic: number }> = [];
 
-    // Calculate velocity (tasks completed per day on average)
     const avgVelocity = real.length > 1
       ? (real[0].tasks - real[real.length - 1].tasks) / real.length
       : 1;
 
-    const optimisticVelocity = avgVelocity * 1.3; // 30% faster
-    const pessimisticVelocity = avgVelocity * 0.7; // 30% slower
+    const optimisticVelocity = avgVelocity * 1.3;
+    const pessimisticVelocity = avgVelocity * 0.7;
 
-    for (let day = 14; day <= 28; day++) {
-      const daysAhead = day - 14;
-      const optimisticRemaining = Math.max(0, remainingTasks - optimisticVelocity * daysAhead);
-      const pessimisticRemaining = Math.max(0, remainingTasks - pessimisticVelocity * daysAhead);
+    for (let day = historicalPeriods - 1; day < historicalPeriods + projectionPeriods; day++) {
+      const periodsAhead = day - (historicalPeriods - 1);
+      const optimisticRemaining = Math.max(0, remainingTasks - optimisticVelocity * periodsAhead);
+      const pessimisticRemaining = Math.max(0, remainingTasks - pessimisticVelocity * periodsAhead);
 
       projection.push({
         day,
@@ -1763,10 +1882,10 @@ Required JSON structure:
     switch (type) {
       case 'weekly_organization':
         // Weekly reports focus on team metrics and workflow
-        chartData.cfd = this.generateSmoothCFD(tasks);
+        chartData.cfd = this.generateSmoothCFD(tasks, period);
         chartData.investment = this.calculateInvestmentProfile(tasks);
-        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks);
-        chartData.burndown = this.projectBurndownCone(tasks);
+        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, period);
+        chartData.burndown = this.projectBurndownCone(tasks, period);
         this.logger.log('Weekly organization charts: CFD, Investment, Heatmap, Burndown');
         break;
 
@@ -1781,23 +1900,23 @@ Required JSON structure:
 
       case 'bottleneck_prediction':
         // Bottleneck reports focus on risk indicators
-        chartData.cfd = this.generateSmoothCFD(tasks);
+        chartData.cfd = this.generateSmoothCFD(tasks, period);
         chartData.cycleTime = this.calculateCycleTime(tasks);
         chartData.investment = this.calculateInvestmentProfile(tasks);
-        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks);
-        chartData.burndown = this.projectBurndownCone(tasks);
+        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, period);
+        chartData.burndown = this.projectBurndownCone(tasks, period);
         this.logger.log('Bottleneck prediction charts: CFD, CycleTime, Investment, Heatmap, Burndown');
         break;
 
       default:
         this.logger.warn(`Unknown report type: ${type}, calculating all charts as fallback`);
         chartData.investment = this.calculateInvestmentProfile(tasks);
-        chartData.cfd = this.generateSmoothCFD(tasks);
+        chartData.cfd = this.generateSmoothCFD(tasks, period);
         chartData.radar = await this.calculateRadarMetrics(organizationId);
         chartData.cycleTime = this.calculateCycleTime(tasks);
         chartData.throughput = this.calculateThroughput(tasks);
-        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks);
-        chartData.burndown = this.projectBurndownCone(tasks);
+        chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, period);
+        chartData.burndown = this.projectBurndownCone(tasks, period);
     }
 
     this.logger.log('Chart data calculated successfully');

@@ -54,13 +54,16 @@ export class AuthService {
   async register(username: string, email: string, password: string) {
     const hashed = await bcrypt.hash(password, 10);
     try {
+      // Smart color assignment: avoid repetition within same initial
+      const avatarColor = await this.selectSmartAvatarColor(username);
+
       const user = await this.prisma.users.create({
         data: {
           username,
           email,
           password_hash: hashed,
           role: 'user',
-          avatar_color: ['blue', 'purple', 'green', 'orange', 'pink', 'teal', 'indigo', 'rose', 'amber', 'cyan'][Math.floor(Math.random() * 10)],
+          avatar_color: avatarColor,
         },
       });
 
@@ -80,6 +83,51 @@ export class AuthService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Smart avatar color selection
+   * Queries users with the same initial and tries to pick an unused color
+   */
+  private async selectSmartAvatarColor(username: string): Promise<string> {
+    const AVATAR_COLORS = [
+      'blue', 'purple', 'green', 'orange', 'pink',
+      'teal', 'indigo', 'rose', 'amber', 'cyan'
+    ];
+
+    // Get the first letter of username (case-insensitive)
+    const initial = username.charAt(0).toUpperCase();
+
+    // Find all users with the same initial
+    const usersWithSameInitial = await this.prisma.users.findMany({
+      where: {
+        username: {
+          startsWith: initial,
+          mode: 'insensitive',
+        },
+      },
+      select: {
+        avatar_color: true,
+      },
+    });
+
+    // Collect colors already in use for this initial
+    const usedColors = new Set(
+      usersWithSameInitial
+        .map(u => u.avatar_color)
+        .filter(c => c && c !== 'zinc')
+    );
+
+    // Find available colors (not yet used by this initial group)
+    const availableColors = AVATAR_COLORS.filter(c => !usedColors.has(c));
+
+    // If there are available colors, pick one randomly
+    if (availableColors.length > 0) {
+      return availableColors[Math.floor(Math.random() * availableColors.length)];
+    }
+
+    // If all colors are used, just pick any random color
+    return AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
   }
 
   async connectGithub(userId: string, code: string) {
