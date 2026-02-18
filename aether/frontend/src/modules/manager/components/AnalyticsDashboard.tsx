@@ -23,11 +23,11 @@ import { managerApi, type AnalyticsData } from '../api/managerApi';
 import { StatCard } from './StatCard';
 import {
   SparklineCard,
-  SmoothCFDChart,
+  RealCFDChart,
   InvestmentSunburst,
   WorkloadHeatmap,
-  PredictiveBurndownChart,
 } from './charts';
+import { SmartAnalyticsWidget } from './analytics/SmartAnalyticsWidget';
 
 interface AnalyticsDashboardProps {
   onOpenAIReport: () => void;
@@ -37,8 +37,8 @@ type PeriodType = 'today' | 'week' | 'month' | 'quarter' | 'all';
 
 const PERIOD_OPTIONS: { value: PeriodType; label: string; shortLabel: string }[] = [
   { value: 'today', label: 'Today', shortLabel: 'Today' },
-  { value: 'week', label: 'This Week', shortLabel: 'Week' },
-  { value: 'month', label: 'This Month', shortLabel: 'Month' },
+  { value: 'week', label: 'Last 7 Days', shortLabel: '7d' },
+  { value: 'month', label: 'Last 30 Days', shortLabel: '30d' },
   { value: 'quarter', label: 'Last 3 Months', shortLabel: '3M' },
   { value: 'all', label: 'All Time', shortLabel: 'All' },
 ];
@@ -46,6 +46,7 @@ const PERIOD_OPTIONS: { value: PeriodType; label: string; shortLabel: string }[]
 export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) {
   const { currentOrganization } = useOrganization();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [realCFDData, setRealCFDData] = useState<Array<{ date: string; done: number; review: number; in_progress: number; todo: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('week');
@@ -56,8 +57,13 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
     setLoading(true);
     setError(null);
     try {
-      const data = await managerApi.getAnalytics(currentOrganization.id, period);
+      const cfdRange = period === 'quarter' ? '90d' : period === 'all' ? 'all' : period === 'week' ? '7d' : '30d';
+      const [data, cfdData] = await Promise.all([
+        managerApi.getAnalytics(currentOrganization.id, period),
+        managerApi.getCFD(currentOrganization.id, cfdRange).catch(() => []),
+      ]);
       setAnalytics(data);
+      setRealCFDData(cfdData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
     } finally {
@@ -235,11 +241,22 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
         />
       </div>
 
+      {/* DAILY PULSE (Period = Today): Priority Widget */}
+      {selectedPeriod === 'today' && (
+        <SmartAnalyticsWidget
+          period={selectedPeriod}
+          organizationId={currentOrganization!.id}
+          burndownData={analytics.premiumCharts?.burndown}
+        />
+      )}
+
       {/* Primary Charts: Flow + Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-[50_50%] gap-6">
-        {analytics.premiumCharts?.cfd && (
-          <SmoothCFDChart data={analytics.premiumCharts.cfd} period={selectedPeriod} />
-        )}
+        <RealCFDChart
+          data={realCFDData}
+          period={selectedPeriod}
+          subtitle="Sourced from daily_metrics — run seed:additive to populate"
+        />
         {analytics.premiumCharts?.investment && (
           <InvestmentSunburst data={analytics.premiumCharts.investment} />
         )}
@@ -250,8 +267,14 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
         {analytics.premiumCharts?.heatmap && (
           <WorkloadHeatmap data={analytics.premiumCharts.heatmap} />
         )}
-        {analytics.premiumCharts?.burndown && (
-          <PredictiveBurndownChart data={analytics.premiumCharts.burndown} period={selectedPeriod} />
+        {/* SmartAnalyticsWidget: renders DailyHealthDashboard for 'today',
+            keeps the original PredictiveBurndownChart for all other periods */}
+        {selectedPeriod !== 'today' && (
+          <SmartAnalyticsWidget
+            period={selectedPeriod}
+            organizationId={currentOrganization!.id}
+            burndownData={analytics.premiumCharts?.burndown}
+          />
         )}
       </div>
 
@@ -281,7 +304,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
-              <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 12 }} />
+              <XAxis type="number" allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
               <YAxis
                 type="category"
                 dataKey="username"

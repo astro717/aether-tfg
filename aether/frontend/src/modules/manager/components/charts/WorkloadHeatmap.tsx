@@ -81,14 +81,20 @@ export function WorkloadHeatmap({
           <div className="flex items-center mb-2">
             <div className="w-24 flex-shrink-0" /> {/* Spacer for user column */}
             <div className="flex gap-1">
-              {data.days.map((day, idx) => (
-                <div
-                  key={idx}
-                  className="w-8 h-8 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400"
-                >
-                  {new Date(day).getDate()}
-                </div>
-              ))}
+              {data.days.map((day, idx) => {
+                // Handle time labels (HH:mm) for 'today' period - show simple hour numbers (9, 10, 11)
+                const isTime = day.includes(':');
+                const label = isTime ? parseInt(day.split(':')[0], 10) : new Date(day).getDate();
+
+                return (
+                  <div
+                    key={idx}
+                    className="w-8 h-8 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {label}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

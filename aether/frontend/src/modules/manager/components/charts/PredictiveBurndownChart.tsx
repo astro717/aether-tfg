@@ -53,10 +53,54 @@ export function PredictiveBurndownChart({
         return 'Period';
     }
   };
+  // Calculate periods based on selected time range (matching backend logic)
+  const getPeriodConfig = () => {
+    switch (period) {
+      case 'today':
+        return { historical: 12, projection: 12 }; // 24 hours total
+      case 'week':
+        return { historical: 7, projection: 7 }; // 14 days total
+      case 'month':
+        return { historical: 30, projection: 30 }; // 60 days total (30 historical + 30 projection)
+      case 'quarter':
+        return { historical: 13, projection: 13 }; // 26 weeks total
+      case 'all':
+        return { historical: 12, projection: 6 }; // 18 months total
+      default:
+        return { historical: 14, projection: 14 }; // Default fallback
+    }
+  };
+
+  const { historical, projection } = getPeriodConfig();
+  const totalDays = historical + projection;
+  const todayIndex = historical - 1; // 0-based index for "Today"
+
+  // Helper to generate date labels based on period and index relative to today
+  const generateDateLabel = (index: number) => {
+    const today = new Date();
+    const diff = index - todayIndex;
+    const targetDate = new Date(today);
+
+    switch (period) {
+      case 'today': // Hourly granularity
+        targetDate.setHours(today.getHours() + diff);
+        return targetDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false });
+      case 'quarter': // Weekly granularity
+        targetDate.setDate(today.getDate() + (diff * 7));
+        return targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      case 'all': // Monthly granularity
+        targetDate.setMonth(today.getMonth() + diff);
+        return targetDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      case 'week': // Daily granularity
+      case 'month':
+      default:
+        targetDate.setDate(today.getDate() + diff);
+        return targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  };
+
   // Combine all data points for the chart
-  // Days 0-13: Historical (real)
-  // Days 14-28: Projection (ideal + uncertainty cone)
-  const allDays = Array.from({ length: 29 }, (_, i) => i);
+  const allDays = Array.from({ length: totalDays }, (_, i) => i);
 
   const chartData = allDays.map((day) => {
     const realPoint = data.real.find((r) => r.day === day);
@@ -65,6 +109,7 @@ export function PredictiveBurndownChart({
 
     return {
       day,
+      dateLabel: generateDateLabel(day),
       real: realPoint?.tasks,
       ideal: idealPoint?.tasks,
       optimistic: projectionPoint?.optimistic,
@@ -102,13 +147,15 @@ export function PredictiveBurndownChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
 
             <XAxis
-              dataKey="day"
+              dataKey="dateLabel"
               tick={{ fill: '#6b7280', fontSize: 11 }}
               axisLine={{ stroke: '#374151', opacity: 0.2 }}
+              interval={period === 'month' ? 5 : 0} // Show every 6th tick for month (60 points → ~10 labels)
               label={{ value: getAxisLabel(), position: 'insideBottom', offset: -5, fill: '#6b7280', fontSize: 12 }}
             />
 
             <YAxis
+              allowDecimals={false}
               tick={{ fill: '#6b7280', fontSize: 11 }}
               axisLine={{ stroke: '#374151', opacity: 0.2 }}
               label={{ value: 'Tasks Remaining', angle: -90, position: 'insideLeft', fill: '#6b7280', fontSize: 12 }}
@@ -124,7 +171,6 @@ export function PredictiveBurndownChart({
               }}
               labelStyle={{ color: '#fff', fontWeight: 'bold', marginBottom: '8px' }}
               itemStyle={{ color: '#fff', fontSize: '12px', padding: '2px 0' }}
-              labelFormatter={(day) => `Day ${day}`}
             />
 
             <Legend
@@ -139,7 +185,7 @@ export function PredictiveBurndownChart({
 
             {/* Vertical line separating historical from projection */}
             <ReferenceLine
-              x={14}
+              x={todayIndex}
               stroke="#6b7280"
               strokeDasharray="5 5"
               label={{ value: 'Today', position: 'top', fill: '#6b7280', fontSize: 10 }}

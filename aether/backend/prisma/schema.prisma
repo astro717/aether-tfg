@@ -89,6 +89,23 @@ model organizations {
   tasks              tasks[]
   user_organizations user_organizations[]
   ai_reports         ai_reports[]
+  daily_metrics      daily_metrics[]
+}
+
+model daily_metrics {
+  id                String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  organization_id   String        @db.Uuid
+  date              DateTime      @db.Date
+  todo_count        Int           @default(0)
+  in_progress_count Int           @default(0)
+  review_count      Int           @default(0)
+  done_count        Int           @default(0)
+  total_count       Int           @default(0)
+
+  organizations     organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([organization_id, date])
+  @@index([date])
 }
 
 model pr_commits {
@@ -138,6 +155,7 @@ model tasks {
   due_date                        DateTime?       @db.Timestamp(6)
   validated_by                    String?         @db.Uuid
   created_at                      DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at                      DateTime        @default(now()) @updatedAt @db.Timestamp(6)
   comments                        String?
   is_archived                     Boolean         @default(false)
   ai_reports                      ai_reports[]

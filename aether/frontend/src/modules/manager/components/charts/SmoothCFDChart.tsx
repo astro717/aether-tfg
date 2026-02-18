@@ -144,6 +144,7 @@ export function SmoothCFDChart({ data, period = 'week', title = 'Cumulative Flow
             />
 
             <YAxis
+              allowDecimals={false}
               tick={{ fill: '#6b7280', fontSize: 11 }}
               axisLine={{ stroke: '#374151', opacity: 0.2 }}
               label={{ value: 'Tasks', angle: -90, position: 'insideLeft', fill: '#6b7280', fontSize: 12 }}

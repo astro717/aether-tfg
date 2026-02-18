@@ -48,6 +48,11 @@ export interface AnalyticsData {
     status: string;
     assignee: string;
     created_at: string;
+    // Enriched fields — only present when period === 'today'
+    updated_at?: string;
+    due_date?: string | null;
+    latestCommitDate?: string | null;
+    latestCommentDate?: string | null;
   }>;
   // PREMIUM CHARTS: Enhanced visualizations for Analytics Dashboard
   premiumCharts?: {
@@ -272,6 +277,21 @@ class ManagerApi {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || 'Failed to fetch team members');
+    }
+    return response.json();
+  }
+
+  async getCFD(
+    organizationId: string,
+    range: '30d' | '90d' | 'all' = '30d',
+  ): Promise<Array<{ date: string; done: number; review: number; in_progress: number; todo: number }>> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/organization/${organizationId}/cfd?range=${range}`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch CFD data');
     }
     return response.json();
   }

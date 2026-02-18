@@ -4,13 +4,13 @@ import { Link } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
+  pointerWithin,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -119,6 +119,20 @@ export function OrganizationView() {
 
     // Permission check: allow move if user is manager OR user is the assignee
     const canMove = isManager || task.assignee_id === user.id;
+
+    // DEBUG LOGGING
+    if (!canMove) {
+      console.log('[OrganizationView] Permission Check Failed:', {
+        taskId,
+        taskTitle: task.title,
+        isManager,
+        userRole: user?.role, // Global role
+        orgRole: currentOrganization?.role_in_org,
+        assigneeId: task.assignee_id,
+        currentUserId: user?.id,
+        canMove
+      });
+    }
     if (!canMove) {
       setPermissionError("You can only move tasks assigned to you.");
       setTimeout(() => setPermissionError(null), 3000);
@@ -255,7 +269,7 @@ export function OrganizationView() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >

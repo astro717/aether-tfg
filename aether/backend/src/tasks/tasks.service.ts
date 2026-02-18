@@ -852,6 +852,22 @@ export class TasksService {
   }
 
   /**
+   * Helper: Check if task status matches expected value (case-insensitive)
+   */
+  private isTaskStatus(task: any, expectedStatus: string): boolean {
+    if (!task.status) return false;
+    const normalizedStatus = task.status.toLowerCase();
+    const normalizedExpected = expectedStatus.toLowerCase();
+
+    // Handle 'done' and 'completed' as equivalent
+    if (normalizedExpected === 'done') {
+      return normalizedStatus === 'done' || normalizedStatus === 'completed';
+    }
+
+    return normalizedStatus === normalizedExpected;
+  }
+
+  /**
    * Get comprehensive analytics for the Manager Zone dashboard
    * @param period - 'today' | 'week' | 'month' | 'quarter' | 'all'
    */
@@ -874,35 +890,57 @@ export class TasksService {
     // Calculate date filter based on period
     const now = new Date();
     let dateFilter: Date | undefined;
+    let endDate: Date | undefined;
 
     switch (period) {
       case 'today':
         dateFilter = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         break;
       case 'week':
+        // Rolling 7-day window ending now
         dateFilter = new Date(now);
-        dateFilter.setDate(now.getDate() - now.getDay()); // Start of current week
+        dateFilter.setDate(now.getDate() - 7);
         dateFilter.setHours(0, 0, 0, 0);
+        endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'month':
-        dateFilter = new Date(now.getFullYear(), now.getMonth(), 1);
+        // Rolling 30-day window ending now
+        dateFilter = new Date(now);
+        dateFilter.setDate(now.getDate() - 30);
+        dateFilter.setHours(0, 0, 0, 0);
+        endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'quarter':
         dateFilter = new Date(now);
         dateFilter.setMonth(now.getMonth() - 3);
+        endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'all':
       default:
         dateFilter = undefined;
+        endDate = undefined;
     }
 
-    // Build where clause with optional date filter
-    const whereClause: any = { organization_id: organizationId, is_archived: false };
+    // Build where clause to capture tasks created OR updated OR due during the period
+    // This ensures we include tasks completed in the period even if created earlier
+    // IMPORTANT: We include archived tasks to count all historical data
+    const baseWhereClause: any = { organization_id: organizationId };
+
+    const whereClause: any = { ...baseWhereClause };
     if (dateFilter) {
-      whereClause.created_at = { gte: dateFilter };
+      // Fetch tasks that were either created OR updated OR due during the period
+      whereClause.OR = [
+        { created_at: { gte: dateFilter } },
+        { updated_at: { gte: dateFilter } },
+        { due_date: { gte: dateFilter, lte: endDate } },
+      ];
     }
 
-    // Get all tasks for this organization (with date filter)
+    // Get all tasks for this organization (created or updated in period)
     const allTasks = await this.prisma.tasks.findMany({
       where: whereClause,
       include: {
@@ -910,7 +948,7 @@ export class TasksService {
           select: { id: true, username: true, avatar_color: true },
         },
       },
-      orderBy: { created_at: 'asc' },
+      orderBy: { updated_at: 'desc' },
     });
 
     // Get team members
@@ -923,22 +961,49 @@ export class TasksService {
       },
     });
 
-    // Calculate KPIs
-    const totalTasks = allTasks.length;
-    const completedTasks = allTasks.filter(t => t.status === 'done').length;
-    const inProgressTasks = allTasks.filter(t => t.status === 'in_progress').length;
-    const pendingValidation = allTasks.filter(t => t.status === 'pending_validation').length;
-    const todoTasks = allTasks.filter(t => t.status === 'todo').length;
+    // Separate tasks by creation vs completion
+    // Total tasks = tasks CREATED in the period
+    const createdTasks = dateFilter
+      ? allTasks.filter(t => t.created_at && new Date(t.created_at) >= dateFilter)
+      : allTasks;
 
-    // Calculate completion rate
-    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    // Completed tasks = tasks with status 'done' AND updated in the period
+    // (This captures completions that happened during the period)
+    const completedInPeriod = dateFilter
+      ? allTasks.filter(t => this.isTaskStatus(t, 'done') && t.updated_at && new Date(t.updated_at) >= dateFilter)
+      : allTasks.filter(t => this.isTaskStatus(t, 'done'));
+
+    // Calculate KPIs
+    const totalTasks = createdTasks.length;
+    const completedTasks = completedInPeriod.length;
+    const inProgressTasks = allTasks.filter(t => this.isTaskStatus(t, 'in_progress')).length;
+    const pendingValidation = allTasks.filter(t => this.isTaskStatus(t, 'pending_validation')).length;
+
+    // "To Do" metric: Count incomplete tasks that have a due date within the selected period OR in the past (Overdue)
+    // We use a separate query ensuring we don't miss old overdue tasks that are outside the 'allTasks' time window
+    const todoWhere: any = {
+      organization_id: organizationId,
+      is_archived: false,
+      status: { notIn: ['done', 'completed', 'Done', 'Completed'] }, // Exclude done
+      due_date: { not: null }, // Must have a due date
+    };
+
+    if (endDate) {
+      todoWhere.due_date.lte = endDate;
+    }
+
+    const todoTasks = await this.prisma.tasks.count({ where: todoWhere });
+
+    // Calculate completion rate (tasks completed vs created in period)
+    const completionRate = totalTasks > 0 ? Math.round((completedInPeriod.length / totalTasks) * 100) : 0;
 
     // Calculate overdue tasks (reuse 'now' from above)
     const overdueTasks = allTasks.filter(t =>
-      t.due_date && new Date(t.due_date) < now && t.status !== 'done'
+      t.due_date && new Date(t.due_date) < now && !this.isTaskStatus(t, 'done')
     ).length;
 
     // Team Velocity: Tasks completed per week (last 8 weeks)
+    // Uses updated_at to track when tasks were actually completed
     const velocityData = [];
     for (let i = 7; i >= 0; i--) {
       const weekStart = new Date();
@@ -949,9 +1014,9 @@ export class TasksService {
       weekEnd.setDate(weekEnd.getDate() + 7);
 
       const completedThisWeek = allTasks.filter(t => {
-        if (t.status !== 'done' || !t.created_at) return false;
-        const createdAt = new Date(t.created_at);
-        return createdAt >= weekStart && createdAt < weekEnd;
+        if (!this.isTaskStatus(t, 'done') || !t.updated_at) return false;
+        const updatedAt = new Date(t.updated_at);
+        return updatedAt >= weekStart && updatedAt < weekEnd;
       }).length;
 
       velocityData.push({
@@ -985,12 +1050,25 @@ export class TasksService {
       }
     }
 
+    // Count metrics from allTasks (tasks active in period)
     for (const task of allTasks) {
       if (task.assignee_id && performanceMap.has(task.assignee_id)) {
         const user = performanceMap.get(task.assignee_id)!;
-        user.total++;
-        if (task.status === 'done') user.completed++;
-        if (task.status === 'in_progress') user.inProgress++;
+
+        // Total: tasks created in period
+        if (!dateFilter || (task.created_at && new Date(task.created_at) >= dateFilter)) {
+          user.total++;
+        }
+
+        // In progress: current state
+        if (this.isTaskStatus(task, 'in_progress')) {
+          user.inProgress++;
+        }
+
+        // Completed: tasks completed (updated) in period
+        if (this.isTaskStatus(task, 'done') && (!dateFilter || (task.updated_at && new Date(task.updated_at) >= dateFilter))) {
+          user.completed++;
+        }
       }
     }
 
@@ -1002,7 +1080,7 @@ export class TasksService {
     const healthData = [
       {
         name: 'On Track',
-        onTime: allTasks.filter(t => t.status !== 'done' && (!t.due_date || new Date(t.due_date) >= now)).length,
+        onTime: allTasks.filter(t => !this.isTaskStatus(t, 'done') && (!t.due_date || new Date(t.due_date) >= now)).length,
         overdue: 0,
       },
       {
@@ -1012,17 +1090,87 @@ export class TasksService {
       },
     ];
 
-    // Recent activity: last 10 task updates
-    const recentTasks = allTasks
-      .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime())
-      .slice(0, 10)
-      .map(t => ({
+    // Recent activity — period-aware
+    // For 'today': run a dedicated query that captures every "signal of life" today
+    // (updated_at, created_at, linked commits, comments, or simply in_progress status).
+    // This replaces the old simulation-based approach and returns real activity dates.
+    let recentTasks: Array<{
+      id: string;
+      title: string;
+      status: string | null;
+      assignee: string;
+      created_at: Date | null;
+      updated_at: Date;
+      due_date?: Date | null;
+      latestCommitDate?: Date | null;
+      latestCommentDate?: Date | null;
+    }>;
+
+    if (period === 'today') {
+      const todayStartForActive = new Date();
+      todayStartForActive.setHours(0, 0, 0, 0);
+
+      const activeTasks = await this.prisma.tasks.findMany({
+        where: {
+          organization_id: organizationId,
+          is_archived: false,
+          OR: [
+            { updated_at: { gte: todayStartForActive } },
+            { created_at: { gte: todayStartForActive } },
+            // Commit linked to this task committed today
+            { task_commits: { some: { commits: { committed_at: { gte: todayStartForActive } } } } },
+            // Comment left on this task today
+            { task_comments: { some: { created_at: { gte: todayStartForActive } } } },
+            // Silently in-progress tasks (no touch needed to be relevant)
+            { status: 'in_progress' },
+          ],
+        },
+        include: {
+          users_tasks_assignee_idTousers: {
+            select: { id: true, username: true, avatar_color: true },
+          },
+          // Latest linked commit (ordered by linked_at as proxy for committed_at)
+          task_commits: {
+            include: {
+              commits: { select: { committed_at: true } },
+            },
+            orderBy: { linked_at: 'desc' },
+            take: 1,
+          },
+          // Latest comment
+          task_comments: {
+            select: { created_at: true },
+            orderBy: { created_at: 'desc' },
+            take: 1,
+          },
+        },
+        take: 20,
+      });
+
+      recentTasks = activeTasks.map(t => ({
         id: t.id,
         title: t.title,
         status: t.status,
         assignee: t.users_tasks_assignee_idTousers?.username || 'Unassigned',
         created_at: t.created_at,
+        updated_at: t.updated_at,
+        due_date: t.due_date,
+        latestCommitDate: t.task_commits[0]?.commits?.committed_at ?? null,
+        latestCommentDate: t.task_comments[0]?.created_at ?? null,
       }));
+    } else {
+      recentTasks = allTasks
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 10)
+        .map(t => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          assignee: t.users_tasks_assignee_idTousers?.username || 'Unassigned',
+          created_at: t.created_at,
+          updated_at: t.updated_at,
+        }));
+    }
 
     // PREMIUM ANALYTICS: Calculate enhanced metrics and charts (period-aware)
     const normalizedPeriod = period || 'week';
@@ -1033,7 +1181,7 @@ export class TasksService {
     const heatmapData = await this.analyzeWorkloadHeatmap(organizationId, allTasks, normalizedPeriod);
     const burndownData = this.projectBurndownCone(allTasks, normalizedPeriod);
 
-    // Generate sparklines for KPI cards
+    // Generate sparklines for KPI cards (based on completion vs creation)
     const completionRateSparkline: number[] = [];
     for (let i = 7; i >= 0; i--) {
       const weekStart = new Date();
@@ -1042,12 +1190,14 @@ export class TasksService {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 7);
 
+      // Tasks completed (based on updated_at) in this week
       const weekCompleted = allTasks.filter(t => {
-        if (t.status !== 'done' || !t.created_at) return false;
-        const createdAt = new Date(t.created_at);
-        return createdAt >= weekStart && createdAt < weekEnd;
+        if (!this.isTaskStatus(t, 'done') || !t.updated_at) return false;
+        const updatedAt = new Date(t.updated_at);
+        return updatedAt >= weekStart && updatedAt < weekEnd;
       }).length;
 
+      // Tasks created in this week
       const weekTotal = allTasks.filter(t => {
         if (!t.created_at) return false;
         const createdAt = new Date(t.created_at);
@@ -1120,15 +1270,14 @@ export class TasksService {
         break;
 
       case 'week':
-        // Daily buckets (last 7 days: Mon, Tue, Wed, ...)
+        // Daily buckets for rolling last 7 days
         granularity = 'day';
         for (let i = 6; i >= 0; i--) {
           const bucket = new Date(now);
           bucket.setDate(bucket.getDate() - i);
           bucket.setHours(0, 0, 0, 0);
           timestamps.push(bucket);
-          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          labels.push(dayNames[bucket.getDay()]);
+          labels.push(`${bucket.getMonth() + 1}/${bucket.getDate()}`);
         }
         break;
 
@@ -1227,7 +1376,7 @@ export class TasksService {
     const now = Date.now();
 
     // Factor 1: Tasks with due dates approaching or overdue
-    const tasksWithDueDate = tasks.filter(t => t.due_date && t.status !== 'done');
+    const tasksWithDueDate = tasks.filter(t => t.due_date && !this.isTaskStatus(t, 'done'));
     const overdueTasks = tasksWithDueDate.filter(t => new Date(t.due_date).getTime() < now);
     const approachingDeadline = tasksWithDueDate.filter(t => {
       const daysUntilDue = (new Date(t.due_date).getTime() - now) / (1000 * 60 * 60 * 24);
@@ -1235,13 +1384,13 @@ export class TasksService {
     });
 
     // Factor 2: WIP (Work In Progress) saturation
-    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
-    const pendingValidation = tasks.filter(t => t.status === 'pending_validation').length;
+    const inProgress = tasks.filter(t => this.isTaskStatus(t, 'in_progress')).length;
+    const pendingValidation = tasks.filter(t => this.isTaskStatus(t, 'pending_validation')).length;
     const totalActive = inProgress + pendingValidation;
     const wipSaturation = Math.min(100, (totalActive / Math.max(tasks.length * 0.3, 1)) * 100);
 
     // Factor 3: Completion rate
-    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    const completedTasks = tasks.filter(t => this.isTaskStatus(t, 'done')).length;
     const completionRate = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 100;
     const completionRisk = 100 - completionRate;
 
@@ -1270,7 +1419,7 @@ export class TasksService {
     cycleTimeSparkline: number[];
     reviewEfficiencySparkline: number[];
   } {
-    const completedTasks = tasks.filter(t => t.status === 'done');
+    const completedTasks = tasks.filter(t => this.isTaskStatus(t, 'done'));
     const deploymentFrequency = completedTasks.length;
 
     // Calculate lead time (days from created_at to when status became 'done')
@@ -1314,7 +1463,7 @@ export class TasksService {
     const cycleTimeSparkline = leadTimes.slice(-10);
 
     // Review Efficiency: Approximate time in pending_validation
-    const pendingTasks = tasks.filter(t => t.status === 'pending_validation');
+    const pendingTasks = tasks.filter(t => this.isTaskStatus(t, 'pending_validation'));
     const reviewEfficiencySparkline = pendingTasks.slice(-10).map(t => {
       const created = new Date(t.created_at).getTime();
       const now = Date.now();
@@ -1363,10 +1512,10 @@ export class TasksService {
 
       // Calculate cumulative values (bottom to top stacking)
       // This simulates how tasks move through states over time
-      const doneCount = Math.round(tasks.filter(t => t.status === 'done').length * progressFactor);
-      const reviewCount = Math.round(tasks.filter(t => t.status === 'pending_validation').length * progressFactor);
-      const inProgressCount = Math.round(tasks.filter(t => t.status === 'in_progress').length * progressFactor);
-      const todoCount = Math.round(tasks.filter(t => t.status === 'todo').length * (1 - progressFactor * 0.5));
+      const doneCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'done')).length * progressFactor);
+      const reviewCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'pending_validation')).length * progressFactor);
+      const inProgressCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'in_progress')).length * progressFactor);
+      const todoCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'todo')).length * (1 - progressFactor * 0.5));
 
       data.push({
         date: dateStr,
@@ -1498,7 +1647,7 @@ export class TasksService {
     projection: Array<{ day: number; optimistic: number; pessimistic: number }>;
   } {
     const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    const completedTasks = tasks.filter(t => this.isTaskStatus(t, 'done')).length;
     const remainingTasks = totalTasks - completedTasks;
 
     // Determine historical and projection periods based on selected period
@@ -1515,8 +1664,8 @@ export class TasksService {
         projectionPeriods = 7; // Next 7 days
         break;
       case 'month':
-        historicalPeriods = 15; // Last 15 days
-        projectionPeriods = 15; // Next 15 days
+        historicalPeriods = 30; // Last 30 days
+        projectionPeriods = 30; // Next 30 days
         break;
       case 'quarter':
         historicalPeriods = 13; // Last 13 weeks
@@ -1641,6 +1790,46 @@ export class TasksService {
     });
 
     return { archived: result.count };
+  }
+
+  /**
+   * Get real historical CFD data from daily_metrics table.
+   * @param organizationId - Organization to query
+   * @param range - '30d' | '90d' | 'all'
+   */
+  async getDailyMetrics(organizationId: string, range: string): Promise<Array<{
+    date: string;
+    done: number;
+    review: number;
+    in_progress: number;
+    todo: number;
+  }>> {
+    let daysAgo: number | null = null;
+    if (range === '7d') daysAgo = 7;
+    else if (range === '30d') daysAgo = 30;
+    else if (range === '90d') daysAgo = 90;
+    // 'all' → no date filter
+
+    const where: any = { organization_id: organizationId };
+    if (daysAgo !== null) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - daysAgo);
+      cutoff.setHours(0, 0, 0, 0);
+      where.date = { gte: cutoff };
+    }
+
+    const metrics = await this.prisma.daily_metrics.findMany({
+      where,
+      orderBy: { date: 'asc' },
+    });
+
+    return metrics.map(m => ({
+      date: (m.date as Date).toISOString().split('T')[0],
+      done: m.done_count,
+      review: m.review_count,
+      in_progress: m.in_progress_count,
+      todo: m.todo_count,
+    }));
   }
 
   /**

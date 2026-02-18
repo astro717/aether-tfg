@@ -83,6 +83,15 @@ export class TasksController {
     return this.tasksService.getAnalytics(organizationId, user.id, period);
   }
 
+  @Get('organization/:organizationId/cfd')
+  async getCFD(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Query('range') range: string = '30d',
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.getDailyMetrics(organizationId, range);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get()
   async findAll(@CurrentUser() user: User) {

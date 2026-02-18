@@ -8,7 +8,9 @@
         "build": "nest build",
         "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-        "test": "jest"
+        "test": "jest",
+        "seed:additive": "ts-node prisma/seed-additive.ts",
+        "seed:bootstrap": "ts-node prisma/seed-additive.ts --bootstrap"
     },
     "dependencies": {
         "@google/generative-ai": "^0.24.1",

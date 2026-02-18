@@ -67,8 +67,8 @@ export function ManagerUsersList() {
     );
   }
 
-  const admins = members.filter(m => m.role_in_org === 'admin');
-  const regularMembers = members.filter(m => m.role_in_org !== 'admin');
+  const admins = members.filter(m => m.role_in_org === 'admin' || m.role_in_org === 'manager');
+  const regularMembers = members.filter(m => m.role_in_org !== 'admin' && m.role_in_org !== 'manager');
 
   return (
     <div className="space-y-8">
@@ -139,7 +139,7 @@ export function ManagerUsersList() {
 
         <div className="divide-y divide-gray-100 dark:divide-zinc-800">
           {members.map((member) => {
-            const isAdmin = member.role_in_org === 'admin';
+            const isAdmin = member.role_in_org === 'admin' || member.role_in_org === 'manager';
             const isCurrentUser = member.id === currentUser?.id;
             const isOnlyAdmin = isAdmin && admins.length === 1;
 
