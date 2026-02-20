@@ -13,7 +13,7 @@ import {
   Users,
   AlertTriangle,
   ListTodo,
-  ClipboardCheck,
+  Briefcase,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -224,10 +224,10 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
           color="blue"
         />
         <StatCard
-          title="Pending Validation"
-          value={kpis.pendingValidation}
-          subtitle="Needs review"
-          icon={<ClipboardCheck className="w-5 h-5" />}
+          title="Avg. Workload"
+          value={kpis.teamSize > 0 ? (kpis.todoTasks / kpis.teamSize).toFixed(1) : '0'}
+          subtitle="Tasks / Member"
+          icon={<Briefcase className="w-5 h-5" />}
           color="purple"
         />
         <StatCard

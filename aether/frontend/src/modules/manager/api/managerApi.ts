@@ -283,7 +283,7 @@ class ManagerApi {
 
   async getCFD(
     organizationId: string,
-    range: '30d' | '90d' | 'all' = '30d',
+    range: '7d' | '30d' | '90d' | 'all' = '30d',
   ): Promise<Array<{ date: string; done: number; review: number; in_progress: number; todo: number }>> {
     const response = await fetch(
       `${API_BASE_URL}/tasks/organization/${organizationId}/cfd?range=${range}`,
