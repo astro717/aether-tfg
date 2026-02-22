@@ -6,7 +6,7 @@ import { GithubService, CommitDiff } from '../github/github.service';
 export interface TaskValidationResult {
   taskId: string;
   taskTitle: string;
-  readableId: number;
+  readableId: string;
   isCompliant: boolean;
   confidence: 'high' | 'medium' | 'low';
   summary: string;
@@ -27,7 +27,7 @@ export interface CommitInTaskContextExplanation {
   sha: string;
   taskId: string;
   taskTitle: string;
-  readableId: number;
+  readableId: string;
   explanation: string;
   howItFulfillsTask: string;
   remainingWork: string[];

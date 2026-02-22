@@ -9,7 +9,6 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 interface CFDDataPoint {
   date: string;
   done: number;
-  review: number;
   in_progress: number;
   todo: number;
 }
@@ -21,7 +20,7 @@ interface SmoothCFDChartProps {
   subtitle?: string;
 }
 
-// Aether color palette with gradients
+// Aether color palette with gradients (3-phase flow: To Do → In Progress → Done)
 const CFD_LAYERS = [
   {
     dataKey: 'done',
@@ -29,13 +28,6 @@ const CFD_LAYERS = [
     color: '#10b981', // Emerald
     gradientId: 'gradientDone',
     opacity: 0.8,
-  },
-  {
-    dataKey: 'review',
-    name: 'Review',
-    color: '#8b5cf6', // Purple
-    gradientId: 'gradientReview',
-    opacity: 0.7,
   },
   {
     dataKey: 'in_progress',

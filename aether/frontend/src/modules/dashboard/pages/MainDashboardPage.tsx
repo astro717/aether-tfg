@@ -14,7 +14,7 @@ export function MainDashboardPage() {
     const { isManager } = useOrganization();
 
     return (
-        <div className="h-full flex flex-col p-0 w-full overflow-y-auto custom-scrollbar relative">
+        <div className="h-full flex flex-col p-0 w-full overflow-hidden relative">
             {/* Header Bar - Flex container with bottom alignment */}
             <div className="absolute top-8 left-8 right-8 z-50 flex items-end justify-between">
                 {/* View Toggle - Left */}
@@ -48,7 +48,7 @@ export function MainDashboardPage() {
 
             {/* Content Area */}
             {/* Added pt-20 to push content down below absolute headers, but allowing full scroll */}
-            <div className="flex-1 w-full pt-20">
+            <div className="flex-1 w-full pt-20 min-h-0">
                 {view === "org" ? <OrganizationView /> : <PersonalView />}
             </div>
 

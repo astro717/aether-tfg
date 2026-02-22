@@ -141,6 +141,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         if (isManager) {
             fetchPendingValidationCount();
         }
+
+        const handleRefresh = () => fetchPendingValidationCount(true);
+        window.addEventListener('refreshPendingValidation', handleRefresh);
+
+        return () => {
+            window.removeEventListener('refreshPendingValidation', handleRefresh);
+        };
     }, [fetchPendingValidationCount, isManager]);
 
     // Fetch conversations (initial + polling)

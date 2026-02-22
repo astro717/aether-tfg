@@ -10,13 +10,12 @@ import {
   Legend,
 } from 'recharts';
 import {
-  Users,
   AlertTriangle,
-  ListTodo,
   Briefcase,
   Loader2,
   RefreshCw,
   Sparkles,
+  Activity,
 } from 'lucide-react';
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { managerApi, type AnalyticsData } from '../api/managerApi';
@@ -46,7 +45,7 @@ const PERIOD_OPTIONS: { value: PeriodType; label: string; shortLabel: string }[]
 export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) {
   const { currentOrganization } = useOrganization();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [realCFDData, setRealCFDData] = useState<Array<{ date: string; done: number; review: number; in_progress: number; todo: number }>>([]);
+  const [realCFDData, setRealCFDData] = useState<Array<{ date: string; done: number; in_progress: number; todo: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('week');
@@ -113,132 +112,166 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
 
   const { kpis, velocityData, individualPerformance } = analytics;
 
+  // ── CFD Relative Offset Math ──────────────────────────────────────────────
+  // For non-"all" periods, subtract the baseline done count from day 1.
+  // This prevents historical baggage from squashing recent activity.
+  const isRelativeView = selectedPeriod !== 'all' && realCFDData.length > 0;
+  const chartCFDData = isRelativeView
+    ? (() => {
+        const baseDone = realCFDData[0].done;
+        return realCFDData.map((point) => ({
+          ...point,
+          done: Math.max(0, point.done - baseDone),
+        }));
+      })()
+    : realCFDData;
+
+  const cfdSubtitle = isRelativeView
+    ? 'Relative view — baseline offset applied for this period'
+    : 'Sourced from daily_metrics — run seed:additive to populate';
+
   return (
     <div className="space-y-8">
-      {/* Header with Period Selector and AI Button */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Team Analytics
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Real-time insights for your organization
-          </p>
+      {/* Header */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Team Analytics
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Real-time insights for your organization
+        </p>
+      </div>
+
+      {/* LIVE SNAPSHOT SECTION: Current state metrics (unaffected by period selector) */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Live Snapshot
+          </h3>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            — Current organization state
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Period Selector */}
-          <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 p-1">
-            {PERIOD_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => handlePeriodChange(option.value)}
-                className={`
-                  px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200
-                  ${selectedPeriod === option.value
-                    ? 'bg-blue-500 text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-700'
-                  }
-                `}
-                title={option.label}
-              >
-                <span className="hidden sm:inline">{option.label}</span>
-                <span className="sm:hidden">{option.shortLabel}</span>
-              </button>
-            ))}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard
+            title="Risk Score"
+            value={kpis.riskScore}
+            subtitle={kpis.riskScore > 70 ? 'High risk' : kpis.riskScore > 40 ? 'Moderate' : 'Low risk'}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            color={kpis.riskScore > 70 ? 'red' : kpis.riskScore > 40 ? 'amber' : 'green'}
+          />
+          <StatCard
+            title="Avg. Workload"
+            value={kpis.teamSize > 0 ? (kpis.todoTasks / kpis.teamSize).toFixed(1) : '0'}
+            subtitle="Tasks / Member"
+            icon={<Briefcase className="w-5 h-5" />}
+            color="purple"
+          />
+          <StatCard
+            title="In Progress"
+            value={kpis.inProgressTasks}
+            subtitle="Active work"
+            icon={<Activity className="w-5 h-5" />}
+            color="blue"
+          />
+          <StatCard
+            title="Overdue"
+            value={kpis.overdueTasks}
+            subtitle="Currently overdue"
+            icon={<AlertTriangle className="w-5 h-5" />}
+            color="red"
+            trend={kpis.overdueTasks > 0 ? 'down' : 'up'}
+            trendValue={kpis.overdueTasks > 0 ? 'At risk' : 'On track'}
+          />
+        </div>
+      </div>
+
+      {/* HISTORICAL PERFORMANCE SECTION: Time-filtered metrics */}
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Historical Performance
+            </h3>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              — Time-based analytics
+            </span>
           </div>
-          <button
-            onClick={() => fetchAnalytics()}
-            className="p-2 rounded-xl bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onOpenAIReport}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-300 hover:scale-[1.02]"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span className="hidden sm:inline">Generate AI Report</span>
-            <span className="sm:hidden">AI Report</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Period Selector */}
+            <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 p-1">
+              {PERIOD_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handlePeriodChange(option.value)}
+                  className={`
+                    px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200
+                    ${selectedPeriod === option.value
+                      ? 'bg-blue-500 text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-700'
+                    }
+                  `}
+                  title={option.label}
+                >
+                  <span className="hidden sm:inline">{option.label}</span>
+                  <span className="sm:hidden">{option.shortLabel}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => fetchAnalytics()}
+              className="p-2 rounded-xl bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onOpenAIReport}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-300 hover:scale-[1.02]"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="hidden sm:inline">Generate AI Report</span>
+              <span className="sm:hidden">AI Report</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Hero KPIs with Sparklines */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <SparklineCard
-          title="Completed Tasks"
-          value={kpis.completedTasks}
-          sparklineData={analytics.premiumCharts?.sparklines?.completionRate || []}
-          color="green"
-          trend={kpis.completionRate >= 70 ? 'up' : kpis.completionRate >= 40 ? 'neutral' : 'down'}
-          subtitle={`${kpis.completionRate}% completion rate`}
-        />
-        <SparklineCard
-          title="Velocity"
-          value={velocityData.length > 0 ? velocityData[velocityData.length - 1].completed : 0}
-          unit="tasks/week"
-          sparklineData={analytics.premiumCharts?.sparklines?.velocity || []}
-          color="blue"
-          subtitle="Weekly throughput"
-        />
-        <SparklineCard
-          title="Cycle Time"
-          value={analytics.premiumCharts?.sparklines?.cycleTime?.[analytics.premiumCharts.sparklines.cycleTime.length - 1]
-            ? Math.round(analytics.premiumCharts.sparklines.cycleTime[analytics.premiumCharts.sparklines.cycleTime.length - 1])
-            : 0}
-          unit="days"
-          sparklineData={analytics.premiumCharts?.sparklines?.cycleTime || []}
-          color="amber"
-          subtitle="Time to complete"
-        />
-        <SparklineCard
-          title="Risk Score"
-          value={analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0}
-          sparklineData={[]}
-          color={
-            (analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0) > 70 ? 'red' :
-              (analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0) > 40 ? 'amber' : 'green'
-          }
-          trend={
-            (analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0) < 30 ? 'up' :
-              (analytics.premiumCharts?.sparklines?.riskScore?.[0] || 0) < 70 ? 'neutral' : 'down'
-          }
-          subtitle={kpis.overdueTasks > 0 ? `${kpis.overdueTasks} overdue` : 'On track'}
-        />
-      </div>
-
-      {/* Supporting KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Team Size"
-          value={kpis.teamSize}
-          subtitle="Active members"
-          icon={<Users className="w-5 h-5" />}
-          color="zinc"
-        />
-        <StatCard
-          title="To Do"
-          value={kpis.todoTasks}
-          subtitle="Backlog items"
-          icon={<ListTodo className="w-5 h-5" />}
-          color="blue"
-        />
-        <StatCard
-          title="Avg. Workload"
-          value={kpis.teamSize > 0 ? (kpis.todoTasks / kpis.teamSize).toFixed(1) : '0'}
-          subtitle="Tasks / Member"
-          icon={<Briefcase className="w-5 h-5" />}
-          color="purple"
-        />
-        <StatCard
-          title="Overdue"
-          value={kpis.overdueTasks}
-          subtitle="Needs attention"
-          icon={<AlertTriangle className="w-5 h-5" />}
-          color="red"
-          trend={kpis.overdueTasks > 0 ? 'down' : 'up'}
-          trendValue={kpis.overdueTasks > 0 ? 'At risk' : 'On track'}
-        />
+        {/* Hero KPIs with Sparklines */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <SparklineCard
+            title="Completed Tasks"
+            value={kpis.completedTasks}
+            sparklineData={analytics.premiumCharts?.sparklines?.completionRate || []}
+            color="green"
+            trend={kpis.completionRate >= 70 ? 'up' : kpis.completionRate >= 40 ? 'neutral' : 'down'}
+            subtitle={`${kpis.completionRate}% completion rate`}
+          />
+          <SparklineCard
+            title="Velocity"
+            value={velocityData.length > 0 ? velocityData[velocityData.length - 1].completed : 0}
+            unit="tasks/week"
+            sparklineData={analytics.premiumCharts?.sparklines?.velocity || []}
+            color="blue"
+            subtitle="Weekly throughput"
+          />
+          <SparklineCard
+            title="Cycle Time"
+            value={kpis.cycleTime}
+            unit="days"
+            sparklineData={analytics.premiumCharts?.sparklines?.cycleTime || []}
+            color="amber"
+            subtitle="Time to complete"
+          />
+          <SparklineCard
+            title="On-Time Delivery"
+            value={kpis.onTimeRate}
+            unit="%"
+            sparklineData={[]}
+            color="green"
+            trend={kpis.onTimeRate >= 80 ? 'up' : kpis.onTimeRate >= 60 ? 'neutral' : 'down'}
+            subtitle="Delivered before deadline"
+          />
+        </div>
       </div>
 
       {/* DAILY PULSE (Period = Today): Priority Widget */}
@@ -251,12 +284,15 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
       )}
 
       {/* Primary Charts: Flow + Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-[50_50%] gap-6">
-        <RealCFDChart
-          data={realCFDData}
-          period={selectedPeriod}
-          subtitle="Sourced from daily_metrics — run seed:additive to populate"
-        />
+      {/* CFD is hidden for 'today' — the Daily Pulse widget handles intraday insights */}
+      <div className="grid grid-cols-1 gap-6">
+        {selectedPeriod !== 'today' && (
+          <RealCFDChart
+            data={chartCFDData}
+            period={selectedPeriod}
+            subtitle={cfdSubtitle}
+          />
+        )}
         {analytics.premiumCharts?.investment && (
           <InvestmentSunburst data={analytics.premiumCharts.investment} />
         )}
@@ -319,6 +355,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
                   boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
                 }}
                 labelStyle={{ color: '#fff' }}
+                itemStyle={{ color: '#fff' }}
               />
               <Legend />
               <Bar

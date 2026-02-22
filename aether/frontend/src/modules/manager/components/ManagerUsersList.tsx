@@ -137,7 +137,7 @@ export function ManagerUsersList() {
           </h3>
         </div>
 
-        <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+        <div className="divide-y divide-gray-100 dark:divide-zinc-800 max-h-[500px] overflow-y-auto premium-scrollbar">
           {members.map((member) => {
             const isAdmin = member.role_in_org === 'admin' || member.role_in_org === 'manager';
             const isCurrentUser = member.id === currentUser?.id;

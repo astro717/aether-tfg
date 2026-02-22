@@ -51,7 +51,7 @@ export function SidebarSearch({ tasks, conversations, onNavigate }: SidebarSearc
                 id: t.id,
                 type: "task",
                 title: t.title,
-                subtitle: `#${t.readable_id} • ${t.status.replace('_', ' ')}`,
+                subtitle: `${t.readable_id} • ${t.status.replace('_', ' ')}`,
                 data: t
             }));
 

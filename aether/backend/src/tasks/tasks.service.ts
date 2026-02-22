@@ -2,6 +2,7 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -35,6 +36,50 @@ export class TasksService {
    */
   private getTaskLink(taskId: string): string {
     return `${this.frontendUrl}/tasks/${taskId}`;
+  }
+
+  /**
+   * Generate a unique readable_id in the format PREFIX-HASH (e.g., AET-3M2KV9)
+   * @param organizationId - The organization to get the prefix from
+   */
+  private async generateReadableId(organizationId: string): Promise<string> {
+    // Get organization prefix
+    const org = await this.prisma.organizations.findUnique({
+      where: { id: organizationId },
+      select: { task_prefix: true, name: true },
+    });
+
+    // Use task_prefix if set, otherwise derive from org name
+    const prefix = org?.task_prefix || org?.name?.substring(0, 3).toUpperCase() || 'TSK';
+
+    // Generate 6-character alphanumeric hash (uppercase for aesthetics)
+    const generateHash = (): string => {
+      return randomBytes(4).toString('hex').toUpperCase().slice(0, 6);
+    };
+
+    // Ensure uniqueness with retry logic
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (attempts < maxAttempts) {
+      const hash = generateHash();
+      const readableId = `${prefix}-${hash}`;
+
+      // Check if this readable_id already exists
+      const existing = await this.prisma.tasks.findUnique({
+        where: { readable_id: readableId },
+      });
+
+      if (!existing) {
+        return readableId;
+      }
+
+      attempts++;
+    }
+
+    // Fallback: use timestamp-based hash if random collisions persist
+    const fallbackHash = Date.now().toString(36).toUpperCase().slice(-6);
+    return `${prefix}-${fallbackHash}`;
   }
 
   /**
@@ -231,6 +276,9 @@ export class TasksService {
     // - Members: task starts as 'pending_validation' (needs manager approval)
     const initialStatus = isManager ? (dto.status ?? 'todo') : 'pending_validation';
 
+    // Generate unique readable_id (e.g., AET-3M2KV9)
+    const readableId = await this.generateReadableId(dto.organization_id);
+
     const data: any = {
       title: dto.title,
       description: dto.description,
@@ -239,6 +287,7 @@ export class TasksService {
       repo_id: dto.repo_id || null,
       organization_id: dto.organization_id,
       assignee_id: dto.assignee_id,
+      readable_id: readableId,
     };
 
     // If creator is manager -> task is already validated
@@ -358,7 +407,7 @@ export class TasksService {
   /**
    * Find task by readable_id (for commit linking)
    */
-  async findByReadableId(readableId: number) {
+  async findByReadableId(readableId: string) {
     return this.prisma.tasks.findUnique({
       where: { readable_id: readableId },
     });
@@ -977,30 +1026,68 @@ export class TasksService {
     const totalTasks = createdTasks.length;
     const completedTasks = completedInPeriod.length;
     const inProgressTasks = allTasks.filter(t => this.isTaskStatus(t, 'in_progress')).length;
-    const pendingValidation = allTasks.filter(t => this.isTaskStatus(t, 'pending_validation')).length;
 
-    // "To Do" metric: Count incomplete tasks that have a due date within the selected period OR in the past (Overdue)
-    // We use a separate query ensuring we don't miss old overdue tasks that are outside the 'allTasks' time window
-    const todoWhere: any = {
-      organization_id: organizationId,
-      is_archived: false,
-      status: { notIn: ['done', 'completed', 'Done', 'Completed'] }, // Exclude done
-      due_date: { not: null }, // Must have a due date
-    };
+    // SNAPSHOT METRICS: These metrics reflect the current state of the organization
+    // and are NOT filtered by the selected time period (dateFilter is ignored)
 
-    if (endDate) {
-      todoWhere.due_date.lte = endDate;
-    }
+    // Pending Validation Snapshot: Current count of tasks awaiting review
+    const pendingValidation = await this.prisma.tasks.count({
+      where: {
+        organization_id: organizationId,
+        status: 'pending_validation',
+        is_archived: false,
+      },
+    });
 
-    const todoTasks = await this.prisma.tasks.count({ where: todoWhere });
+    // To Do Snapshot: Current count of all incomplete tasks (global backlog)
+    const todoTasks = await this.prisma.tasks.count({
+      where: {
+        organization_id: organizationId,
+        is_archived: false,
+        status: { notIn: ['done', 'completed', 'Done', 'Completed'] },
+      },
+    });
+
+    // Overdue Snapshot: Current count of tasks past their due date
+    const overdueTasks = await this.prisma.tasks.count({
+      where: {
+        organization_id: organizationId,
+        is_archived: false,
+        due_date: { lt: now },
+        status: { notIn: ['done', 'completed', 'Done', 'Completed'] },
+      },
+    });
+
+    // In Progress Snapshot: Current count of tasks actively being worked on
+    const inProgressSnapshot = await this.prisma.tasks.count({
+      where: {
+        organization_id: organizationId,
+        status: 'in_progress',
+        is_archived: false,
+      },
+    });
 
     // Calculate completion rate (tasks completed vs created in period)
     const completionRate = totalTasks > 0 ? Math.round((completedInPeriod.length / totalTasks) * 100) : 0;
 
-    // Calculate overdue tasks (reuse 'now' from above)
-    const overdueTasks = allTasks.filter(t =>
-      t.due_date && new Date(t.due_date) < now && !this.isTaskStatus(t, 'done')
-    ).length;
+    // On-Time Delivery Rate: Percentage of completed tasks delivered before their due date
+    // Tasks without due_date are counted as on-time by default
+    let onTimeCount = 0;
+    for (const t of completedInPeriod) {
+      if (!t.due_date) {
+        // No deadline = on-time by default
+        onTimeCount++;
+      } else if (t.updated_at) {
+        const completedAt = new Date(t.updated_at).getTime();
+        const dueAt = new Date(t.due_date).getTime();
+        if (completedAt <= dueAt) {
+          onTimeCount++;
+        }
+      }
+    }
+    const onTimeRate = completedInPeriod.length > 0
+      ? Math.round((onTimeCount / completedInPeriod.length) * 100)
+      : 100; // No tasks = 100% on-time (avoid false negatives)
 
     // Team Velocity: Tasks completed per week (last 8 weeks)
     // Uses updated_at to track when tasks were actually completed
@@ -1175,7 +1262,18 @@ export class TasksService {
     // PREMIUM ANALYTICS: Calculate enhanced metrics and charts (period-aware)
     const normalizedPeriod = period || 'week';
     const doraMetrics = this.calculateDoraMetrics(allTasks);
-    const riskScore = this.calculateRiskScore(allTasks, organizationId);
+
+    // Risk Score: Calculated from truly ACTIVE tasks only (todo + in_progress)
+    // Excludes 'done' (completed) and 'pending_validation' (ideas not yet approved)
+    // This prevents false low-risk readings when filtering to short time windows
+    const globalActiveTasks = await this.prisma.tasks.findMany({
+      where: {
+        organization_id: organizationId,
+        is_archived: false,
+        status: { in: ['todo', 'in_progress'] },
+      },
+    });
+    const riskScore = this.calculateRiskScore(globalActiveTasks, organizationId);
     const cfdData = this.generateSmoothCFD(allTasks, normalizedPeriod);
     const investmentData = this.calculateInvestmentProfile(allTasks);
     const heatmapData = await this.analyzeWorkloadHeatmap(organizationId, allTasks, normalizedPeriod);
@@ -1208,16 +1306,34 @@ export class TasksService {
       completionRateSparkline.push(weekRate);
     }
 
+    // Calculate precise average cycle time for tasks completed WITHIN the selected period
+    const cycleTimesInPeriod: number[] = [];
+    for (const t of completedInPeriod) {
+      if (t.created_at && t.updated_at) {
+        const created = new Date(t.created_at).getTime();
+        const completed = new Date(t.updated_at).getTime();
+        if (completed >= created) {
+          cycleTimesInPeriod.push((completed - created) / (1000 * 60 * 60 * 24));
+        }
+      }
+    }
+    const periodCycleTimeAvg = cycleTimesInPeriod.length > 0
+      ? parseFloat((cycleTimesInPeriod.reduce((a, b) => a + b, 0) / cycleTimesInPeriod.length).toFixed(1))
+      : 0;
+
     return {
       kpis: {
         totalTasks,
         completedTasks,
-        inProgressTasks,
+        inProgressTasks: inProgressSnapshot,
         pendingValidation,
         todoTasks,
         completionRate,
         overdueTasks,
         teamSize: teamMembers.length,
+        cycleTime: periodCycleTimeAvg,
+        onTimeRate,
+        riskScore,
       },
       velocityData,
       statusDistribution,
@@ -1369,40 +1485,78 @@ export class TasksService {
 
   /**
    * HELPER: Calculate AI Risk Score (0-100)
-   * Algorithm: Based on % completion vs time remaining + blockers + overdue
-   * Higher score = Higher risk of delays
+   * Algorithm: Weighted sum of actionable risk factors for ACTIVE tasks
+   * Input: Only 'todo' and 'in_progress' tasks (no 'done' or 'pending_validation')
+   *
+   * Risk Factors:
+   * - Overdue tasks: highest risk (exponential weight, capped at 60)
+   * - Approaching deadlines (7 days): moderate risk (capped at 25)
+   * - High WIP ratio: capacity risk (capped at 25)
+   * - Tasks without due dates: planning risk (capped at 15)
+   *
+   * Score Interpretation:
+   * - 0-20: Healthy (green)
+   * - 21-40: Low risk (green)
+   * - 41-70: Moderate (amber)
+   * - 71-100: High risk (red)
    */
-  private calculateRiskScore(tasks: any[], organizationId: string): number {
+  private calculateRiskScore(tasks: any[], _organizationId: string): number {
+    // Edge case: no active tasks = no risk
+    if (tasks.length === 0) {
+      return 0;
+    }
+
     const now = Date.now();
 
-    // Factor 1: Tasks with due dates approaching or overdue
-    const tasksWithDueDate = tasks.filter(t => t.due_date && !this.isTaskStatus(t, 'done'));
+    // === FACTOR 1: Overdue Tasks (capped at 60 points) ===
+    // Exponential weight: first 2 add 15 each, next 3 add 10 each, rest add 5 each
+    const tasksWithDueDate = tasks.filter(t => t.due_date);
     const overdueTasks = tasksWithDueDate.filter(t => new Date(t.due_date).getTime() < now);
+    const overdueCount = overdueTasks.length;
+
+    let overdueScore = 0;
+    if (overdueCount > 0) {
+      // First 2 overdue: 15 points each
+      const tier1 = Math.min(overdueCount, 2);
+      overdueScore += tier1 * 15;
+
+      // Next 3 overdue (3-5): 10 points each
+      const tier2 = Math.min(Math.max(overdueCount - 2, 0), 3);
+      overdueScore += tier2 * 10;
+
+      // Remaining overdue (6+): 5 points each
+      const tier3 = Math.max(overdueCount - 5, 0);
+      overdueScore += tier3 * 5;
+    }
+    overdueScore = Math.min(overdueScore, 60);
+
+    // === FACTOR 2: Approaching Deadlines (capped at 25 points) ===
+    // Tasks due within 7 days: 5 points each
     const approachingDeadline = tasksWithDueDate.filter(t => {
       const daysUntilDue = (new Date(t.due_date).getTime() - now) / (1000 * 60 * 60 * 24);
       return daysUntilDue > 0 && daysUntilDue <= 7;
     });
+    const approachingScore = Math.min(approachingDeadline.length * 5, 25);
 
-    // Factor 2: WIP (Work In Progress) saturation
-    const inProgress = tasks.filter(t => this.isTaskStatus(t, 'in_progress')).length;
-    const pendingValidation = tasks.filter(t => this.isTaskStatus(t, 'pending_validation')).length;
-    const totalActive = inProgress + pendingValidation;
-    const wipSaturation = Math.min(100, (totalActive / Math.max(tasks.length * 0.3, 1)) * 100);
+    // === FACTOR 3: WIP Saturation (capped at 25 points) ===
+    // Risk when in_progress tasks exceed 50% of total active tasks
+    const inProgressCount = tasks.filter(t => this.isTaskStatus(t, 'in_progress')).length;
+    const wipRatio = inProgressCount / tasks.length;
+    let wipScore = 0;
+    if (wipRatio > 0.5) {
+      // Scale linearly from 0 to 25 as WIP goes from 50% to 100%
+      wipScore = Math.round(((wipRatio - 0.5) / 0.5) * 25);
+    }
 
-    // Factor 3: Completion rate
-    const completedTasks = tasks.filter(t => this.isTaskStatus(t, 'done')).length;
-    const completionRate = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 100;
-    const completionRisk = 100 - completionRate;
+    // === FACTOR 4: Missing Due Dates (capped at 15 points) ===
+    // Tasks without due dates indicate poor planning: 3 points each
+    const missingDueDateCount = tasks.filter(t => !t.due_date).length;
+    const missingDueDateScore = Math.min(missingDueDateCount * 3, 15);
 
-    // Calculate weighted risk score
-    const overdueWeight = overdueTasks.length * 15; // Each overdue task adds 15 points
-    const approachingWeight = approachingDeadline.length * 8; // Each approaching deadline adds 8 points
-    const wipWeight = wipSaturation * 0.3; // WIP saturation contributes 30%
-    const completionWeight = completionRisk * 0.4; // Completion risk contributes 40%
+    // === FINAL SCORE ===
+    const totalScore = overdueScore + approachingScore + wipScore + missingDueDateScore;
 
-    const riskScore = Math.min(100, overdueWeight + approachingWeight + wipWeight + completionWeight);
-
-    return Math.round(riskScore);
+    return Math.min(100, Math.round(totalScore));
   }
 
   /**
@@ -1422,15 +1576,17 @@ export class TasksService {
     const completedTasks = tasks.filter(t => this.isTaskStatus(t, 'done'));
     const deploymentFrequency = completedTasks.length;
 
-    // Calculate lead time (days from created_at to when status became 'done')
-    const leadTimes = completedTasks
-      .filter(t => t.created_at)
-      .map(t => {
-        // Approximation: use created_at to now (ideally we'd track status change timestamps)
+    // Calculate lead time (days from created_at to completion)
+    const leadTimes: number[] = [];
+    for (const t of completedTasks) {
+      if (t.created_at && t.updated_at) {
         const created = new Date(t.created_at).getTime();
-        const now = Date.now();
-        return (now - created) / (1000 * 60 * 60 * 24); // days
-      });
+        const completed = new Date(t.updated_at).getTime();
+        if (completed >= created) {
+          leadTimes.push((completed - created) / (1000 * 60 * 60 * 24)); // days
+        }
+      }
+    }
 
     const leadTimeAvg = leadTimes.length > 0
       ? Math.round(leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length)
@@ -1490,12 +1646,11 @@ export class TasksService {
   private generateSmoothCFD(tasks: any[], period: string = 'week'): Array<{
     date: string;
     done: number;
-    review: number;
     in_progress: number;
     todo: number;
   }> {
     const { timestamps, labels } = this.getTimeBuckets(period);
-    const data: Array<{ date: string; done: number; review: number; in_progress: number; todo: number }> = [];
+    const data: Array<{ date: string; done: number; in_progress: number; todo: number }> = [];
 
     const totalBuckets = timestamps.length;
 
@@ -1513,14 +1668,12 @@ export class TasksService {
       // Calculate cumulative values (bottom to top stacking)
       // This simulates how tasks move through states over time
       const doneCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'done')).length * progressFactor);
-      const reviewCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'pending_validation')).length * progressFactor);
       const inProgressCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'in_progress')).length * progressFactor);
       const todoCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'todo')).length * (1 - progressFactor * 0.5));
 
       data.push({
         date: dateStr,
         done: doneCount,
-        review: reviewCount,
         in_progress: inProgressCount,
         todo: todoCount,
       });
@@ -1800,7 +1953,6 @@ export class TasksService {
   async getDailyMetrics(organizationId: string, range: string): Promise<Array<{
     date: string;
     done: number;
-    review: number;
     in_progress: number;
     todo: number;
   }>> {
@@ -1826,7 +1978,6 @@ export class TasksService {
     return metrics.map(m => ({
       date: (m.date as Date).toISOString().split('T')[0],
       done: m.done_count,
-      review: m.review_count,
       in_progress: m.in_progress_count,
       todo: m.todo_count,
     }));

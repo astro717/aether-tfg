@@ -77,7 +77,7 @@ export function TaskValidationModal({
           <div className="flex-1 min-w-0 pr-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-mono text-gray-400 dark:text-gray-500">
-                #{task.readable_id}
+                {task.readable_id}
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
                 Pending Validation

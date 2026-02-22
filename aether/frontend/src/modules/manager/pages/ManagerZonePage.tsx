@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ClipboardCheck, Users, ChevronLeft, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TaskValidationList } from '../components/TaskValidationList';
@@ -6,13 +6,44 @@ import { ManagerUsersList } from '../components/ManagerUsersList';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import { AIReportModal } from '../components/AIReportModal';
 import { useOrganization } from '../../organization/context/OrganizationContext';
+import { managerApi } from '../api/managerApi';
 
 type TabType = 'validation' | 'users' | 'analytics';
 
 export function ManagerZonePage() {
   const [activeTab, setActiveTab] = useState<TabType>('analytics');
   const [showAIModal, setShowAIModal] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const { currentOrganization } = useOrganization();
+
+  // Fetch count on mount and listen to refresh event
+  useEffect(() => {
+    const fetchCount = async () => {
+      if (currentOrganization?.id) {
+        try {
+          const tasks = await managerApi.getPendingValidationTasks(currentOrganization.id);
+          setPendingCount(tasks.length);
+        } catch (e) {
+          console.error("Error fetching pending validation count:", e);
+        }
+      }
+    };
+
+    fetchCount();
+
+    // Refresh count if a task is validated/rejected
+    const handleRefresh = () => fetchCount();
+    window.addEventListener('refreshPendingValidation', handleRefresh);
+    return () => window.removeEventListener('refreshPendingValidation', handleRefresh);
+  }, [currentOrganization?.id]);
+
+  const handleTabChange = (newTab: TabType) => {
+    // If we're leaving the validation tab, refresh the global notification counts
+    if (activeTab === 'validation' && newTab !== 'validation') {
+      window.dispatchEvent(new Event('refreshPendingValidation'));
+    }
+    setActiveTab(newTab);
+  };
 
   const tabs = [
     {
@@ -24,6 +55,7 @@ export function ManagerZonePage() {
       id: 'validation' as TabType,
       label: 'Task Validation',
       icon: ClipboardCheck,
+      hasNotification: pendingCount > 0,
     },
     {
       id: 'users' as TabType,
@@ -63,7 +95,7 @@ export function ManagerZonePage() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
                   className={`
                     flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium
                     transition-all duration-200
@@ -75,6 +107,9 @@ export function ManagerZonePage() {
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
+                  {tab.hasNotification && (
+                    <span className="w-2 h-2 rounded-full bg-blue-500 ml-1"></span>
+                  )}
                 </button>
               );
             })}

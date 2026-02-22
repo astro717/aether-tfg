@@ -273,7 +273,7 @@ export function OrganizationView() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex-1 w-full overflow-x-auto overflow-y-hidden flex flex-col h-full relative">
+      <div className="flex-1 w-full overflow-x-hidden overflow-y-hidden flex flex-col h-full relative">
         {/* Permission Error Toast */}
         {permissionError && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">
@@ -289,13 +289,13 @@ export function OrganizationView() {
               title="To Do"
               total={todoTotal}
               width="w-full"
-              contentOffset="pr-[140px]"
+              contentOffset="pr-[100px]"
               tasks={todoTasks}
             />
           </div>
 
           {/* In Progress Column */}
-          <div className="relative z-30 -ml-[100px] flex-1 min-w-[390px] flex flex-col">
+          <div className="relative z-30 -ml-[70px] flex-1 min-w-[350px] flex flex-col">
             <KanbanColumn
               id="in_progress"
               title="In Progress"
@@ -307,13 +307,13 @@ export function OrganizationView() {
           </div>
 
           {/* Done Column */}
-          <div className="relative z-10 -ml-[100px] flex-1 min-w-[350px] flex flex-col">
+          <div className="relative z-10 -ml-[70px] flex-1 min-w-[320px] flex flex-col">
             <KanbanColumn
               id="done"
               title="Done"
               total={data.totals.done}
               width="w-full"
-              contentOffset="pl-[120px]"
+              contentOffset="pl-[90px]"
               tasks={data.done}
               onClearDone={isManager ? handleClearDone : undefined}
               isClearing={isClearing}
@@ -370,7 +370,7 @@ function KanbanColumn({
       strategy={verticalListSortingStrategy}
     >
       <div
-        className={`flex flex-col ${width} bg-white/40 dark:bg-white/5 backdrop-blur-xl rounded-[40px] p-4 border border-white/40 dark:border-white/10 shadow-xl transition-all hover:z-40 h-full`}
+        className={`flex flex-col ${width} bg-white/40 dark:bg-white/5 backdrop-blur-xl rounded-[40px] ${id === 'done' ? 'p-4' : 'pl-4 pt-4 pb-4 pr-1'} border border-white/40 dark:border-white/10 shadow-xl transition-all hover:z-40 h-full min-h-0 overflow-hidden`}
         data-column-id={id}
       >
         <h3 className={`text-gray-500 dark:text-gray-300 font-medium mb-3 text-lg tracking-wide flex items-center justify-between ${contentOffset}`}>
@@ -429,7 +429,7 @@ function DroppableArea({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 space-y-3 overflow-y-auto ${contentOffset} min-h-[100px] transition-colors ${isOver ? 'bg-blue-50/30 dark:bg-blue-500/10 rounded-2xl' : ''
+      className={`flex-1 min-h-0 space-y-3 overflow-y-auto premium-scrollbar-hover pr-2 ${contentOffset} transition-colors ${isOver ? 'bg-blue-50/30 dark:bg-blue-500/10 rounded-2xl' : ''
         }`}
     >
       {children}

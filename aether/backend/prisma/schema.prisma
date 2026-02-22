@@ -84,6 +84,7 @@ model commits {
 model organizations {
   id                 String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   name               String
+  task_prefix        String               @default("AET") @db.VarChar(10)
   created_at         DateTime?            @default(now()) @db.Timestamp(6)
   repos              repos[]
   tasks              tasks[]
@@ -144,7 +145,7 @@ model repos {
 
 model tasks {
   id                              String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  readable_id                     Int             @unique @default(autoincrement())
+  readable_id                     String          @unique @db.VarChar(20)
   repo_id                         String?         @db.Uuid
   organization_id                 String?         @db.Uuid
   title                           String

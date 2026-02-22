@@ -125,7 +125,7 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
         </h3>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3 max-h-[500px] overflow-y-auto premium-scrollbar pr-2">
         {tasks.map((task) => (
           <div
             key={task.id}
@@ -147,7 +147,7 @@ export function TaskValidationList({ onTaskValidated }: TaskValidationListProps)
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-mono text-gray-400 dark:text-gray-500">
-                    #{task.readable_id}
+                    {task.readable_id}
                   </span>
                   {task.repos && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400">

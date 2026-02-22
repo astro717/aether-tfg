@@ -10,8 +10,8 @@ import { OrganizationsService } from '../organizations/organizations.service';
 export class CommitsService {
   private readonly logger = new Logger(CommitsService.name);
 
-  // Regex to match task references like #42, T-15, TASK-123
-  private readonly TASK_REF_PATTERN = /#(\d+)/g;
+  // Regex to match task references in format PREFIX-HASH (e.g., AET-3M2KV9, TSK-ABC123)
+  private readonly TASK_REF_PATTERN = /\b([A-Z]{2,10}-[A-Z0-9]{6})\b/g;
 
   constructor(
     private prisma: PrismaService,
@@ -21,15 +21,15 @@ export class CommitsService {
 
   /**
    * Parse task references from a commit message
-   * Returns array of readable_ids found (e.g., [42, 15, 123])
+   * Returns array of readable_ids found (e.g., ['AET-3M2KV9', 'TSK-ABC123'])
    */
-  parseTaskReferences(message: string): number[] {
-    const matches: number[] = [];
+  parseTaskReferences(message: string): string[] {
+    const matches: string[] = [];
     let match: RegExpExecArray | null;
 
     while ((match = this.TASK_REF_PATTERN.exec(message)) !== null) {
-      const readableId = parseInt(match[1], 10);
-      if (!isNaN(readableId) && !matches.includes(readableId)) {
+      const readableId = match[1];
+      if (!matches.includes(readableId)) {
         matches.push(readableId);
       }
     }

@@ -6,12 +6,11 @@
  */
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DatabaseZap } from 'lucide-react';
+import { DatabaseZap, Info } from 'lucide-react';
 
 interface CFDDataPoint {
   date: string;
   done: number;
-  review: number;
   in_progress: number;
   todo: number;
 }
@@ -25,7 +24,6 @@ interface RealCFDChartProps {
 
 const CFD_LAYERS = [
   { dataKey: 'done',        name: 'Done',        color: '#10b981', gradientId: 'rCfdDone',       opacity: 0.8 },
-  { dataKey: 'review',      name: 'Review',      color: '#8b5cf6', gradientId: 'rCfdReview',     opacity: 0.7 },
   { dataKey: 'in_progress', name: 'In Progress', color: '#3b82f6', gradientId: 'rCfdInProgress', opacity: 0.7 },
   { dataKey: 'todo',        name: 'To Do',       color: '#6b7280', gradientId: 'rCfdTodo',       opacity: 0.6 },
 ];
@@ -51,7 +49,7 @@ function formatTooltipLabel(value: string): string {
 
 export function RealCFDChart({
   data,
-  period = 'month',
+  period: _period = 'month',
   title = 'Cumulative Flow Diagram',
   subtitle,
 }: RealCFDChartProps) {
@@ -99,10 +97,32 @@ export function RealCFDChart({
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
           {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
         </div>
-        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          Live data
-        </span>
+        <div className="flex items-center gap-2">
+          {/* Info Tooltip */}
+          <div className="relative group">
+            <button
+              type="button"
+              className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700/50 transition-colors"
+              aria-label="Understanding CFD"
+            >
+              <Info className="w-4 h-4" />
+            </button>
+            {/* Glassmorphism Popover */}
+            <div className="absolute right-0 top-full mt-2 w-72 p-4 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 bg-zinc-900/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/20 border border-zinc-700/50">
+              <h4 className="text-sm font-semibold text-white mb-2">Understanding CFD</h4>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                A Cumulative Flow Diagram always grows over time. The true magic lies in the <span className="text-emerald-400 font-medium">thickness of the bands</span>—each band's width reveals your team's bottlenecks and true work-in-progress, not just daily static numbers.
+              </p>
+              {/* Arrow */}
+              <div className="absolute -top-1.5 right-4 w-3 h-3 bg-zinc-900/95 dark:bg-zinc-900/95 rotate-45 border-l border-t border-zinc-700/50" />
+            </div>
+          </div>
+          {/* Live Badge */}
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Live data
+          </span>
+        </div>
       </div>
 
       {/* Chart */}
@@ -145,7 +165,7 @@ export function RealCFDChart({
               }}
               labelStyle={{ color: '#fff', fontWeight: 'bold', marginBottom: '8px' }}
               itemStyle={{ color: '#fff', fontSize: '12px', padding: '4px 0' }}
-              labelFormatter={formatTooltipLabel}
+              labelFormatter={(value) => formatTooltipLabel(String(value))}
             />
 
             {CFD_LAYERS.map((layer) => (

@@ -27,7 +27,7 @@ export interface TaskCommit {
 
 export interface Task {
   id: string;
-  readable_id: number;
+  readable_id: string;
   repo_id: string | null;
   title: string;
   description: string | null;
@@ -106,7 +106,7 @@ export interface CommitInTaskContextExplanation {
   sha: string;
   taskId: string;
   taskTitle: string;
-  readableId: number;
+  readableId: string;
   explanation: string;
   howItFulfillsTask: string;
   remainingWork: string[];

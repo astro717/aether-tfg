@@ -192,3 +192,35 @@ html.dark body {
 .premium-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* --- Ultra-Premium Hidden Scrollbar (appears on hover) --- */
+.premium-scrollbar-hover {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.premium-scrollbar-hover::-webkit-scrollbar {
+  width: 4px;
+}
+
+.premium-scrollbar-hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.premium-scrollbar-hover::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+
+.premium-scrollbar-hover:hover {
+  scrollbar-color: rgba(71, 85, 105, 0.3) transparent;
+}
+
+.premium-scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.3);
+}
+
+.premium-scrollbar-hover:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.5);
+}

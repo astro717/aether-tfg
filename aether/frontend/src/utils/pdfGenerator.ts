@@ -96,7 +96,7 @@ interface CommitExplanationData extends BaseReportMetadata {
   type: 'commit_explanation';
   commitSha: string;
   taskTitle: string;
-  readableId: number;
+  readableId: string;
   explanation: string;
   howItFulfillsTask: string;
   technicalDetails: string;
@@ -840,7 +840,7 @@ export function generateCommitExplanationPDF(
     sha: string;
     taskId: string;
     taskTitle: string;
-    readableId: number;
+    readableId: string;
     explanation: string;
     howItFulfillsTask: string;
     technicalDetails: string;

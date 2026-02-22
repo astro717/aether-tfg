@@ -125,7 +125,7 @@ export function ActiveTaskMonitor({ tasks }: ActiveTaskMonitorProps) {
   }
 
   return (
-    <div className="space-y-2 max-h-80 overflow-y-auto pr-1 scrollbar-thin">
+    <div className="space-y-2 max-h-80 overflow-y-auto pr-1 premium-scrollbar-hover">
       {tasks.map((task) => (
         <HealthCard key={task.taskId} task={task} />
       ))}

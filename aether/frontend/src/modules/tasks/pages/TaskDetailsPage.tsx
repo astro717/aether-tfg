@@ -22,6 +22,7 @@ import { CommitCodeViewer } from "../components/CommitCodeViewer";
 import { AICommitExplanationCard } from "../components/AICommitExplanationCard";
 import { AICodeAnalysisCard } from "../components/AICodeAnalysisCard";
 import { AITaskReportCard } from "../components/AITaskReportCard";
+import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 
 export function TaskDetailsPage() {
     const { user } = useAuth();
@@ -38,6 +39,7 @@ export function TaskDetailsPage() {
     const [copied, setCopied] = useState(false);
     const [isRefreshingCommits, setIsRefreshingCommits] = useState(false);
     const [isArchiving, setIsArchiving] = useState(false);
+    const [showArchiveDialog, setShowArchiveDialog] = useState(false);
 
     // Commit selection state
     const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
@@ -59,20 +61,21 @@ export function TaskDetailsPage() {
 
     const handleCopyTaskId = () => {
         if (task) {
-            navigator.clipboard.writeText(`#${task.readable_id}`);
+            navigator.clipboard.writeText(task.readable_id);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         }
     };
 
-    const handleArchiveTask = async () => {
+    const handleArchiveTask = () => {
+        setShowArchiveDialog(true);
+    };
+
+    const executeArchive = async () => {
         if (!task || !taskId) return;
 
-        // Confirmation dialog
-        const confirmMessage = `Archive task "${task.title}"? It will be hidden from the board but preserved in the database.`;
-        if (!window.confirm(confirmMessage)) return;
-
         setIsArchiving(true);
+        setShowArchiveDialog(false);
         try {
             await tasksApi.archiveTask(taskId);
             // Navigate back to dashboard after successful archive
@@ -300,7 +303,7 @@ export function TaskDetailsPage() {
                                     onClick={handleCopyTaskId}
                                     className="flex items-center gap-1.5 font-mono text-xs text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full border border-white/60 dark:border-white/20 hover:bg-white/70 dark:hover:bg-white/20 hover:border-gray-200/50 transition-all cursor-pointer"
                                 >
-                                    <span>#{task.readable_id}</span>
+                                    <span>{task.readable_id}</span>
                                     {copied ? <CheckCheck size={12} className="text-green-500" /> : <Copy size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />}
                                 </button>
                                 {/* Tooltip */}
@@ -316,8 +319,8 @@ export function TaskDetailsPage() {
                                 }`}>
                                 {task.status.replace('_', ' ').toUpperCase()}
                             </span>
-                            {/* Archive Button - only show for assignee or manager */}
-                            {(user?.id === task.assignee_id || user?.role === 'manager' || user?.role === 'admin') && (
+                            {/* Archive Button - only show for done tasks and assignee/manager */}
+                            {task.status === 'done' && (user?.id === task.assignee_id || user?.role === 'manager' || user?.role === 'admin') && (
                                 <button
                                     onClick={handleArchiveTask}
                                     disabled={isArchiving}
@@ -524,6 +527,18 @@ export function TaskDetailsPage() {
                         commitMessage={
                             task?.task_commits?.find(tc => tc.commit_sha === pendingCommitSha)?.commits.message || undefined
                         }
+                    />
+
+                    {/* Archive Confirmation Dialog */}
+                    <ConfirmationDialog
+                        isOpen={showArchiveDialog}
+                        onClose={() => setShowArchiveDialog(false)}
+                        onConfirm={executeArchive}
+                        title="Archive Task"
+                        message={`Archive task "${task.title}"? It will be hidden from the board but preserved in the database.`}
+                        confirmLabel="Archive"
+                        variant="warning"
+                        isLoading={isArchiving}
                     />
 
                     {/* AI Actions (Grows to fill space) */}

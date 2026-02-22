@@ -33,9 +33,27 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
+
+/** Generate a random UUID v4 */
+function randomUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/** Generate a 6-character uppercase alphanumeric hash */
+function generateHash(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 
 const DAYS_BACK = 30;
 const BOOTSTRAP_COUNT = 50;
@@ -116,7 +134,9 @@ async function resolveContext() {
     orderBy: { created_at: 'asc' },
   });
   if (!org) throw new Error('No organisation found. Create one via the app first.');
-  console.log(`  → Organisation: "${org.name}" (${org.id})`);
+  // Get task_prefix from org or derive from name
+  const prefix = (org as any).task_prefix || org.name.substring(0, 3).toUpperCase();
+  console.log(`  → Organisation: "${org.name}" (${org.id}), prefix: ${prefix}`);
 
   const memberships = await prisma.user_organizations.findMany({
     where: { organization_id: org.id },
@@ -132,7 +152,7 @@ async function resolveContext() {
   }));
   console.log(`  → Members (${members.length}): ${members.map((m) => m.username).join(', ')}`);
 
-  return { org, members };
+  return { org, members, prefix };
 }
 
 // ── Raw-SQL task insertion ────────────────────────────────────────────────────
@@ -145,6 +165,7 @@ interface TaskSpec {
   assigneeId: string;
   validatedById: string | null;
   title: string;
+  readableId: string;
 }
 
 async function insertTask(orgId: string, spec: TaskSpec): Promise<void> {
@@ -154,7 +175,8 @@ async function insertTask(orgId: string, spec: TaskSpec): Promise<void> {
       id, organization_id, title, status,
       assignee_id, validated_by,
       due_date,
-      created_at, updated_at
+      created_at, updated_at,
+      readable_id
     ) VALUES (
       ${id}::uuid,
       ${orgId}::uuid,
@@ -164,7 +186,8 @@ async function insertTask(orgId: string, spec: TaskSpec): Promise<void> {
       ${spec.validatedById}::uuid,
       ${spec.dueDate},
       ${spec.createdAt},
-      ${spec.updatedAt}
+      ${spec.updatedAt},
+      ${spec.readableId}
     )
     ON CONFLICT DO NOTHING
   `;
@@ -219,22 +242,33 @@ async function upsertSnapshot(orgId: string, snapshotDay: Date, allTasks: Array<
 
 // ── Bootstrap mode ────────────────────────────────────────────────────────────
 
-async function runBootstrap(orgId: string, members: Array<{ id: string; username: string }>) {
+async function runBootstrap(orgId: string, members: Array<{ id: string; username: string }>, prefix: string) {
   console.log(`\n📦 Bootstrap: inserting ${BOOTSTRAP_COUNT} historical tasks…`);
 
   const nano = Date.now() % 100000; // cheap uniquifier
 
+  // Cycle time distribution: realistic variation (1, 2, 3, 5, 8, 13, 20 days)
+  const CYCLE_TIME_POOL = [1, 1, 2, 2, 2, 3, 3, 3, 5, 5, 8, 8, 13, 20];
+
   for (let i = 0; i < BOOTSTRAP_COUNT; i++) {
     const status = BOOTSTRAP_STATUS_POOL[i % BOOTSTRAP_STATUS_POOL.length];
-    const createdDaysAgo = randomInt(1, DAYS_BACK);
-    const createdAt = daysAgo(createdDaysAgo);
 
+    let createdAt: Date;
     let updatedAt: Date;
+
     if (status === 'done') {
-      const daysUntilDone = randomInt(0, Math.max(0, createdDaysAgo - 1));
-      updatedAt = daysAgo(daysUntilDone);
-      if (updatedAt < createdAt) updatedAt = new Date(createdAt.getTime() + 60_000);
+      // For done tasks: spread completion dates across the full 30-day range
+      // This ensures different periods capture different subsets of completions
+      const completedDaysAgo = randomInt(0, DAYS_BACK); // 0-30 days ago
+      const cycleTime = CYCLE_TIME_POOL[randomInt(0, CYCLE_TIME_POOL.length - 1)];
+      const createdDaysAgo = completedDaysAgo + cycleTime;
+
+      createdAt = daysAgo(createdDaysAgo);
+      updatedAt = daysAgo(completedDaysAgo);
     } else {
+      // For non-done tasks: created 1-30 days ago, updated shortly after creation
+      const createdDaysAgo = randomInt(1, DAYS_BACK);
+      createdAt = daysAgo(createdDaysAgo);
       updatedAt = new Date(createdAt.getTime() + randomInt(0, 3600) * 1000);
     }
 
@@ -246,6 +280,9 @@ async function runBootstrap(orgId: string, members: Array<{ id: string; username
     const assignee = members[i % members.length];
     const validatedById = status !== 'pending_validation' ? assignee.id : null;
 
+    // Generate premium readable_id (e.g., AET-3M2KV9)
+    const readableId = `${prefix}-${generateHash()}`;
+
     await insertTask(orgId, {
       status,
       createdAt,
@@ -254,6 +291,7 @@ async function runBootstrap(orgId: string, members: Array<{ id: string; username
       assigneeId: assignee.id,
       validatedById,
       title: pickTitle(i, `#B${nano + i}`),
+      readableId,
     });
   }
   console.log(`  ✓ Historical tasks inserted.`);
@@ -273,7 +311,7 @@ async function runBootstrap(orgId: string, members: Array<{ id: string; username
 
 // ── Drip mode ─────────────────────────────────────────────────────────────────
 
-async function runDrip(orgId: string, members: Array<{ id: string; username: string }>) {
+async function runDrip(orgId: string, members: Array<{ id: string; username: string }>, prefix: string) {
   const count = randomInt(DRIP_MIN, DRIP_MAX);
   console.log(`\n💧 Drip: inserting ${count} new todo task(s)…`);
 
@@ -291,6 +329,9 @@ async function runDrip(orgId: string, members: Array<{ id: string; username: str
     // Distribute across members
     const assignee = members[(i + randomInt(0, members.length - 1)) % members.length];
 
+    // Generate premium readable_id (e.g., AET-3M2KV9)
+    const readableId = `${prefix}-${generateHash()}`;
+
     await insertTask(orgId, {
       status: 'todo',
       createdAt,
@@ -299,6 +340,7 @@ async function runDrip(orgId: string, members: Array<{ id: string; username: str
       assigneeId: assignee.id,
       validatedById: null,
       title: pickTitle(i + count, `#D${nano + i}`),
+      readableId,
     });
 
     console.log(`  ✓ "${TASK_TITLES[(i + count) % TASK_TITLES.length]}" → ${assignee.username} (due ${dueDate.toISOString().split('T')[0]})`);
@@ -319,12 +361,12 @@ async function main() {
   const isBootstrap = process.argv.includes('--bootstrap');
   console.log(`🌱 Aether Additive Seeder — ${isBootstrap ? 'BOOTSTRAP' : 'drip'} mode`);
 
-  const { org, members } = await resolveContext();
+  const { org, members, prefix } = await resolveContext();
 
   if (isBootstrap) {
-    await runBootstrap(org.id, members);
+    await runBootstrap(org.id, members, prefix);
   } else {
-    await runDrip(org.id, members);
+    await runDrip(org.id, members, prefix);
   }
 
   console.log('\n✅ Seed complete!');

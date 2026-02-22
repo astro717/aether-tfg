@@ -2,7 +2,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export interface PendingTask {
   id: string;
-  readable_id: number;
+  readable_id: string;
   title: string;
   description?: string;
   status: string;
@@ -30,6 +30,9 @@ export interface AnalyticsData {
     completionRate: number;
     overdueTasks: number;
     teamSize: number;
+    cycleTime: number;
+    onTimeRate: number;
+    riskScore: number;
   };
   velocityData: Array<{ week: string; completed: number; weekStart: string }>;
   statusDistribution: Array<{ name: string; value: number; color: string }>;
@@ -60,7 +63,6 @@ export interface AnalyticsData {
     cfd: Array<{
       date: string;
       done: number;
-      review: number;
       in_progress: number;
       todo: number;
     }>;
@@ -146,7 +148,6 @@ export interface AIReport {
     cfd?: Array<{
       date: string;
       done: number;
-      review: number;
       in_progress: number;
       todo: number;
     }>;
@@ -284,7 +285,7 @@ class ManagerApi {
   async getCFD(
     organizationId: string,
     range: '7d' | '30d' | '90d' | 'all' = '30d',
-  ): Promise<Array<{ date: string; done: number; review: number; in_progress: number; todo: number }>> {
+  ): Promise<Array<{ date: string; done: number; in_progress: number; todo: number }>> {
     const response = await fetch(
       `${API_BASE_URL}/tasks/organization/${organizationId}/cfd?range=${range}`,
       { headers: this.getAuthHeaders() }
