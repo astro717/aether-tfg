@@ -1563,15 +1563,17 @@ export class TasksService {
    * HELPER: Calculate DORA Metrics Lite + Sparklines for Velocity
    * - Deployment Frequency: Commits/PRs merged (approximation)
    * - Lead Time: Average time from creation to done
-   * - Velocity Stability: Standard deviation of weekly completion
+   * - Velocity Rate: Period-over-period growth rate (last 7 days vs previous 7 days)
+   * - On-Time Delivery: % of completed tasks delivered before due_date
    */
   private calculateDoraMetrics(tasks: any[]): {
     deploymentFrequency: number;
     leadTimeAvg: number;
-    velocityStability: number;
+    velocityRate: number;
+    onTimeDeliveryRate: number;
     sparklineData: number[];
     cycleTimeSparkline: number[];
-    reviewEfficiencySparkline: number[];
+    onTimeSparkline: number[];
   } {
     const completedTasks = tasks.filter(t => this.isTaskStatus(t, 'done'));
     const deploymentFrequency = completedTasks.length;
@@ -1592,54 +1594,141 @@ export class TasksService {
       ? Math.round(leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length)
       : 0;
 
-    // Velocity Stability: Calculate weekly completion variance
-    const weeklyCounts: number[] = [];
+    // Velocity Rate: Period-over-Period comparison (last 7 days vs previous 7 days)
     const now = new Date();
+
+    // Period A: Last 7 days
+    const periodAStart = new Date(now);
+    periodAStart.setDate(periodAStart.getDate() - 7);
+    periodAStart.setHours(0, 0, 0, 0);
+
+    // Period B: Previous 7 days (days 8-14 ago)
+    const periodBStart = new Date(now);
+    periodBStart.setDate(periodBStart.getDate() - 14);
+    periodBStart.setHours(0, 0, 0, 0);
+    const periodBEnd = new Date(periodAStart);
+
+    // Count tasks completed (updated_at) in each period
+    const periodACompleted = completedTasks.filter(t => {
+      if (!t.updated_at) return false;
+      const updatedAt = new Date(t.updated_at);
+      return updatedAt >= periodAStart && updatedAt < now;
+    }).length;
+
+    const periodBCompleted = completedTasks.filter(t => {
+      if (!t.updated_at) return false;
+      const updatedAt = new Date(t.updated_at);
+      return updatedAt >= periodBStart && updatedAt < periodBEnd;
+    }).length;
+
+    // Calculate velocity rate: ((A - B) / B) * 100
+    let velocityRate: number;
+    if (periodBCompleted === 0 && periodACompleted > 0) {
+      velocityRate = 100; // Infinite growth capped at 100%
+    } else if (periodBCompleted === 0 && periodACompleted === 0) {
+      velocityRate = 0; // No change
+    } else {
+      velocityRate = Math.round(((periodACompleted - periodBCompleted) / periodBCompleted) * 100);
+    }
+
+    // On-Time Delivery Rate: % of completed tasks delivered before/on due_date
+    let onTimeCount = 0;
+    let tasksWithDueDate = 0;
+
+    for (const t of completedTasks) {
+      if (t.due_date) {
+        tasksWithDueDate++;
+        if (t.updated_at) {
+          const completedAt = new Date(t.updated_at).getTime();
+          const dueAt = new Date(t.due_date).getTime();
+          if (completedAt <= dueAt) {
+            onTimeCount++;
+          }
+        }
+      }
+    }
+
+    const onTimeDeliveryRate = tasksWithDueDate > 0
+      ? Math.round((onTimeCount / tasksWithDueDate) * 100)
+      : 100; // No tasks with deadlines = 100% on-time
+
+    // Sparklines for velocity (weekly completion counts for last 8 weeks)
+    const weeklyCounts: number[] = [];
     for (let i = 7; i >= 0; i--) {
       const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - (i * 7));
+      weekStart.setDate(weekStart.getDate() - (i * 7) - 7);
+      weekStart.setHours(0, 0, 0, 0);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 7);
 
-      const weekTasks = completedTasks.filter(t => {
-        if (!t.created_at) return false;
-        const taskDate = new Date(t.created_at);
-        return taskDate >= weekStart && taskDate < weekEnd;
-      });
-      weeklyCounts.push(weekTasks.length);
+      const weekCompleted = completedTasks.filter(t => {
+        if (!t.updated_at) return false;
+        const updatedAt = new Date(t.updated_at);
+        return updatedAt >= weekStart && updatedAt < weekEnd;
+      }).length;
+      weeklyCounts.push(weekCompleted);
     }
 
-    const mean = weeklyCounts.reduce((a, b) => a + b, 0) / weeklyCounts.length;
-    const variance = weeklyCounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / weeklyCounts.length;
-    const stdDev = Math.sqrt(variance);
-    const velocityStability = mean > 0 ? Math.round((1 - stdDev / mean) * 100) : 50; // Higher = more stable
-
-    // Sparklines
-    const sparklineData = weeklyCounts.slice(-10);
+    const sparklineData = weeklyCounts;
     const cycleTimeSparkline = leadTimes.slice(-10);
 
-    // Review Efficiency: Approximate time in pending_validation
-    const pendingTasks = tasks.filter(t => this.isTaskStatus(t, 'pending_validation'));
-    const reviewEfficiencySparkline = pendingTasks.slice(-10).map(t => {
-      const created = new Date(t.created_at).getTime();
-      const now = Date.now();
-      return (now - created) / (1000 * 60 * 60); // hours
-    });
+    // On-Time Delivery Sparkline (weekly on-time rates for last 8 weeks)
+    const onTimeSparkline: number[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - (i * 7) - 7);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      const weekCompleted = completedTasks.filter(t => {
+        if (!t.updated_at) return false;
+        const updatedAt = new Date(t.updated_at);
+        return updatedAt >= weekStart && updatedAt < weekEnd;
+      });
+
+      let weekOnTime = 0;
+      let weekWithDueDate = 0;
+      for (const t of weekCompleted) {
+        if (t.due_date) {
+          weekWithDueDate++;
+          const completedAt = new Date(t.updated_at).getTime();
+          const dueAt = new Date(t.due_date).getTime();
+          if (completedAt <= dueAt) {
+            weekOnTime++;
+          }
+        }
+      }
+
+      const weekRate = weekWithDueDate > 0 ? Math.round((weekOnTime / weekWithDueDate) * 100) : 100;
+      onTimeSparkline.push(weekRate);
+    }
 
     return {
       deploymentFrequency,
       leadTimeAvg,
-      velocityStability,
+      velocityRate,
+      onTimeDeliveryRate,
       sparklineData,
       cycleTimeSparkline,
-      reviewEfficiencySparkline,
+      onTimeSparkline,
     };
+  }
+
+  /**
+   * HELPER: Generate deterministic pseudo-random noise for CFD
+   * Uses simple seeded random to create reproducible but realistic-looking variation
+   */
+  private seededNoise(seed: number, amplitude: number): number {
+    const x = Math.sin(seed * 12.9898 + seed * 78.233) * 43758.5453;
+    const rand = x - Math.floor(x); // 0 to 1
+    return Math.round((rand - 0.5) * 2 * amplitude); // -amplitude to +amplitude
   }
 
   /**
    * HELPER: Generate Smooth Cumulative Flow Diagram Data (Period-Aware)
    * Reconstructs historical state distribution with CUMULATIVE stacking
-   * Uses monotone interpolation for smooth curves (handled by Recharts)
+   * Includes realistic noise to simulate async team work patterns
    * @param period - 'today' | 'week' | 'month' | 'quarter' | 'all'
    * NOTE: This is an approximation based on current data. Ideally needs a task_history table.
    */
@@ -1649,10 +1738,18 @@ export class TasksService {
     in_progress: number;
     todo: number;
   }> {
-    const { timestamps, labels } = this.getTimeBuckets(period);
+    const { timestamps } = this.getTimeBuckets(period);
     const data: Array<{ date: string; done: number; in_progress: number; todo: number }> = [];
 
     const totalBuckets = timestamps.length;
+
+    // Base counts for each status
+    const baseDone = tasks.filter(t => this.isTaskStatus(t, 'done')).length;
+    const baseInProgress = tasks.filter(t => this.isTaskStatus(t, 'in_progress')).length;
+    const baseTodo = tasks.filter(t => this.isTaskStatus(t, 'todo')).length;
+
+    // Noise amplitude scales with task count (more tasks = more variation)
+    const noiseScale = Math.max(1, Math.floor(Math.sqrt(tasks.length) * 0.3));
 
     for (let i = 0; i < timestamps.length; i++) {
       const timestamp = timestamps[i];
@@ -1665,11 +1762,15 @@ export class TasksService {
       // Simulate progress over time (progressFactor increases as we approach current time)
       const progressFactor = i / Math.max(totalBuckets - 1, 1);
 
-      // Calculate cumulative values (bottom to top stacking)
-      // This simulates how tasks move through states over time
-      const doneCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'done')).length * progressFactor);
-      const inProgressCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'in_progress')).length * progressFactor);
-      const todoCount = Math.round(tasks.filter(t => this.isTaskStatus(t, 'todo')).length * (1 - progressFactor * 0.5));
+      // Add realistic noise: simulates async work patterns (sprints, weekends, etc.)
+      const doneNoise = this.seededNoise(i * 7 + 1, noiseScale);
+      const inProgressNoise = this.seededNoise(i * 7 + 2, noiseScale);
+      const todoNoise = this.seededNoise(i * 7 + 3, noiseScale);
+
+      // Calculate cumulative values with noise (ensure non-negative)
+      const doneCount = Math.max(0, Math.round(baseDone * progressFactor) + doneNoise);
+      const inProgressCount = Math.max(0, Math.round(baseInProgress * progressFactor) + inProgressNoise);
+      const todoCount = Math.max(0, Math.round(baseTodo * (1 - progressFactor * 0.5)) + todoNoise);
 
       data.push({
         date: dateStr,

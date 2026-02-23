@@ -621,12 +621,12 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                       {report.chartData.pulse && (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           <SparklineCard
-                            title="Velocity Stability"
-                            value={report.chartData.pulse.velocityStability.value}
+                            title="Velocity"
+                            value={report.chartData.pulse.velocityRate?.value ?? 0}
                             unit="%"
-                            sparklineData={report.chartData.pulse.velocityStability.sparkline}
-                            color="blue"
-                            subtitle="SD/Variance"
+                            sparklineData={report.chartData.pulse.velocityRate?.sparkline ?? []}
+                            isVelocityRate={true}
+                            subtitle="vs previous 7 days"
                           />
                           <SparklineCard
                             title="Cycle Time"
@@ -637,12 +637,12 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             subtitle="Avg In Progress → Done"
                           />
                           <SparklineCard
-                            title="Review Efficiency"
-                            value={report.chartData.pulse.reviewEfficiency.value}
-                            unit="hrs"
-                            sparklineData={report.chartData.pulse.reviewEfficiency.sparkline}
+                            title="On-Time Delivery"
+                            value={report.chartData.pulse.onTimeDelivery?.value ?? 100}
+                            unit="%"
+                            sparklineData={report.chartData.pulse.onTimeDelivery?.sparkline ?? []}
                             color="amber"
-                            subtitle="Time in Review"
+                            subtitle="Met deadlines"
                           />
                           <SparklineCard
                             title="AI Risk Score"
@@ -745,20 +745,20 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             subtitle="Current throughput"
                           />
                           <SparklineCard
-                            title="Review Queue"
-                            value={report.chartData.pulse.reviewEfficiency.value}
-                            unit="hrs"
-                            sparklineData={report.chartData.pulse.reviewEfficiency.sparkline}
+                            title="On-Time Delivery"
+                            value={report.chartData.pulse.onTimeDelivery?.value ?? 100}
+                            unit="%"
+                            sparklineData={report.chartData.pulse.onTimeDelivery?.sparkline ?? []}
                             color="purple"
-                            subtitle="Avg review time"
+                            subtitle="Met deadlines"
                           />
                           <SparklineCard
                             title="Velocity"
-                            value={report.chartData.pulse.velocityStability.value}
+                            value={report.chartData.pulse.velocityRate?.value ?? 0}
                             unit="%"
-                            sparklineData={report.chartData.pulse.velocityStability.sparkline}
-                            color="blue"
-                            subtitle="Stability score"
+                            sparklineData={report.chartData.pulse.velocityRate?.sparkline ?? []}
+                            isVelocityRate={true}
+                            subtitle="vs previous 7 days"
                           />
                         </div>
                       )}
@@ -772,25 +772,16 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                         />
                       )}
 
-                      {/* Two-column layout for Heatmap & Burndown */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {report.chartData.heatmap && (
-                          <WorkloadHeatmap
-                            data={report.chartData.heatmap}
-                            title="Resource Utilization"
-                            subtitle="Team capacity analysis"
-                          />
-                        )}
-                        {report.chartData.burndown && (
-                          <PredictiveBurndownChart
-                            data={report.chartData.burndown}
-                            title="Risk Forecast"
-                            subtitle="Completion probability"
-                          />
-                        )}
-                      </div>
+                      {/* Risk Forecast - Full Width */}
+                      {report.chartData.burndown && (
+                        <PredictiveBurndownChart
+                          data={report.chartData.burndown}
+                          title="Risk Forecast"
+                          subtitle="Completion probability"
+                        />
+                      )}
 
-                      {/* Investment & Cycle Time */}
+                      {/* Investment & Resource Utilization - Two columns */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {report.chartData.investment && (
                           <InvestmentSunburst
@@ -799,10 +790,19 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             subtitle="Identify imbalances"
                           />
                         )}
-                        {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
-                          <ScatterCycleChart data={report.chartData.cycleTime} />
+                        {report.chartData.heatmap && (
+                          <WorkloadHeatmap
+                            data={report.chartData.heatmap}
+                            title="Resource Utilization"
+                            subtitle="Team capacity analysis"
+                          />
                         )}
                       </div>
+
+                      {/* Cycle Time Scatterplot - Full Width */}
+                      {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
+                        <ScatterCycleChart data={report.chartData.cycleTime} />
+                      )}
                     </>
                   )}
                 </div>

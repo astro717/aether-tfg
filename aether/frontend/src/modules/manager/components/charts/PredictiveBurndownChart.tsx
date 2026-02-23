@@ -36,23 +36,6 @@ export function PredictiveBurndownChart({
   title = 'Predictive Burndown',
   subtitle = 'Historical progress with AI projection',
 }: PredictiveBurndownChartProps) {
-  // Period-aware axis label
-  const getAxisLabel = () => {
-    switch (period) {
-      case 'today':
-        return 'Hour';
-      case 'week':
-        return 'Day';
-      case 'month':
-        return 'Day';
-      case 'quarter':
-        return 'Week';
-      case 'all':
-        return 'Month';
-      default:
-        return 'Period';
-    }
-  };
   // Calculate periods based on selected time range (matching backend logic)
   const getPeriodConfig = () => {
     switch (period) {
@@ -148,10 +131,19 @@ export function PredictiveBurndownChart({
 
             <XAxis
               dataKey="dateLabel"
-              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tick={{ fill: '#6b7280', fontSize: 10 }}
               axisLine={{ stroke: '#374151', opacity: 0.2 }}
-              interval={period === 'month' ? 5 : 0} // Show every 6th tick for month (60 points → ~10 labels)
-              label={{ value: getAxisLabel(), position: 'insideBottom', offset: -5, fill: '#6b7280', fontSize: 12 }}
+              interval={period === 'month' ? 5 : period === 'week' ? 1 : 0}
+              angle={-45}
+              textAnchor="end"
+              height={60}
+              tickFormatter={(value) => {
+                // Shorten long labels to prevent overlap
+                if (typeof value === 'string' && value.length > 8) {
+                  return value.slice(0, 6);
+                }
+                return value;
+              }}
             />
 
             <YAxis
@@ -191,21 +183,15 @@ export function PredictiveBurndownChart({
               label={{ value: 'Today', position: 'top', fill: '#6b7280', fontSize: 10 }}
             />
 
-            {/* Uncertainty Cone (Area between optimistic and pessimistic) */}
+            {/* Uncertainty Cone (Band between optimistic and pessimistic) */}
             <Area
               type="monotone"
-              dataKey="optimistic"
+              dataKey="projectionRange"
               stroke="none"
               fill="url(#uncertaintyCone)"
               name="Projection Range"
               isAnimationActive={true}
-            />
-            <Area
-              type="monotone"
-              dataKey="pessimistic"
-              stroke="none"
-              fill="url(#uncertaintyCone)"
-              isAnimationActive={true}
+              connectNulls={false}
             />
 
             {/* Ideal Burndown Line (dashed) */}

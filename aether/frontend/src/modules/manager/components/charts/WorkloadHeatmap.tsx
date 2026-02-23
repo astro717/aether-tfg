@@ -82,9 +82,30 @@ export function WorkloadHeatmap({
             <div className="w-24 flex-shrink-0" /> {/* Spacer for user column */}
             <div className="flex gap-1">
               {data.days.map((day, idx) => {
-                // Handle time labels (HH:mm) for 'today' period - show simple hour numbers (9, 10, 11)
-                const isTime = day.includes(':');
-                const label = isTime ? parseInt(day.split(':')[0], 10) : new Date(day).getDate();
+                // Safe date/label parsing to avoid NaN
+                let label: string | number = day;
+
+                // Handle time labels (HH:mm) for 'today' period - show simple hour numbers
+                if (day.includes(':')) {
+                  const hour = parseInt(day.split(':')[0], 10);
+                  label = isNaN(hour) ? day : hour;
+                }
+                // Handle ISO date strings (YYYY-MM-DD)
+                else if (day.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                  const date = new Date(day + 'T00:00:00'); // Ensure valid parsing
+                  const dayNum = date.getDate();
+                  label = isNaN(dayNum) ? day : dayNum;
+                }
+                // Handle week labels (W1, W2, etc.) or month labels (Jan, Feb) - keep as-is
+                else if (day.startsWith('W') || day.length <= 3) {
+                  label = day;
+                }
+                // Fallback: try to parse, if fails show original
+                else {
+                  const date = new Date(day);
+                  const dayNum = date.getDate();
+                  label = isNaN(dayNum) ? day : dayNum;
+                }
 
                 return (
                   <div

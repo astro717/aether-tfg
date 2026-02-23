@@ -113,7 +113,7 @@ export interface AIReport {
   chartData?: {
     // The Pulse - KPI Cards with Sparklines
     pulse?: {
-      velocityStability: {
+      velocityRate: {
         value: number;
         sparkline: number[];
       };
@@ -121,7 +121,7 @@ export interface AIReport {
         value: number;
         sparkline: number[];
       };
-      reviewEfficiency: {
+      onTimeDelivery: {
         value: number;
         sparkline: number[];
       };
