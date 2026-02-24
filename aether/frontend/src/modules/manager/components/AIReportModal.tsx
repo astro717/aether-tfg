@@ -171,6 +171,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
   const [availableReports, setAvailableReports] = useState<ReportAvailability[]>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   // Animation state
   useEffect(() => {
@@ -264,23 +265,29 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
     if (!report || !selectedType || !currentOrganization) return;
 
     setDownloadingPdf(true);
+    setIsExportingPDF(true);
+
     const reportOption = reportOptions.find(o => o.type === selectedType);
     const reportTypeName = reportOption?.title || 'Report';
     const periodLabel = PERIOD_OPTIONS.find(p => p.value === selectedPeriod)?.label || selectedPeriod;
 
-    try {
-      await generateManagerReportPDF(
-        report,
-        currentOrganization.name,
-        periodLabel,
-        reportTypeName
-      );
-    } catch (error) {
-      console.error('Failed to generate PDF:', error);
-      setError('Failed to generate PDF. Please try again.');
-    } finally {
-      setDownloadingPdf(false);
-    }
+    // Delay to allow Recharts to re-render with PDF-optimized layout
+    setTimeout(async () => {
+      try {
+        await generateManagerReportPDF(
+          report,
+          currentOrganization.name,
+          periodLabel,
+          reportTypeName
+        );
+      } catch (error) {
+        console.error('Failed to generate PDF:', error);
+        setError('Failed to generate PDF. Please try again.');
+      } finally {
+        setDownloadingPdf(false);
+        setIsExportingPDF(false);
+      }
+    }, 600);
   };
 
 
@@ -671,6 +678,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             data={report.chartData.investment}
                             title="Investment Distribution"
                             subtitle="Task allocation by category"
+                            pdfMode={isExportingPDF}
                           />
                         )}
                         {report.chartData.burndown && (
@@ -717,6 +725,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                           data={report.chartData.investment}
                           title="Task Distribution"
                           subtitle="Individual work allocation"
+                          pdfMode={isExportingPDF}
                         />
                       )}
                     </>
@@ -788,6 +797,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             data={report.chartData.investment}
                             title="Work Distribution"
                             subtitle="Identify imbalances"
+                            pdfMode={isExportingPDF}
                           />
                         )}
                         {report.chartData.heatmap && (

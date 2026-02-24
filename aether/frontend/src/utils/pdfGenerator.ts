@@ -52,7 +52,7 @@ const LAYOUT = {
   spacing: {
     section: 8,
     paragraph: 5,
-    small: 3,
+    small: 4,
   },
 } as const;
 
@@ -115,7 +115,7 @@ interface CommitExplanationData extends BaseReportMetadata {
  * Handles all PDF generation with consistent styling and branding
  */
 class PDFGenerator {
-  private doc: jsPDF;
+  public doc: jsPDF; // Public for direct access in constrained layout rendering
   public currentY: number; // Made public for external layout calculations
   private pageWidth: number;
   private pageHeight: number;
@@ -295,7 +295,14 @@ class PDFGenerator {
 
     // Handle page breaks within content
     for (const line of lines) {
+      const prevPage = this.pageNumber;
       this.checkPageBreak(6);
+      // Restore body text style if page break occurred (footer contaminated font state)
+      if (this.pageNumber !== prevPage) {
+        this.doc.setFontSize(FONTS.body.size);
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setTextColor(...COLORS.neutral.dark);
+      }
       this.doc.text(line, LAYOUT.margin.left + 7, this.currentY);
       this.currentY += 5;
     }
@@ -668,98 +675,66 @@ export async function generateManagerReportPDF(
   // ========== PAGE 1: EXECUTIVE SUMMARY & KEY METRICS ==========
   generator.addSummaryBox('Executive Summary', generator.cleanMarkdown(data.summary));
 
-  // Define compact chart width (half page for side-by-side)
-  const halfWidth = (generator.contentWidth - 5) / 2; // 5mm gap between charts
-  const leftX = LAYOUT.margin.left;
-  const rightX = LAYOUT.margin.left + halfWidth + 5;
 
-  // Get all available charts
+  // ========== CHART EXTRACTION ==========
+  // Get all available charts from html2canvas capture
   const doraChart = charts.get('dora-metrics');
   const investmentChart = charts.get('investment-profile');
   const throughputChart = charts.get('throughput-trend');
   const radarChart = charts.get('radar-metrics');
   const cfdChart = charts.get('cfd-area');
   const cycleTimeChart = charts.get('scatter-cycle');
+  const burndownChart = charts.get('burndown-predictive');
+  // const heatmapChart = charts.get('workload-heatmap');
+  const realCfdChart = charts.get('real-cfd-chart');
 
-  // ========== PAGE 1 (continued): DORA Metrics (if available) ==========
+  // ========== PRIORITY 1: DORA Metrics (Full-Width KPI Strip) ==========
+  // DORA metrics are wide, low-height KPIs - perfect for full-width placement
   if (doraChart) {
     generator.checkPageBreak(65);
-    // DORA gets full width as it's a panel with multiple metrics
     generator.addChartImage(doraChart, 'Key Performance Indicators', generator.contentWidth);
   }
 
-  // ========== PAGE 2: SIDE-BY-SIDE CHARTS ==========
-  // Try to fit 2 charts per row for compact layout
+  // ========== SECTION: UNIFIED CONSTRAINED CHARTS ==========
+  // Single-Column Layout with Object-Fit Contain Logic
+  // Each chart respects its maxHeight constraint; if exceeded, width is recalculated
+  // proportionally and the image is centered horizontally for premium aesthetics
+  const chartSequence: Array<{ canvas: HTMLCanvasElement; title: string; maxHeight: number }> = [
+    investmentChart && { canvas: investmentChart, title: 'Investment Profile', maxHeight: 75 },
+    cycleTimeChart && { canvas: cycleTimeChart, title: 'Cycle Time Analysis', maxHeight: 90 },
+    radarChart && { canvas: radarChart, title: 'Code Review Metrics', maxHeight: 90 },
+    throughputChart && { canvas: throughputChart, title: 'Throughput Trend', maxHeight: 90 },
+    burndownChart && { canvas: burndownChart, title: 'Predictive Burndown', maxHeight: 100 },
+    // heatmapChart && { canvas: heatmapChart, title: 'Workload Heatmap', maxHeight: 100 },
+    cfdChart && { canvas: cfdChart, title: 'Cumulative Flow Diagram', maxHeight: 110 },
+    realCfdChart && { canvas: realCfdChart, title: 'Real-Time Cumulative Flow', maxHeight: 110 },
+  ].filter((item): item is { canvas: HTMLCanvasElement; title: string; maxHeight: number } => Boolean(item));
 
-  // Row 1: Investment + Throughput OR Cycle Time
-  if (investmentChart || throughputChart || cycleTimeChart) {
-    generator.checkPageBreak(75);
-    const startY = generator.currentY;
+  for (const chart of chartSequence) {
+    let imgWidth = generator.contentWidth;
+    let imgHeight = (chart.canvas.height * imgWidth) / chart.canvas.width;
 
-    if (investmentChart && throughputChart) {
-      // Two charts side by side
-      generator.addChartImageAtPosition(investmentChart, 'Investment Profile', leftX, startY, halfWidth);
-      generator.addChartImageAtPosition(throughputChart, 'Throughput Trend', rightX, startY, halfWidth);
-
-      // Calculate max height and move cursor
-      const investmentHeight = (investmentChart.height * halfWidth) / investmentChart.width;
-      const throughputHeight = (throughputChart.height * halfWidth) / throughputChart.width;
-      generator.currentY = startY + Math.max(investmentHeight, throughputHeight) + 15;
-    } else if (investmentChart && cycleTimeChart) {
-      // Two charts side by side
-      generator.addChartImageAtPosition(investmentChart, 'Investment Profile', leftX, startY, halfWidth);
-      generator.addChartImageAtPosition(cycleTimeChart, 'Cycle Time Analysis', rightX, startY, halfWidth);
-
-      // Calculate max height and move cursor
-      const investmentHeight = (investmentChart.height * halfWidth) / investmentChart.width;
-      const cycleHeight = (cycleTimeChart.height * halfWidth) / cycleTimeChart.width;
-      generator.currentY = startY + Math.max(investmentHeight, cycleHeight) + 15;
-    } else if (investmentChart) {
-      // Single chart, use half width for consistency
-      generator.addChartImage(investmentChart, 'Investment Profile', halfWidth);
-    } else if (throughputChart) {
-      generator.addChartImage(throughputChart, 'Throughput Trend', halfWidth);
-    } else if (cycleTimeChart) {
-      generator.addChartImage(cycleTimeChart, 'Cycle Time Analysis', halfWidth);
+    // Object-Fit Contain Logic (Clamp Height & Recalculate Width)
+    if (imgHeight > chart.maxHeight) {
+      imgHeight = chart.maxHeight;
+      imgWidth = (chart.canvas.width * imgHeight) / chart.canvas.height;
     }
-  }
 
-  // Row 2: Radar + CFD OR remaining charts
-  if (radarChart || cfdChart) {
-    generator.checkPageBreak(75);
-    const startY = generator.currentY;
+    // Check if chart fits on current page
+    generator.checkPageBreak(imgHeight + 15);
 
-    if (radarChart && cfdChart) {
-      // Two charts side by side
-      generator.addChartImageAtPosition(radarChart, 'Code Review Metrics', leftX, startY, halfWidth);
-      generator.addChartImageAtPosition(cfdChart, 'Cumulative Flow Diagram', rightX, startY, halfWidth);
+    // Print Title
+    generator.doc.setFontSize(FONTS.h3.size);
+    generator.doc.setFont('Helvetica', FONTS.h3.weight);
+    generator.doc.setTextColor(...COLORS.primary.blue);
+    generator.doc.text(chart.title, LAYOUT.margin.left, generator.currentY);
 
-      // Calculate max height and move cursor
-      const radarHeight = (radarChart.height * halfWidth) / radarChart.width;
-      const cfdHeight = (cfdChart.height * halfWidth) / cfdChart.width;
-      generator.currentY = startY + Math.max(radarHeight, cfdHeight) + 15;
-    } else if (radarChart) {
-      generator.addChartImage(radarChart, 'Code Review Metrics', halfWidth);
-    } else if (cfdChart) {
-      // CFD is complex, give it more space
-      generator.addChartImage(cfdChart, 'Cumulative Flow Diagram', generator.contentWidth);
-    }
-  }
+    // Print Image Centered (Object-Fit Contain)
+    const xOffset = LAYOUT.margin.left + (generator.contentWidth - imgWidth) / 2;
+    const imgData = chart.canvas.toDataURL('image/png');
+    generator.doc.addImage(imgData, 'PNG', xOffset, generator.currentY + 8, imgWidth, imgHeight, undefined, 'FAST');
 
-  // Row 3: Remaining charts (Throughput or Cycle Time if not placed yet)
-  if (!investmentChart && throughputChart && cycleTimeChart) {
-    generator.checkPageBreak(75);
-    const startY = generator.currentY;
-    generator.addChartImageAtPosition(throughputChart, 'Throughput Trend', leftX, startY, halfWidth);
-    generator.addChartImageAtPosition(cycleTimeChart, 'Cycle Time Analysis', rightX, startY, halfWidth);
-
-    const throughputHeight = (throughputChart.height * halfWidth) / throughputChart.width;
-    const cycleHeight = (cycleTimeChart.height * halfWidth) / cycleTimeChart.width;
-    generator.currentY = startY + Math.max(throughputHeight, cycleHeight) + 15;
-  } else if (!investmentChart && !throughputChart && cycleTimeChart) {
-    generator.addChartImage(cycleTimeChart, 'Cycle Time Analysis', halfWidth);
-  } else if (!investmentChart && !cycleTimeChart && throughputChart) {
-    generator.addChartImage(throughputChart, 'Throughput Trend', halfWidth);
+    generator.currentY += imgHeight + 8 + LAYOUT.spacing.section;
   }
 
   // ========== PAGE 3: TEXT SECTIONS ==========

@@ -20,6 +20,7 @@ interface InvestmentSunburstProps {
   data: InvestmentData;
   title?: string;
   subtitle?: string;
+  pdfMode?: boolean;
 }
 
 // Macro-level colors (outer ring)
@@ -46,6 +47,7 @@ export function InvestmentSunburst({
   data,
   title = 'Investment Distribution',
   subtitle,
+  pdfMode = false,
 }: InvestmentSunburstProps) {
   // Transform data for double donut
   const macroData = data.labels.map((label, idx) => ({
@@ -73,16 +75,16 @@ export function InvestmentSunburst({
       </div>
 
       {/* Chart */}
-      <div className="h-96">
+      <div className={pdfMode ? 'h-64' : 'h-96'}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             {/* Outer Ring (Macro Categories) */}
             <Pie
               data={macroData}
-              cx="50%"
+              cx={pdfMode ? "48%" : "50%"}
               cy="50%"
-              innerRadius={90}
-              outerRadius={130}
+              innerRadius={pdfMode ? 60 : 90}
+              outerRadius={pdfMode ? 85 : 130}
               paddingAngle={2}
               dataKey="value"
               label={({ name, percent }) =>
@@ -98,10 +100,10 @@ export function InvestmentSunburst({
             {/* Inner Ring (Micro - slightly different shading) */}
             <Pie
               data={microData}
-              cx="50%"
+              cx={pdfMode ? "48%" : "50%"}
               cy="50%"
-              innerRadius={50}
-              outerRadius={85}
+              innerRadius={pdfMode ? 35 : 50}
+              outerRadius={pdfMode ? 55 : 85}
               paddingAngle={1}
               dataKey="value"
             >
@@ -124,8 +126,10 @@ export function InvestmentSunburst({
             />
 
             <Legend
-              verticalAlign="bottom"
-              height={36}
+              layout={pdfMode ? 'vertical' : 'horizontal'}
+              align={pdfMode ? 'right' : 'center'}
+              verticalAlign={pdfMode ? 'middle' : 'bottom'}
+              height={pdfMode ? undefined : 36}
               iconType="circle"
               wrapperStyle={{
                 fontSize: '12px',
@@ -136,12 +140,14 @@ export function InvestmentSunburst({
         </ResponsiveContainer>
       </div>
 
-      {/* Info Text */}
-      <div className="mt-4 text-center">
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          Outer ring: Primary categories | Inner ring: Sub-categories
-        </p>
-      </div>
+      {/* Info Text - Hidden in PDF mode to save vertical space */}
+      {!pdfMode && (
+        <div className="mt-4 text-center">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Outer ring: Primary categories | Inner ring: Sub-categories
+          </p>
+        </div>
+      )}
     </div>
   );
 }
