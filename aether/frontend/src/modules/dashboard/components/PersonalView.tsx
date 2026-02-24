@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
     Maximize2,
-    AlertTriangle,
-    Zap,
+    Siren,
+    Goal,
     Check,
-    MessageCircle
+    Coffee
 } from "lucide-react";
 import { tasksApi, type Task } from '../api/tasksApi';
 import { useAuth } from '../../auth/context/AuthContext';
@@ -233,9 +233,9 @@ function InProgressCard({ task, isLast }: { task: Task; isLast?: boolean }) {
     const date = formatDate(task.due_date);
 
     const tagStyles = {
-        urgent: { bg: "bg-red-100", text: "text-red-500", icon: AlertTriangle, label: "urgent" },
-        important: { bg: "bg-orange-100", text: "text-orange-500", icon: Zap, label: "important" },
-        "far-deadline": { bg: "bg-green-100", text: "text-green-600", icon: MessageCircle, label: "far deadline" }
+        urgent: { bg: "bg-red-100", text: "text-red-500", icon: Siren, label: "urgent" },
+        important: { bg: "bg-orange-100", text: "text-orange-500", icon: Goal, label: "important" },
+        "far-deadline": { bg: "bg-green-100", text: "text-green-600", icon: Coffee, label: "far deadline" }
     };
 
     const style = tagStyles[tag];
@@ -254,7 +254,7 @@ function InProgressCard({ task, isLast }: { task: Task; isLast?: boolean }) {
 
             <div className="flex items-center gap-6">
                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${style.bg} ${style.text}`}>
-                    <Icon size={12} fill="currentColor" className="opacity-80" />
+                    <Icon size={12} className="opacity-80 stroke-[2.5px]" />
                     <span className="text-[10px] font-bold uppercase tracking-wide">{style.label}</span>
                 </div>
                 {date && <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">{date}</span>}

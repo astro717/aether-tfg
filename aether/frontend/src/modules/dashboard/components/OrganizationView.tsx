@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Flame, AlertTriangle, MessageCircle, Loader2, Trash2 } from "lucide-react";
+import { Check, Goal, Siren, Coffee, Loader2, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   DndContext,
@@ -498,10 +498,10 @@ function TaskCard({ task, isDragging = false }: { task: Task; isDragging?: boole
         <div className="flex items-center gap-2">
           {/* Priority/Status indicator only - Task ID removed for cleaner Kanban view */}
           <div className="text-gray-400">
-            {task.status === 'done' && <Check size={14} className="text-gray-400" />}
-            {task.status !== 'done' && priority === 'high' && <AlertTriangle size={14} className="text-red-400 fill-red-400/10" />}
-            {task.status !== 'done' && priority === 'medium' && <Flame size={14} className="text-yellow-400 fill-yellow-400" />}
-            {task.status !== 'done' && priority === 'low' && <MessageCircle size={14} className="text-green-500 fill-green-500" />}
+            {task.status === 'done' && <Check size={14} className="text-gray-400 stroke-[2.5px]" />}
+            {task.status !== 'done' && priority === 'high' && <Siren size={14} className="text-red-400 stroke-[2.5px]" />}
+            {task.status !== 'done' && priority === 'medium' && <Goal size={14} className="text-yellow-400 stroke-[2.5px]" />}
+            {task.status !== 'done' && priority === 'low' && <Coffee size={14} className="text-green-500 stroke-[2.5px]" />}
           </div>
         </div>
       </div>

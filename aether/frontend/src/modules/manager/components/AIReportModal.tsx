@@ -626,7 +626,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                     <>
                       {/* The Pulse - KPI Cards with Sparklines */}
                       {report.chartData.pulse && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-chart-id="pulse-metrics">
                           <SparklineCard
                             title="Velocity"
                             value={report.chartData.pulse.velocityRate?.value ?? 0}
@@ -671,24 +671,24 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                         />
                       )}
 
-                      {/* Two-column layout for Investment & Burndown */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {report.chartData.investment && (
-                          <InvestmentSunburst
-                            data={report.chartData.investment}
-                            title="Investment Distribution"
-                            subtitle="Task allocation by category"
-                            pdfMode={isExportingPDF}
-                          />
-                        )}
-                        {report.chartData.burndown && (
-                          <PredictiveBurndownChart
-                            data={report.chartData.burndown}
-                            title="Predictive Burndown"
-                            subtitle="AI-powered completion forecast"
-                          />
-                        )}
-                      </div>
+                      {/* Full-width Investment Distribution */}
+                      {report.chartData.investment && (
+                        <InvestmentSunburst
+                          data={report.chartData.investment}
+                          title="Investment Distribution"
+                          subtitle="Task allocation by category"
+                          pdfMode={isExportingPDF}
+                        />
+                      )}
+
+                      {/* Full-width Predictive Burndown */}
+                      {report.chartData.burndown && (
+                        <PredictiveBurndownChart
+                          data={report.chartData.burndown}
+                          title="Predictive Burndown"
+                          subtitle="AI-powered completion forecast"
+                        />
+                      )}
 
                       {/* Workload Heatmap */}
                       {report.chartData.heatmap && (
@@ -790,24 +790,24 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                         />
                       )}
 
-                      {/* Investment & Resource Utilization - Two columns */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {report.chartData.investment && (
-                          <InvestmentSunburst
-                            data={report.chartData.investment}
-                            title="Work Distribution"
-                            subtitle="Identify imbalances"
-                            pdfMode={isExportingPDF}
-                          />
-                        )}
-                        {report.chartData.heatmap && (
-                          <WorkloadHeatmap
-                            data={report.chartData.heatmap}
-                            title="Resource Utilization"
-                            subtitle="Team capacity analysis"
-                          />
-                        )}
-                      </div>
+                      {/* Work Distribution - Full Width */}
+                      {report.chartData.investment && (
+                        <InvestmentSunburst
+                          data={report.chartData.investment}
+                          title="Work Distribution"
+                          subtitle="Identify imbalances"
+                          pdfMode={isExportingPDF}
+                        />
+                      )}
+
+                      {/* Resource Utilization - Full Width */}
+                      {report.chartData.heatmap && (
+                        <WorkloadHeatmap
+                          data={report.chartData.heatmap}
+                          title="Resource Utilization"
+                          subtitle="Team capacity analysis"
+                        />
+                      )}
 
                       {/* Cycle Time Scatterplot - Full Width */}
                       {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (

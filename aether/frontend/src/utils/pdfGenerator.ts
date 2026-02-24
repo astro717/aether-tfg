@@ -258,13 +258,11 @@ class PDFGenerator {
     this.doc.text(title, LAYOUT.margin.left + 5, boxY + 7);
 
     // Content
-    this.doc.setFontSize(FONTS.body.size);
-    this.doc.setFont('helvetica', 'normal');
-    this.doc.setTextColor(...COLORS.neutral.dark);
+    this.currentY = boxY + 14; // Start inside the box with proper padding
 
-    const lines = this.doc.splitTextToSize(content, this.contentWidth - 10);
-    this.doc.text(lines, LAYOUT.margin.left + 5, boxY + 14);
+    this.renderRichText(content, LAYOUT.margin.left + 5, this.contentWidth - 10);
 
+    // Box height is fixed visually, jump Y passed the box
     this.currentY = boxY + boxHeight + LAYOUT.spacing.section;
   }
 
@@ -284,29 +282,10 @@ class PDFGenerator {
     this.doc.circle(LAYOUT.margin.left + 2, this.currentY - 1.5, 1.5, 'F');
 
     this.doc.text(title, LAYOUT.margin.left + 7, this.currentY);
-    this.currentY += LAYOUT.spacing.paragraph;
+    this.currentY += 8; // Increased gap between header and content
 
     // Section content
-    this.doc.setFontSize(FONTS.body.size);
-    this.doc.setFont('helvetica', 'normal');
-    this.doc.setTextColor(...COLORS.neutral.dark);
-
-    const lines = this.doc.splitTextToSize(content, this.contentWidth - 7);
-
-    // Handle page breaks within content
-    for (const line of lines) {
-      const prevPage = this.pageNumber;
-      this.checkPageBreak(6);
-      // Restore body text style if page break occurred (footer contaminated font state)
-      if (this.pageNumber !== prevPage) {
-        this.doc.setFontSize(FONTS.body.size);
-        this.doc.setFont('helvetica', 'normal');
-        this.doc.setTextColor(...COLORS.neutral.dark);
-      }
-      this.doc.text(line, LAYOUT.margin.left + 7, this.currentY);
-      this.currentY += 5;
-    }
-
+    this.renderRichText(content, LAYOUT.margin.left + 7, this.contentWidth - 7);
     this.currentY += LAYOUT.spacing.section;
   }
 
@@ -400,6 +379,117 @@ class PDFGenerator {
   }
 
   /**
+   * Helper to render Rich Text (Markdown bold and lists) with word wrapping
+   */
+  private renderRichText(text: string, startX: number, maxWidth: number): void {
+    this.doc.setFontSize(FONTS.body.size);
+    this.doc.setTextColor(...COLORS.neutral.dark);
+
+    const paragraphs = text.split('\n');
+
+    for (const paragraph of paragraphs) {
+      if (!paragraph.trim()) {
+        this.currentY += 3; // Empty line spacing
+        continue;
+      }
+
+      let indentOffset = 0;
+      let paragraphText = paragraph;
+      let isBullet = false;
+      let bulletText = '';
+      let isFirstLine = true;
+
+      // Handle list items (bullet points or numbered lists)
+      const listMatch = paragraphText.match(/^(\s*)([-*]|\d+\.)\s+/);
+      if (listMatch) {
+        const marker = listMatch[2];
+        isBullet = marker === '-' || marker === '*';
+        bulletText = isBullet ? '' : marker;
+
+        // Strip the markdown bullet/number from the text string
+        paragraphText = paragraphText.substring(listMatch[0].length);
+        // Indent the text block to leave room for our custom bullet/number
+        indentOffset = 6;
+      }
+
+      // Parse bold tokens
+      const parts = paragraphText.split(/(\*\*.*?\*\*)/g);
+
+      let currentLine: {text: string, isBold: boolean}[] = [];
+      let currentLineWidth = 0;
+      let currentX = startX + indentOffset;
+      const safeMaxWidth = maxWidth - indentOffset;
+
+      const printCurrentLine = () => {
+        if (currentLine.length === 0 && !isFirstLine) return;
+        if (currentLine.length === 0 && isFirstLine && !listMatch) return;
+
+        // Handle precise page breaks
+        const prevPage = this.pageNumber;
+        this.checkPageBreak(6);
+        if (this.pageNumber !== prevPage) {
+          this.doc.setFontSize(FONTS.body.size);
+          this.doc.setTextColor(...COLORS.neutral.dark);
+        }
+
+        // ONLY draw the bullet/number on the first line of the list block
+        if (isFirstLine && listMatch) {
+          if (isBullet) {
+             this.doc.setFillColor(...COLORS.primary.indigo);
+             // Draw a premium circular bullet
+             this.doc.circle(startX + 2, this.currentY - 1, 0.8, 'F');
+          } else {
+             // Draw nice bold colored numbers
+             this.doc.setFont('Helvetica', 'bold');
+             this.doc.setTextColor(...COLORS.primary.indigo);
+             this.doc.text(bulletText, startX, this.currentY);
+             // Restore text color to dark
+             this.doc.setTextColor(...COLORS.neutral.dark);
+          }
+        }
+
+        // Print text words
+        let renderX = currentX;
+        currentLine.forEach(span => {
+          this.doc.setFont('Helvetica', span.isBold ? 'bold' : 'normal');
+          this.doc.text(span.text, renderX, this.currentY);
+          renderX += this.doc.getTextWidth(span.text);
+        });
+
+        this.currentY += 5; // Increment Y for the next line
+        currentLine = [];
+        currentLineWidth = 0;
+        isFirstLine = false;
+      };
+
+      // Process words and fill lines
+      parts.forEach(part => {
+        if (!part) return;
+        const isBold = part.startsWith('**') && part.endsWith('**');
+        const textContent = isBold ? part.slice(2, -2) : part;
+
+        const words = textContent.split(/(\s+)/); // Preserve spaces
+
+        words.forEach(word => {
+          if (!word) return;
+          this.doc.setFont('Helvetica', isBold ? 'bold' : 'normal');
+          const wordWidth = this.doc.getTextWidth(word);
+
+          if (currentLineWidth + wordWidth > safeMaxWidth && currentLine.length > 0 && word.trim() !== '') {
+            printCurrentLine();
+          }
+
+          currentLine.push({ text: word, isBold });
+          currentLineWidth += wordWidth;
+        });
+      });
+
+      printCurrentLine(); // Flush remaining
+      this.currentY += 2; // Paragraph bottom margin
+    }
+  }
+
+  /**
    * Add chart image to PDF (captured via html2canvas)
    * @param canvas - Canvas element containing the chart
    * @param title - Optional title for the chart
@@ -480,11 +570,11 @@ class PDFGenerator {
     this.addFooter();
 
     // Summary
-    this.addSummaryBox('Executive Summary', this.cleanMarkdown(data.summary));
+    this.addSummaryBox('Executive Summary', data.summary);
 
     // Sections
     for (const section of data.sections) {
-      this.addSection(section.title, this.cleanMarkdown(section.content));
+      this.addSection(section.title, section.content);
     }
   }
 
@@ -503,11 +593,11 @@ class PDFGenerator {
     this.addFooter();
 
     // Summary
-    this.addSummaryBox('Summary', this.cleanMarkdown(data.summary));
+    this.addSummaryBox('Summary', data.summary);
 
     // Sections
     for (const section of data.sections) {
-      this.addSection(section.title, this.cleanMarkdown(section.content));
+      this.addSection(section.title, section.content);
     }
   }
 
@@ -528,7 +618,7 @@ class PDFGenerator {
     // Summary with score
     this.addSummaryBox(
       `Quality Score: ${data.score}`,
-      this.cleanMarkdown(data.summary)
+      data.summary
     );
 
     // Issues
@@ -562,15 +652,15 @@ class PDFGenerator {
     this.currentY += LAYOUT.spacing.section;
 
     // Explanation
-    this.addSummaryBox('What This Commit Does', this.cleanMarkdown(data.explanation));
+    this.addSummaryBox('What This Commit Does', data.explanation);
 
     // How It Fulfills Task
     if (data.howItFulfillsTask) {
-      this.addSection('How It Fulfills the Task', this.cleanMarkdown(data.howItFulfillsTask));
+      this.addSection('How It Fulfills the Task', data.howItFulfillsTask);
     }
 
     // Technical Details
-    this.addSection('Technical Details', this.cleanMarkdown(data.technicalDetails));
+    this.addSection('Technical Details', data.technicalDetails);
 
     // Remaining Work
     if (data.remainingWork && data.remainingWork.length > 0) {
@@ -673,39 +763,33 @@ export async function generateManagerReportPDF(
   generator.addFooter();
 
   // ========== PAGE 1: EXECUTIVE SUMMARY & KEY METRICS ==========
-  generator.addSummaryBox('Executive Summary', generator.cleanMarkdown(data.summary));
+  generator.addSummaryBox('Executive Summary', data.summary);
 
 
   // ========== CHART EXTRACTION ==========
   // Get all available charts from html2canvas capture
-  const doraChart = charts.get('dora-metrics');
   const investmentChart = charts.get('investment-profile');
   const throughputChart = charts.get('throughput-trend');
   const radarChart = charts.get('radar-metrics');
   const cfdChart = charts.get('cfd-area');
   const cycleTimeChart = charts.get('scatter-cycle');
   const burndownChart = charts.get('burndown-predictive');
-  // const heatmapChart = charts.get('workload-heatmap');
+  const heatmapChart = charts.get('workload-heatmap');
   const realCfdChart = charts.get('real-cfd-chart');
-
-  // ========== PRIORITY 1: DORA Metrics (Full-Width KPI Strip) ==========
-  // DORA metrics are wide, low-height KPIs - perfect for full-width placement
-  if (doraChart) {
-    generator.checkPageBreak(65);
-    generator.addChartImage(doraChart, 'Key Performance Indicators', generator.contentWidth);
-  }
 
   // ========== SECTION: UNIFIED CONSTRAINED CHARTS ==========
   // Single-Column Layout with Object-Fit Contain Logic
   // Each chart respects its maxHeight constraint; if exceeded, width is recalculated
   // proportionally and the image is centered horizontally for premium aesthetics
+  const isBottleneckReport = reportTypeName.toLowerCase().includes('bottleneck');
+
   const chartSequence: Array<{ canvas: HTMLCanvasElement; title: string; maxHeight: number }> = [
     investmentChart && { canvas: investmentChart, title: 'Investment Profile', maxHeight: 75 },
     cycleTimeChart && { canvas: cycleTimeChart, title: 'Cycle Time Analysis', maxHeight: 90 },
     radarChart && { canvas: radarChart, title: 'Code Review Metrics', maxHeight: 90 },
     throughputChart && { canvas: throughputChart, title: 'Throughput Trend', maxHeight: 90 },
     burndownChart && { canvas: burndownChart, title: 'Predictive Burndown', maxHeight: 100 },
-    // heatmapChart && { canvas: heatmapChart, title: 'Workload Heatmap', maxHeight: 100 },
+    !isBottleneckReport && heatmapChart && { canvas: heatmapChart, title: 'Workload Heatmap', maxHeight: 85 },
     cfdChart && { canvas: cfdChart, title: 'Cumulative Flow Diagram', maxHeight: 110 },
     realCfdChart && { canvas: realCfdChart, title: 'Real-Time Cumulative Flow', maxHeight: 110 },
   ].filter((item): item is { canvas: HTMLCanvasElement; title: string; maxHeight: number } => Boolean(item));
@@ -734,13 +818,13 @@ export async function generateManagerReportPDF(
     const imgData = chart.canvas.toDataURL('image/png');
     generator.doc.addImage(imgData, 'PNG', xOffset, generator.currentY + 8, imgWidth, imgHeight, undefined, 'FAST');
 
-    generator.currentY += imgHeight + 8 + LAYOUT.spacing.section;
+    generator.currentY += imgHeight + 14 + LAYOUT.spacing.section;
   }
 
   // ========== PAGE 3: TEXT SECTIONS ==========
   // Add text sections after charts
   for (const section of data.sections) {
-    generator.addSection(section.title, generator.cleanMarkdown(section.content));
+    generator.addSection(section.title, section.content);
   }
 
   // Download

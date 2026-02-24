@@ -2186,7 +2186,7 @@ ${tasks.slice(0, 10).map(t => `- [${t.status}] "${t.title}" - ${t.users_tasks_as
 
     switch (type) {
       case 'weekly_organization':
-        prompt = `You are a senior project manager writing a weekly organization report.
+        prompt = `You are a senior project manager writing a weekly organization report for an executive audience.
 
 ${baseContext}
 
@@ -2197,19 +2197,28 @@ Write a comprehensive weekly report that includes:
 4. Upcoming Priorities (what should the team focus on next week)
 5. Recommendations (actionable suggestions for improvement)
 
+FORMATTING REQUIREMENTS (CRITICAL - follow these exactly):
+- Use **bold text** to highlight key metrics, user names, percentages, and core insights
+- Use bullet points (* or -) to break down complex information into scannable items
+- Keep paragraphs short (2-3 sentences max) for executive readability
+- Structure each section with clear hierarchy: lead with the insight, then supporting details
+- For metrics, bold the numbers (e.g., **85%** completion rate, **12 tasks** completed)
+- For team members, bold names (e.g., **Alice** completed 5 tasks)
+
 CRITICAL OUTPUT INSTRUCTIONS:
 - Return ONLY a raw JSON object, nothing else
 - Do NOT wrap the response in markdown code blocks
 - The response must start with { and end with }
+- The "content" strings inside the JSON MUST contain the rich Markdown formatting described above
 
 Required JSON structure:
 {
-  "summary": "Executive summary here",
+  "summary": "Executive summary with **bold metrics** and key highlights here",
   "sections": [
-    {"title": "Productivity Analysis", "content": "Detailed analysis..."},
-    {"title": "Workload Distribution", "content": "Assessment..."},
-    {"title": "Upcoming Priorities", "content": "Focus areas..."},
-    {"title": "Recommendations", "content": "Suggestions..."}
+    {"title": "Productivity Analysis", "content": "* **Key finding 1**: Details...\n* **Key finding 2**: Details..."},
+    {"title": "Workload Distribution", "content": "* **Team Member**: workload details...\n* Balance assessment..."},
+    {"title": "Upcoming Priorities", "content": "1. **Priority 1**: Details...\n2. **Priority 2**: Details..."},
+    {"title": "Recommendations", "content": "1. **Action Item 1**: Details...\n2. **Action Item 2**: Details..."}
   ]
 }`;
         break;
@@ -2250,30 +2259,39 @@ Required JSON structure:
         break;
 
       case 'bottleneck_prediction':
-        prompt = `You are a senior project risk analyst identifying potential bottlenecks and risks.
+        prompt = `You are a senior project risk analyst identifying potential bottlenecks and risks for an executive audience.
 
 ${baseContext}
 
-Analyze the data and predict potential bottlenecks:
-1. Executive Summary (key risks and concerns)
+Analyze the data and predict potential bottlenecks. Structure your analysis into these sections:
+1. Executive Summary (key risks and concerns - 2-3 impactful sentences)
 2. Current Bottlenecks (tasks or areas blocking progress)
 3. Resource Constraints (overloaded team members, capacity issues)
-4. Risk Assessment (potential future problems)
-5. Mitigation Strategies (how to address identified risks)
+4. Risk Assessment (potential future problems with severity levels)
+5. Mitigation Strategies (actionable recommendations to address identified risks)
+
+FORMATTING REQUIREMENTS (CRITICAL - follow these exactly):
+- Use **bold text** to highlight key metrics, user names, risk levels, and critical findings
+- Use bullet points (* or -) to break down complex information into scannable items
+- Keep paragraphs short (2-3 sentences max) for executive readability
+- Structure each section with clear hierarchy: lead with the insight, then supporting details
+- For risks, always include severity indicators (e.g., **High Risk**, **Medium Risk**)
+- For metrics, bold the numbers (e.g., **85%** completion rate, **3 tasks** blocked)
 
 CRITICAL OUTPUT INSTRUCTIONS:
 - Return ONLY a raw JSON object, nothing else
 - Do NOT wrap the response in markdown code blocks
 - The response must start with { and end with }
+- The "content" strings inside the JSON MUST contain the rich Markdown formatting described above
 
 Required JSON structure:
 {
-  "summary": "Executive summary of risks here",
+  "summary": "Executive summary with **bold metrics** and key findings here",
   "sections": [
-    {"title": "Current Bottlenecks", "content": "Identified blockers..."},
-    {"title": "Resource Constraints", "content": "Capacity issues..."},
-    {"title": "Risk Assessment", "content": "Future concerns..."},
-    {"title": "Mitigation Strategies", "content": "Recommendations..."}
+    {"title": "Current Bottlenecks", "content": "* **Blocker 1**: Description...\n* **Blocker 2**: Description..."},
+    {"title": "Resource Constraints", "content": "Analysis with **bold names** and metrics..."},
+    {"title": "Risk Assessment", "content": "* **High Risk**: Issue...\n* **Medium Risk**: Issue..."},
+    {"title": "Mitigation Strategies", "content": "1. **Action 1**: Details...\n2. **Action 2**: Details..."}
   ]
 }`;
         break;
