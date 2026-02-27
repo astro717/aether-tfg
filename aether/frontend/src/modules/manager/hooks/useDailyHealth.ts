@@ -124,14 +124,10 @@ export const useDailyHealth = (organizationId: string): UseDailyHealthResult => 
       setLoading(true);
       setError(null);
       try {
-        const data = await managerApi.getAnalytics(organizationId, 'today');
+        // Use lightweight daily-pulse endpoint instead of heavy analytics
+        const data = await managerApi.getDailyPulse(organizationId);
 
         if (cancelled) return;
-
-        // Build username → performance lookup for avatar colors
-        const perfLookup = new Map(
-          data.individualPerformance.map((p) => [p.username, p]),
-        );
 
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
@@ -139,26 +135,26 @@ export const useDailyHealth = (organizationId: string): UseDailyHealthResult => 
         const processed: DailyTaskHealth[] = data.recentTasks
           .filter((t) => t.status !== 'done')
           .map((task) => {
-            const healthStatus = computeHealthStatus(task);
-            const lastActivity = getLastActivity(task);
-            const perf = perfLookup.get(task.assignee);
+            const normalizedTask = { ...task, status: task.status ?? 'unknown' };
+            const healthStatus = computeHealthStatus(normalizedTask);
+            const lastActivity = getLastActivity(normalizedTask);
             const createdAt = new Date(task.created_at);
             const isUnplanned = createdAt >= todayStart;
 
             return {
               taskId: task.id,
               title: task.title,
-              status: task.status,
+              status: task.status ?? 'unknown',
               assignee: {
-                id: perf?.id ?? task.assignee,
+                id: task.assigneeId ?? task.assignee,
                 username: task.assignee,
-                avatarColor: perf?.avatar_color,
+                avatarColor: task.assigneeAvatarColor,
               },
               healthStatus,
               lastActivity: lastActivity.getTime() > 0
                 ? lastActivity.toISOString()
-                : task.created_at, // fallback: use created_at if no activity
-              aiInsight: generateAiInsight(healthStatus, task),
+                : task.created_at,
+              aiInsight: generateAiInsight(healthStatus, normalizedTask),
               isUnplanned,
             };
           });

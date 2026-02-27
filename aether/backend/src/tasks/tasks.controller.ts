@@ -92,6 +92,14 @@ export class TasksController {
     return this.tasksService.getDailyMetrics(organizationId, range);
   }
 
+  @Get('organization/:organizationId/daily-pulse')
+  async getDailyPulse(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.getDailyPulse(organizationId, user.id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get()
   async findAll(@CurrentUser() user: User) {

@@ -137,7 +137,7 @@ export function PersonalView() {
                                 return (
                                     <span
                                         key={label}
-                                        className={`${isCurrent ? 'bg-gray-300/50 dark:bg-gray-600/50 rounded-full px-2 py-1 text-gray-600 dark:text-gray-300' : ''}`}
+                                        className={`${isCurrent ? 'bg-red-500 rounded-full px-2 py-1 text-white font-bold shadow-sm' : ''}`}
                                     >
                                         {label}
                                     </span>
@@ -154,7 +154,7 @@ export function PersonalView() {
                                 return (
                                     <div
                                         key={`line-${index}`}
-                                        className={`h-full ${isCurrent ? 'border-l border-gray-300 w-px' : 'border-l border-dashed border-gray-200 opacity-0'}`}
+                                        className={`h-full ${isCurrent ? 'border-l-2 border-red-500 w-px z-10' : 'border-l border-dashed border-gray-200 opacity-0'}`}
                                     ></div>
                                 );
                             })}
@@ -182,10 +182,13 @@ export function PersonalView() {
                                     className="absolute"
                                     style={{ top: topOffset, ...style }}
                                 >
-                                    <div className={`bg-white/80 dark:bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border-l-4 ${colorClass} w-40`}>
+                                    <div className={`bg-white/80 dark:bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border-l-4 ${colorClass} w-40 flex items-start justify-between gap-2`}>
                                         <span className="text-[10px] text-gray-800 dark:text-gray-200 font-medium leading-tight block">
                                             {task.title}
                                         </span>
+                                        {task.status === 'done' && (
+                                            <Check size={14} className="text-gray-400 stroke-[2.5px] flex-shrink-0" />
+                                        )}
                                     </div>
                                 </div>
                             );

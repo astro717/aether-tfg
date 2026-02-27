@@ -191,6 +191,25 @@ export interface ReportAvailability {
   createdAt: Date;
 }
 
+// Lightweight response for Daily Pulse (Today view)
+export interface DailyPulseTask {
+  id: string;
+  title: string;
+  status: string | null;
+  assignee: string;
+  assigneeId?: string;
+  assigneeAvatarColor?: string;
+  created_at: string;
+  updated_at: string;
+  due_date?: string | null;
+  latestCommitDate?: string | null;
+  latestCommentDate?: string | null;
+}
+
+export interface DailyPulseResponse {
+  recentTasks: DailyPulseTask[];
+}
+
 class ManagerApi {
   private getAuthHeaders() {
     const token = localStorage.getItem('token');
@@ -293,6 +312,18 @@ class ManagerApi {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || 'Failed to fetch CFD data');
+    }
+    return response.json();
+  }
+
+  async getDailyPulse(organizationId: string): Promise<DailyPulseResponse> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/organization/${organizationId}/daily-pulse`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch daily pulse');
     }
     return response.json();
   }

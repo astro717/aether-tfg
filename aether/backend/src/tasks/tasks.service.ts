@@ -2057,31 +2057,86 @@ export class TasksService {
     in_progress: number;
     todo: number;
   }>> {
+    // Step 1: Calculate exact startDate and endDate (today)
+    const endDate = new Date();
+    endDate.setHours(0, 0, 0, 0);
+
+    let startDate: Date;
     let daysAgo: number | null = null;
+
     if (range === '7d') daysAgo = 7;
     else if (range === '30d') daysAgo = 30;
     else if (range === '90d') daysAgo = 90;
-    // 'all' → no date filter
 
-    const where: any = { organization_id: organizationId };
     if (daysAgo !== null) {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - daysAgo);
-      cutoff.setHours(0, 0, 0, 0);
-      where.date = { gte: cutoff };
+      startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - daysAgo);
+    } else {
+      // 'all' → fetch oldest record to determine startDate
+      const oldest = await this.prisma.daily_metrics.findFirst({
+        where: { organization_id: organizationId },
+        orderBy: { date: 'asc' },
+      });
+      if (!oldest) return [];
+      startDate = new Date(oldest.date);
+      startDate.setHours(0, 0, 0, 0);
     }
 
-    const metrics = await this.prisma.daily_metrics.findMany({
-      where,
-      orderBy: { date: 'asc' },
-    });
+    // Step 2: Fetch raw metrics within range + last record before startDate for base state
+    const [metricsInRange, baseMetric] = await Promise.all([
+      this.prisma.daily_metrics.findMany({
+        where: {
+          organization_id: organizationId,
+          date: { gte: startDate, lte: endDate },
+        },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.daily_metrics.findFirst({
+        where: {
+          organization_id: organizationId,
+          date: { lt: startDate },
+        },
+        orderBy: { date: 'desc' },
+      }),
+    ]);
 
-    return metrics.map(m => ({
-      date: (m.date as Date).toISOString().split('T')[0],
-      done: m.done_count,
-      in_progress: m.in_progress_count,
-      todo: m.todo_count,
-    }));
+    // Build a lookup map for quick access by date string
+    const metricsMap = new Map<string, { done: number; in_progress: number; todo: number }>();
+    for (const m of metricsInRange) {
+      const dateStr = (m.date as Date).toISOString().split('T')[0];
+      metricsMap.set(dateStr, {
+        done: m.done_count,
+        in_progress: m.in_progress_count,
+        todo: m.todo_count,
+      });
+    }
+
+    // Step 3 & 4: Iterate continuously from startDate to endDate, forward-filling gaps
+    const result: Array<{ date: string; done: number; in_progress: number; todo: number }> = [];
+
+    // Initialize carry-forward values from base metric or zeros
+    let lastKnown = baseMetric
+      ? { done: baseMetric.done_count, in_progress: baseMetric.in_progress_count, todo: baseMetric.todo_count }
+      : { done: 0, in_progress: 0, todo: 0 };
+
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const existing = metricsMap.get(dateStr);
+
+      if (existing) {
+        lastKnown = existing;
+      }
+
+      result.push({
+        date: dateStr,
+        ...lastKnown,
+      });
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return result;
   }
 
   /**
@@ -2124,6 +2179,85 @@ export class TasksService {
 
     // Return updated task with all linked commits
     return this.findOneOwned(taskId, userId, userRole);
+  }
+
+  /**
+   * Lightweight endpoint for Daily Pulse widget (Today view only)
+   * Returns active tasks with minimal overhead — no heavy analytics computation
+   */
+  async getDailyPulse(organizationId: string, managerId: string) {
+    // Verify user is manager in this organization
+    const userOrg = await this.prisma.user_organizations.findUnique({
+      where: {
+        user_id_organization_id: {
+          user_id: managerId,
+          organization_id: organizationId,
+        },
+      },
+    });
+
+    const role = userOrg?.role_in_org;
+    if (!userOrg || (role !== 'admin' && role !== 'manager')) {
+      throw new ForbiddenException('Only managers can view daily pulse');
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    // Optimized query: only tasks with "signs of life" today or in_progress
+    const rawTasks = await this.prisma.tasks.findMany({
+      where: {
+        organization_id: organizationId,
+        is_archived: false,
+        OR: [
+          { updated_at: { gte: todayStart } },
+          { created_at: { gte: todayStart } },
+          { task_commits: { some: { commits: { committed_at: { gte: todayStart } } } } },
+          { task_comments: { some: { created_at: { gte: todayStart } } } },
+          { status: 'in_progress' },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        created_at: true,
+        updated_at: true,
+        due_date: true,
+        users_tasks_assignee_idTousers: {
+          select: { id: true, username: true, avatar_color: true },
+        },
+        task_commits: {
+          select: {
+            commits: { select: { committed_at: true } },
+          },
+          orderBy: { linked_at: 'desc' },
+          take: 1,
+        },
+        task_comments: {
+          select: { created_at: true },
+          orderBy: { created_at: 'desc' },
+          take: 1,
+        },
+      },
+      take: 30,
+    });
+
+    return {
+      recentTasks: rawTasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        assignee: t.users_tasks_assignee_idTousers?.username || 'Unassigned',
+        assigneeId: t.users_tasks_assignee_idTousers?.id,
+        assigneeAvatarColor: t.users_tasks_assignee_idTousers?.avatar_color,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+        due_date: t.due_date,
+        latestCommitDate: t.task_commits[0]?.commits?.committed_at ?? null,
+        latestCommentDate: t.task_comments[0]?.created_at ?? null,
+      })),
+    };
   }
 }
 
