@@ -138,6 +138,20 @@ export interface TaskReportResult {
   timestamp?: string;
 }
 
+export interface PersonalPulseData {
+  weeklyVelocity: number;
+  trend: number;
+  onTimeRate: number;
+  cycleTime: number; // in days
+  streak: number; // in days
+  progress: {
+    todo: number;
+    inProgress: number;
+    done: number;
+    total: number;
+  };
+}
+
 class TasksApi {
   private getAuthHeaders() {
     const token = localStorage.getItem('token'); // Note: 'token' not 'authToken'
@@ -175,6 +189,15 @@ class TasksApi {
       { headers: this.getAuthHeaders() }
     );
     if (!response.ok) throw new Error('Failed to fetch my tasks');
+    return response.json();
+  }
+
+  async getMyPulse(): Promise<PersonalPulseData> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/my-pulse`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) throw new Error('Failed to fetch personal pulse');
     return response.json();
   }
 

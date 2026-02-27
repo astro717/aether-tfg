@@ -574,6 +574,98 @@ export class TasksService {
     });
   }
 
+  /**
+   * Personal Pulse: weekly velocity, trend, and on-time rate for a single user.
+   */
+  async getMyPulse(userId: string) {
+    const now = new Date();
+
+    // Get start of current week (Monday)
+    const currentWeekStart = new Date(now);
+    currentWeekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    // Get start of last week (Monday)
+    const lastWeekStart = new Date(currentWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    // Get end of last week (Sunday)
+    const lastWeekEnd = new Date(currentWeekStart);
+    lastWeekEnd.setMilliseconds(-1);
+
+    // Count tasks completed THIS week (status changed to done this week)
+    const thisWeekDone = await this.prisma.tasks.count({
+      where: {
+        assignee_id: userId,
+        status: 'done',
+        updated_at: { gte: currentWeekStart },
+      },
+    });
+
+    // Count tasks completed LAST week
+    const lastWeekDone = await this.prisma.tasks.count({
+      where: {
+        assignee_id: userId,
+        status: 'done',
+        updated_at: {
+          gte: lastWeekStart,
+          lte: lastWeekEnd,
+        },
+      },
+    });
+
+    // Calculate on-time rate (done tasks where done before due_date)
+    // Look at last 30 days of completed tasks
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const completedWithDueDate = await this.prisma.tasks.findMany({
+      where: {
+        assignee_id: userId,
+        status: 'done',
+        due_date: { not: null },
+        updated_at: { gte: thirtyDaysAgo },
+      },
+      select: {
+        due_date: true,
+        updated_at: true,
+      },
+    });
+
+    const onTimeCount = completedWithDueDate.filter(
+      (t) => t.updated_at && t.due_date && new Date(t.updated_at) <= new Date(t.due_date)
+    ).length;
+
+    const onTimeRate = completedWithDueDate.length > 0
+      ? Math.round((onTimeCount / completedWithDueDate.length) * 100)
+      : 100; // Default to 100% if no data
+
+    // Get current task counts for progress bar
+    const [todoCount, inProgressCount, doneCount] = await Promise.all([
+      this.prisma.tasks.count({
+        where: { assignee_id: userId, status: { in: ['todo', 'pending'] }, is_archived: false },
+      }),
+      this.prisma.tasks.count({
+        where: { assignee_id: userId, status: 'in_progress', is_archived: false },
+      }),
+      this.prisma.tasks.count({
+        where: { assignee_id: userId, status: 'done', is_archived: false },
+      }),
+    ]);
+
+    return {
+      weeklyVelocity: thisWeekDone,
+      trend: thisWeekDone - lastWeekDone,
+      onTimeRate,
+      progress: {
+        todo: todoCount,
+        inProgress: inProgressCount,
+        done: doneCount,
+        total: todoCount + inProgressCount + doneCount,
+      },
+    };
+  }
+
   // Find tasks by organization
   async findAllByOrganization(organizationId: string, userId: string) {
     // Verify user belongs to organization

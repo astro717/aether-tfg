@@ -34,6 +34,11 @@ export class TasksController {
     return this.tasksService.findMyTasks(user.id);
   }
 
+  @Get('my-pulse')
+  async getMyPulse(@CurrentUser() user: User) {
+    return this.tasksService.getMyPulse(user.id);
+  }
+
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: User) {
     // Managers can view any task, regular users only their own

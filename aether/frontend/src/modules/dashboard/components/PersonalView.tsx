@@ -9,6 +9,7 @@ import {
 import { tasksApi, type Task } from '../api/tasksApi';
 import { useAuth } from '../../auth/context/AuthContext';
 import { getAvatarColorClasses } from '../../../lib/avatarColors';
+import { PersonalPulse } from './PersonalPulse';
 
 // --- Helper Utilities ---
 
@@ -76,8 +77,7 @@ export function PersonalView() {
     }, []);
 
     const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
-    const assignedTasks = tasks.filter(t => t.status === 'pending');
-    const doneTasks = tasks.filter(t => t.status === 'done');
+    const assignedTasks = tasks.filter(t => t.status === 'pending' || t.status === 'todo');
     const timelineTasks = tasks
         .filter(t => t.due_date && isDateInCurrentWeek(t.due_date))
         .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime());
@@ -210,18 +210,9 @@ export function PersonalView() {
                     </div>
                 </section>
 
-                {/* --- Awaiting Review Section (Bottom Right) --- */}
+                {/* --- Personal Pulse Section (Bottom Right) --- */}
                 <section className="col-span-4 row-start-2 bg-white/40 dark:bg-white/5 backdrop-blur-xl rounded-[40px] p-8 border border-white/40 dark:border-white/10 shadow-sm flex flex-col min-h-0 h-full">
-                    <h2 className="text-gray-500 dark:text-gray-300 font-medium text-lg mb-6 flex-shrink-0">Awaiting Review</h2>
-
-                    <div className="space-y-4 overflow-y-auto pr-2 -mr-2 flex-1 min-h-0">
-                        {doneTasks.length === 0 && (
-                            <p className="text-gray-400 text-sm">No tasks awaiting review</p>
-                        )}
-                        {doneTasks.map(task => (
-                            <AwaitingReviewCard key={task.id} task={task} />
-                        ))}
-                    </div>
+                    <PersonalPulse />
                 </section>
 
             </div>
@@ -298,21 +289,3 @@ function AssignedCard({ task }: { task: Task }) {
     );
 }
 
-function AwaitingReviewCard({ task }: { task: Task }) {
-    const date = formatDate(task.due_date);
-
-    return (
-        <div className="bg-white/60 dark:bg-white/10 backdrop-blur-md rounded-[28px] p-4 px-6 shadow-sm border border-white/50 dark:border-white/10 flex items-center justify-between hover:scale-[1.01] transition-transform duration-200 group">
-            <div className="flex flex-col justify-center">
-                <h3 className="text-gray-800 dark:text-gray-200 font-semibold text-sm tracking-tight leading-snug">{task.title}</h3>
-                <div className="mt-1">
-                    {date && <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">{date}</span>}
-                </div>
-            </div>
-
-            <button className="w-8 h-8 rounded-full bg-white dark:bg-white/10 shadow-sm flex items-center justify-center text-gray-400 hover:text-green-500 transition-colors flex-shrink-0 ml-4">
-                <Check size={14} />
-            </button>
-        </div>
-    );
-}
