@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, CheckCheck, MessageSquare, AtSign, ClipboardList, X, Trash2, Clock } from 'lucide-react';
+import { Bell, CheckCheck, MessageSquare, AtSign, ClipboardList, X, Trash2, Clock, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationsContext';
 import type { Notification, NotificationType } from '../api/notificationsApi';
@@ -38,7 +38,7 @@ export function NotificationsPopover({ isCollapsed = false }: NotificationsPopov
   useEffect(() => {
     if (isOpen && anchorRef.current) {
       const rect = anchorRef.current.getBoundingClientRect();
-      const popoverWidth = 360;
+      const popoverWidth = 400;
       const margin = 16;
       // Anchor to the left edge of the button, but ensure it doesn't overflow viewport
       const idealLeft = rect.left;
@@ -164,7 +164,7 @@ export function NotificationsPopover({ isCollapsed = false }: NotificationsPopov
                 left: coords.left,
                 position: 'fixed'
               }}
-              className="w-[360px] max-h-[480px] bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-gray-200 dark:border-zinc-800 overflow-hidden z-[9999]"
+              className="w-[400px] max-h-[480px] bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-gray-200 dark:border-zinc-800 overflow-hidden z-[9999]"
             >
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm sticky top-0 z-10">
@@ -223,7 +223,14 @@ export function NotificationsPopover({ isCollapsed = false }: NotificationsPopov
                         <NotificationItem
                           notification={notification}
                           onClick={() => handleNotificationClick(notification)}
-                          onRemove={() => removeNotification(notification.id)}
+                          onRemove={(e) => {
+                            e.stopPropagation();
+                            removeNotification(notification.id);
+                          }}
+                          onMarkAsRead={(e) => {
+                            e.stopPropagation();
+                            markAsRead(notification.id);
+                          }}
                           getIcon={getNotificationIcon}
                           formatTime={formatTimeAgo}
                         />
@@ -245,11 +252,12 @@ interface NotificationItemProps {
   notification: Notification;
   onClick: () => void;
   onRemove: (e: React.MouseEvent) => void;
+  onMarkAsRead: (e: React.MouseEvent) => void;
   getIcon: (type: NotificationType) => React.ReactNode;
   formatTime: (date: string) => string;
 }
 
-function NotificationItem({ notification, onClick, onRemove, getIcon, formatTime }: NotificationItemProps) {
+function NotificationItem({ notification, onClick, onRemove, onMarkAsRead, getIcon, formatTime }: NotificationItemProps) {
   const isUnread = !notification.read_at;
 
   return (
@@ -275,14 +283,11 @@ function NotificationItem({ notification, onClick, onRemove, getIcon, formatTime
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-w-0 pr-6">
-          <div className="flex items-start justify-between gap-2">
-            <p className={`text-sm ${isUnread ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+        <div className="flex-1 min-w-0 pr-2">
+          <div className="flex items-start gap-2">
+            <p className={`text-sm flex-1 ${isUnread ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
               {notification.title}
             </p>
-            <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0 mt-0.5">
-              {formatTime(notification.created_at)}
-            </span>
           </div>
           {notification.content && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
@@ -296,23 +301,38 @@ function NotificationItem({ notification, onClick, onRemove, getIcon, formatTime
           )}
         </div>
 
-        {/* Unread indicator */}
-        {isUnread && (
-          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-2" />
-        )}
+        {/* Right section: timestamp + unread dot (hidden on hover) */}
+        <div className="flex items-center gap-2 flex-shrink-0 transition-opacity duration-150 group-hover:opacity-0">
+          <span className="text-[11px] text-gray-400 dark:text-gray-500">
+            {formatTime(notification.created_at)}
+          </span>
+          {isUnread && (
+            <div className="w-2 h-2 rounded-full bg-blue-500" />
+          )}
+        </div>
       </button>
 
-      {/* Delete Button (Hover) */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove(e);
-        }}
-        className="absolute top-1/2 -translate-y-1/2 right-2 p-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-        title="Remove notification"
-      >
-        <Trash2 size={16} />
-      </button>
+      {/* Action Bar (appears on hover, replaces timestamp area) */}
+      <div className="absolute top-1/2 -translate-y-1/2 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-white dark:bg-zinc-800 shadow-md rounded-xl px-1.5 py-1 border border-gray-200 dark:border-zinc-600">
+        {/* Mark as Read Button - only shows for unread */}
+        {isUnread && (
+          <button
+            onClick={onMarkAsRead}
+            className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-green-900/30 rounded-lg transition-colors"
+            title="Mark as read"
+          >
+            <Check size={15} strokeWidth={2.5} />
+          </button>
+        )}
+        {/* Delete Button */}
+        <button
+          onClick={onRemove}
+          className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+          title="Remove notification"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
     </div>
   );
 }
