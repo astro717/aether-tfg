@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Maximize2, X, Sparkles, CheckCircle2, Clock, Download } from "lucide-react";
+import { Bot, Maximize2, X, Sparkles, CheckCircle2, Clock, Download, RefreshCw } from "lucide-react";
 import { tasksApi, type CommitInTaskContextExplanation } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
@@ -250,7 +250,7 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             layoutId="explanation-card"
-            className={`relative bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 dark:border-green-500/30 min-h-[120px] ${className}`}
+            className={`relative flex flex-col bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 dark:border-green-500/30 min-h-[120px] ${className}`}
           >
             {/* Header */}
             <div className="flex items-start justify-between mb-2">
@@ -283,24 +283,25 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
             </p>
 
             {/* Footer with timestamp and actions */}
-            <div className="mt-3 pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                <Clock size={10} className="text-gray-400 dark:text-gray-500" />
-                Generated {formatTimeAgo(explanation.timestamp)}
+            <div className="mt-auto pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between gap-2 min-w-0">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1 min-w-0 truncate shrink">
+                <Clock size={10} className="text-gray-400 dark:text-gray-500 shrink-0" />
+                <span className="truncate">Generated {formatTimeAgo(explanation.timestamp)}</span>
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => generateCommitExplanationPDF(explanation)}
-                  className="text-[10px] text-purple-500 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors flex items-center gap-1"
+                  className="p-1.5 rounded-md text-purple-500 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+                  title="Download PDF"
                 >
-                  <Download size={10} />
-                  PDF
+                  <Download size={12} />
                 </button>
                 <button
                   onClick={handleRegenerateClick}
-                  className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                  className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                  title="Regenerate"
                 >
-                  Regenerate
+                  <RefreshCw size={12} />
                 </button>
               </div>
             </div>
@@ -384,7 +385,7 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            className="relative w-full max-w-4xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 flex-shrink-0">
@@ -411,7 +412,7 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
             </div>
 
             {/* Content */}
-            <div className="p-6 overflow-y-auto premium-scrollbar flex-1">
+            <div className="p-6 sm:p-8 overflow-y-auto premium-scrollbar flex-1">
               {/* Explanation Section */}
               <Section title="What This Commit Does">
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">{explanation.explanation}</p>

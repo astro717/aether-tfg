@@ -70,6 +70,7 @@ export interface TaskComment {
     id: string;
     username: string;
     email: string;
+    avatar_color?: string;
   };
 }
 

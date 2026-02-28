@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, X, File as FileIcon } from "lucide-react";
+import { UserAvatar } from "../../../components/ui/UserAvatar";
 
 interface CommentAttachment {
   id: string;
@@ -12,7 +13,7 @@ interface CommentAttachment {
 
 interface CommentCardProps {
   author: string;
-  role: string;
+  avatarColor?: string;
   content: string | null;
   createdAt?: string;
   isMe?: boolean;
@@ -21,7 +22,7 @@ interface CommentCardProps {
 
 export function CommentCard({
   author,
-  role,
+  avatarColor,
   content,
   createdAt,
   isMe = false,
@@ -59,9 +60,12 @@ export function CommentCard({
         {/* Header */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-gray-500 flex items-center justify-center text-[10px] text-white font-bold">
-              {role}
-            </div>
+            <UserAvatar
+              username={author}
+              avatarColor={avatarColor}
+              size="xs"
+              className="w-5 h-5 text-[10px]"
+            />
             <span className="font-bold text-sm text-gray-900">
               {author}{" "}
               {isMe && (

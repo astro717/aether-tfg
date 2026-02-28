@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock, GitCommit, Download } from "lucide-react";
+import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock, GitCommit, Download, RefreshCw } from "lucide-react";
 import { tasksApi, type CodeAnalysisResult } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
@@ -193,7 +193,7 @@ export function AICodeAnalysisCard({ commitSha, className = "" }: AICodeAnalysis
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         layoutId="code-analysis-card"
-                        className={`relative bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-amber-200/50 dark:border-amber-500/30 min-h-[120px] w-full ${className}`}
+                        className={`relative flex flex-col bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-amber-200/50 dark:border-amber-500/30 min-h-[120px] w-full ${className}`}
                     >
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2 gap-2">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -222,31 +222,28 @@ export function AICodeAnalysisCard({ commitSha, className = "" }: AICodeAnalysis
                         </p>
 
                         {/* Footer with timestamp, commit SHA, and actions */}
-                        <div className="mt-3 pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                                    <Clock size={10} className="text-gray-400 dark:text-gray-500" />
-                                    Scanned {formatTimeAgo(analysis.timestamp)}
-                                </span>
-                                <span className="text-[10px] text-gray-300 dark:text-zinc-600">|</span>
-                                <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1 font-mono" title={`Analyzing commit: ${commitSha}`}>
-                                    <GitCommit size={10} className="text-gray-400 dark:text-gray-500" />
-                                    {commitSha.substring(0, 7)}
-                                </span>
+                        <div className="mt-auto pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between gap-2 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0 text-[10px] text-gray-400 dark:text-gray-500 truncate shrink">
+                                <Clock size={10} className="shrink-0" />
+                                <span className="truncate hidden xs:inline">{formatTimeAgo(analysis.timestamp)}</span>
+                                <span className="text-gray-300 dark:text-zinc-600 shrink-0">·</span>
+                                <GitCommit size={10} className="shrink-0" />
+                                <span className="font-mono shrink-0" title={`Commit: ${commitSha}`}>{commitSha.substring(0, 7)}</span>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 shrink-0">
                                 <button
                                     onClick={() => generateCodeAnalysisPDF(analysis, commitSha)}
-                                    className="text-[10px] text-amber-500 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors flex items-center gap-1"
+                                    className="p-1.5 rounded-md text-amber-500 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                                    title="Download PDF"
                                 >
-                                    <Download size={10} />
-                                    PDF
+                                    <Download size={12} />
                                 </button>
                                 <button
                                     onClick={handleRegenerateClick}
-                                    className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                                    className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                                    title="Re-scan"
                                 >
-                                    Re-scan
+                                    <RefreshCw size={12} />
                                 </button>
                             </div>
                         </div>
@@ -319,7 +316,7 @@ function AnalysisModal({ isOpen, onClose, analysis, commitSha }: { isOpen: boole
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+                        className="relative w-full max-w-4xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
                     >
                         {/* Header - Amber/Security Theme */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 flex-shrink-0">
@@ -344,7 +341,7 @@ function AnalysisModal({ isOpen, onClose, analysis, commitSha }: { isOpen: boole
                             </motion.button>
                         </div>
 
-                        <div className="p-6 overflow-y-auto premium-scrollbar flex-1 space-y-6">
+                        <div className="p-6 sm:p-8 overflow-y-auto premium-scrollbar flex-1 space-y-6">
                             <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-900/30 flex items-start gap-3">
                                 <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={18} />
                                 <div>

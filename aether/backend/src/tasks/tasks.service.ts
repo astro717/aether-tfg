@@ -641,17 +641,19 @@ export class TasksService {
       : 100; // Default to 100% if no data
 
     // Get current task counts for progress bar
-    const [todoCount, inProgressCount, doneCount] = await Promise.all([
+    // Note: todo/inProgress exclude archived (user doesn't work on archived tasks)
+    // doneCount uses thisWeekDone so archived tasks still count toward weekly progress
+    const [todoCount, inProgressCount] = await Promise.all([
       this.prisma.tasks.count({
         where: { assignee_id: userId, status: { in: ['todo', 'pending'] }, is_archived: false },
       }),
       this.prisma.tasks.count({
         where: { assignee_id: userId, status: 'in_progress', is_archived: false },
       }),
-      this.prisma.tasks.count({
-        where: { assignee_id: userId, status: 'done', is_archived: false },
-      }),
     ]);
+
+    // Weekly progress: completed THIS week, archived or not
+    const doneCount = thisWeekDone;
 
     return {
       weeklyVelocity: thisWeekDone,

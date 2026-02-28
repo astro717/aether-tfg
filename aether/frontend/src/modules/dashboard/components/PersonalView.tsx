@@ -16,6 +16,7 @@ import {
     Goal,
     Coffee
 } from "lucide-react";
+import { Link } from 'react-router-dom';
 import { tasksApi, type Task } from '../api/tasksApi';
 import { useAuth } from '../../auth/context/AuthContext';
 import { getAvatarColorClasses } from '../../../lib/avatarColors';
@@ -249,10 +250,12 @@ export function PersonalView() {
                             )}
                             {inProgressTasks.map((task, idx) => (
                                 <DraggableTask key={task.id} id={task.id}>
-                                    <InProgressCard
-                                        task={task}
-                                        isLast={idx === inProgressTasks.length - 1}
-                                    />
+                                    <Link to={`/tasks/${task.id}`} className="block outline-none">
+                                        <InProgressCard
+                                            task={task}
+                                            isLast={idx === inProgressTasks.length - 1}
+                                        />
+                                    </Link>
                                 </DraggableTask>
                             ))}
                         </div>
@@ -324,11 +327,13 @@ export function PersonalView() {
                                             className="absolute"
                                             style={{ top: topOffset, ...style }}
                                         >
-                                            <div className={`bg-white/80 dark:bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border-l-4 ${colorClass} w-40 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing`}>
-                                                <span className="text-[10px] text-gray-800 dark:text-gray-200 font-medium leading-tight block">
-                                                    {task.title}
-                                                </span>
-                                            </div>
+                                            <Link to={`/tasks/${task.id}`} className="block outline-none">
+                                                <div className={`bg-white/80 dark:bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border-l-4 ${colorClass} w-40 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing`}>
+                                                    <span className="text-[10px] text-gray-800 dark:text-gray-200 font-medium leading-tight block">
+                                                        {task.title}
+                                                    </span>
+                                                </div>
+                                            </Link>
                                         </div>
                                     </DraggableTask>
                                 );
@@ -355,7 +360,9 @@ export function PersonalView() {
                             )}
                             {assignedTasks.map(task => (
                                 <DraggableTask key={task.id} id={task.id}>
-                                    <AssignedCard task={task} />
+                                    <Link to={`/tasks/${task.id}`} className="block outline-none">
+                                        <AssignedCard task={task} />
+                                    </Link>
                                 </DraggableTask>
                             ))}
                         </div>

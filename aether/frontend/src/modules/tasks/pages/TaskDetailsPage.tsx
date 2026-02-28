@@ -13,6 +13,7 @@ import {
     Archive
 } from "lucide-react";
 import { tasksApi, type Task, type TaskComment, type CommitDiff } from "../../dashboard/api/tasksApi";
+import { UserAvatar } from "../../../components/ui/UserAvatar";
 import { useAuth } from "../../auth/context/AuthContext";
 import { formatTimeAgo } from "../../../lib/utils";
 import { CommentModal } from "../components/CommentModal";
@@ -487,7 +488,7 @@ export function TaskDetailsPage() {
                                     <CommentCard
                                         key={comment.id}
                                         author={comment.users.username}
-                                        role={comment.users.username.charAt(0).toUpperCase()}
+                                        avatarColor={comment.users.avatar_color}
                                         content={comment.content}
                                         createdAt={comment.created_at}
                                         isMe={user?.id === comment.user_id}
@@ -621,13 +622,13 @@ function CommitItem({
 
 function CommentCard({
     author,
-    role,
+    avatarColor,
     content,
     createdAt,
     isMe = false,
 }: {
     author: string;
-    role: string;
+    avatarColor?: string;
     content: string | null;
     createdAt?: string;
     isMe?: boolean;
@@ -647,9 +648,12 @@ function CommentCard({
         <div className="bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm">
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-gray-500 flex items-center justify-center text-[10px] text-white font-bold">
-                        {role}
-                    </div>
+                    <UserAvatar
+                        username={author}
+                        avatarColor={avatarColor}
+                        size="xs"
+                        className="w-5 h-5 text-[10px]"
+                    />
                     <span className="font-bold text-sm text-gray-900 dark:text-white">
                         {author} {isMe && <span className="text-gray-400 font-normal ml-1">(You)</span>}
                     </span>

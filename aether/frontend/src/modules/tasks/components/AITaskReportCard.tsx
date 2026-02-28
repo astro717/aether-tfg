@@ -211,7 +211,7 @@ export function AITaskReportCard({ taskId, commitSha, className = "" }: AITaskRe
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         layoutId="task-report-card"
-                        className={`relative bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-blue-200/50 dark:border-blue-500/30 min-h-[120px] w-full ${className}`}
+                        className={`relative flex flex-col bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-blue-200/50 dark:border-blue-500/30 min-h-[120px] w-full ${className}`}
                     >
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2 gap-2">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -240,27 +240,28 @@ export function AITaskReportCard({ taskId, commitSha, className = "" }: AITaskRe
                         </p>
 
                         {/* Footer with timestamp and actions */}
-                        <div className="mt-3 pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between">
-                            <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                                <Clock size={10} className="text-gray-400 dark:text-gray-500" />
-                                Generated {formatTimeAgo(report.timestamp)}
+                        <div className="mt-auto pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between gap-2 min-w-0">
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1 min-w-0 truncate shrink">
+                                <Clock size={10} className="text-gray-400 dark:text-gray-500 shrink-0" />
+                                <span className="truncate">Generated {formatTimeAgo(report.timestamp)}</span>
                             </span>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 shrink-0">
                                 <button
                                     onClick={() => {
                                         const taskTitle = taskId ? `Task ${taskId}` : 'Task Report';
                                         generateTaskReportPDF(report, taskTitle);
                                     }}
-                                    className="text-[10px] text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
+                                    className="p-1.5 rounded-md text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                    title="Download PDF"
                                 >
-                                    <Download size={10} />
-                                    PDF
+                                    <Download size={12} />
                                 </button>
                                 <button
                                     onClick={handleRegenerateClick}
-                                    className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                    className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                                    title="Regenerate"
                                 >
-                                    Regenerate
+                                    <Bot size={12} />
                                 </button>
                             </div>
                         </div>
@@ -339,7 +340,7 @@ function ReportModal({ isOpen, onClose, report, taskId }: { isOpen: boolean; onC
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+                        className="relative w-full max-w-4xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
                     >
                         {/* Header - Blue Theme */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 flex-shrink-0">
@@ -357,7 +358,7 @@ function ReportModal({ isOpen, onClose, report, taskId }: { isOpen: boolean; onC
                             </motion.button>
                         </div>
 
-                        <div className="p-6 overflow-y-auto premium-scrollbar flex-1 space-y-6">
+                        <div className="p-6 sm:p-8 overflow-y-auto premium-scrollbar flex-1 space-y-6">
                             <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
                                 <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">Executive Summary</h3>
                                 <p className="text-sm text-blue-800 dark:text-blue-200/80 leading-relaxed">{report.summary}</p>

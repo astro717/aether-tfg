@@ -29,6 +29,7 @@ import {
     Mail,
     CheckCircle,
     Loader2,
+    BookOpen,
 } from "lucide-react";
 import { useAuth } from "../../auth/context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -36,6 +37,7 @@ import { useSettings } from "../context/SettingsContext";
 import { useNavigate } from "react-router-dom";
 import { changePassword, sendResetEmailToCurrentUser, updateProfile } from "../../auth/api/authApi";
 import { UserAvatar } from "../../../components/ui/UserAvatar";
+import { OnboardingModal } from "../../../components/ui/OnboardingModal";
 
 type SettingsTab = "profile" | "appearance" | "notifications" | "security" | "integrations" | "ai";
 
@@ -131,6 +133,9 @@ export function SettingsPage() {
         { id: "1", name: "CLI Integration", created: "Jan 15, 2025", lastUsed: "2 hours ago" },
     ]);
     const [showApiKey, setShowApiKey] = useState<string | null>(null);
+
+    // Onboarding replay state
+    const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
     const handleLogout = () => {
         logout();
@@ -353,6 +358,30 @@ export function SettingsPage() {
                                                 </div>
                                             ) : <div />}
                                             <SaveButton onClick={handleSaveProfile} loading={isSaving} />
+                                        </div>
+                                    </SettingsCard>
+
+                                    {/* Quick Guide */}
+                                    <SettingsCard title="Quick Guide">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 flex items-center justify-center">
+                                                    <BookOpen size={22} className="text-violet-500 dark:text-violet-400" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">Welcome Tutorial</h3>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                        Review the Aether quick start guide
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setIsOnboardingOpen(true)}
+                                                className="px-4 py-2.5 bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-sm font-medium rounded-xl
+                                                    hover:shadow-lg hover:shadow-violet-500/25 hover:scale-[1.02] transition-all duration-200"
+                                            >
+                                                Replay Guide
+                                            </button>
                                         </div>
                                     </SettingsCard>
 
@@ -797,6 +826,12 @@ export function SettingsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Onboarding Tutorial Modal (Replay from Settings) */}
+            <OnboardingModal
+                isOpen={isOnboardingOpen}
+                onClose={() => setIsOnboardingOpen(false)}
+            />
         </div >
     );
 }

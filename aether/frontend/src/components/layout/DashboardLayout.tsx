@@ -13,6 +13,7 @@ import { NotificationsPopover } from "../../modules/notifications/components/Not
 import { CriticalModal } from "../../modules/notifications/components/CriticalModal";
 import { useNotifications } from "../../modules/notifications/context/NotificationsContext";
 import { UserAvatar } from "../ui/UserAvatar";
+import { OnboardingModal, hasSeenOnboarding, markOnboardingAsSeen } from "../ui/OnboardingModal";
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -81,6 +82,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     // Manager validation badge state
     const [pendingValidationCount, setPendingValidationCount] = useState(0);
 
+    // Onboarding modal state
+    const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
     const fetchMyTasks = useCallback(async (silent = false) => {
         if (!user) {
             setTasksLoading(false);
@@ -122,6 +126,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     useEffect(() => {
         fetchMyTasks();
     }, [fetchMyTasks]);
+
+    // Auto-trigger onboarding tutorial on first visit
+    useEffect(() => {
+        if (!hasSeenOnboarding()) {
+            // Small delay to let the dashboard render first
+            const timer = setTimeout(() => {
+                setIsOnboardingOpen(true);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, []);
 
     // Fetch pending validation count for managers
     const fetchPendingValidationCount = useCallback(async (silent = false) => {
@@ -188,6 +203,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const userName = user?.username || 'User';
 
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
+
+    const handleOnboardingClose = useCallback(() => {
+        markOnboardingAsSeen();
+        setIsOnboardingOpen(false);
+    }, []);
 
     return (
         <div className="flex h-screen w-full bg-[#E8E9EC] dark:bg-transparent font-sans text-[#18181B] dark:text-[#FAFAFA] transition-colors duration-200">
@@ -453,6 +473,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     actionLabel="View Task"
                 />
             )}
+
+            {/* Onboarding Tutorial Modal */}
+            <OnboardingModal
+                isOpen={isOnboardingOpen}
+                onClose={handleOnboardingClose}
+            />
         </div>
     );
 }
