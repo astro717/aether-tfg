@@ -9,3 +9,4 @@ export { InvestmentSunburst } from './InvestmentSunburst';
 export { WorkloadHeatmap } from './WorkloadHeatmap';
 export { PredictiveBurndownChart } from './PredictiveBurndownChart';
 export { RealCFDChart } from './RealCFDChart';
+export { InfoTooltip, type InfoTooltipContent } from './InfoTooltip';

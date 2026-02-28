@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, TrendingUp, TrendingDown, Minus, Clock, Flame, Zap } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Minus, Clock, Flame, Zap, Info } from 'lucide-react';
 import { tasksApi, type PersonalPulseData } from '../api/tasksApi';
 
 // Gradient text component for KPI values
@@ -123,10 +123,10 @@ export function PersonalPulse() {
                 </div>
 
                 {/* Current Streak */}
-                <div className="group bg-white/60 dark:bg-white/5 backdrop-blur-md rounded-3xl p-4 border border-white/50 dark:border-white/10 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 flex flex-col justify-center relative overflow-hidden">
+                <div className="group bg-white/60 dark:bg-white/5 backdrop-blur-md rounded-3xl p-4 border border-white/50 dark:border-white/10 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 flex flex-col justify-center relative">
                     {/* Subtle glow effect for active streak */}
                     {streak > 0 && (
-                        <div className="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-orange-400/20 to-amber-400/10 rounded-full blur-xl" />
+                        <div className="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-orange-400/20 to-amber-400/10 rounded-full blur-xl pointer-events-none" />
                     )}
                     <div className="flex items-center justify-between mb-2 relative">
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">Daily Streak</p>
@@ -139,6 +139,25 @@ export function PersonalPulse() {
                             <GradientValue variant="streak">{streak}</GradientValue>
                         </span>
                         <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">days</span>
+                    </div>
+                    {/* Info Tooltip - Bottom Right, aligned with fire icon */}
+                    <div className="absolute bottom-3 right-4 group/tooltip">
+                        <button
+                            type="button"
+                            className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700/50 transition-colors"
+                            aria-label="Momentum & Streaks"
+                        >
+                            <Info className="w-3.5 h-3.5" />
+                        </button>
+                        {/* Glassmorphism Popover */}
+                        <div className="absolute right-0 bottom-full mb-2 w-64 p-4 rounded-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50 bg-zinc-900/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/20 border border-zinc-700/50">
+                            <h4 className="text-sm font-semibold text-white mb-2">Momentum & Streaks</h4>
+                            <p className="text-xs text-zinc-300 leading-relaxed">
+                                The number of consecutive days you've closed at least one task or logged significant progress. Keeping your <span className="text-orange-400 font-medium">Streak</span> alive is key to building high-impact habits.
+                            </p>
+                            {/* Arrow (pointing down since popover is above) */}
+                            <div className="absolute -bottom-1.5 right-3 w-3 h-3 bg-zinc-900/95 dark:bg-zinc-900/95 rotate-45 border-r border-b border-zinc-700/50" />
+                        </div>
                     </div>
                 </div>
             </div>

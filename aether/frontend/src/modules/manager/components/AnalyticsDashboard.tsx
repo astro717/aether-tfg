@@ -160,6 +160,10 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
             subtitle={kpis.riskScore > 70 ? 'High risk' : kpis.riskScore > 40 ? 'Moderate' : 'Low risk'}
             icon={<AlertTriangle className="w-5 h-5" />}
             color={kpis.riskScore > 70 ? 'red' : kpis.riskScore > 40 ? 'amber' : 'green'}
+            infoTooltip={{
+              title: 'AI Risk Score',
+              description: 'A probabilistic model that evaluates delay risk by combining task age, current assignee workload, and historical team deviations.',
+            }}
           />
           <StatCard
             title="Avg. Workload"
@@ -261,6 +265,10 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
             sparklineData={analytics.premiumCharts?.sparklines?.cycleTime || []}
             color="amber"
             subtitle="Time to complete"
+            infoTooltip={{
+              title: 'Understanding Cycle Time',
+              description: "Measures the average time from when a task moves to 'In Progress' until it reaches 'Done'. The gold-standard metric for evaluating your team's delivery speed and flow efficiency.",
+            }}
           />
           <SparklineCard
             title="On-Time Delivery"

@@ -200,22 +200,72 @@ export class MessagesService {
       },
     });
 
-    // Create a MESSAGE notification for the receiver
-    await this.notificationsService.create({
-      user_id: dto.receiverId,
-      actor_id: senderId,
-      type: 'MESSAGE',
-      title: 'New Message',
-      content: dto.content
-        ? dto.content.length > 50
-          ? dto.content.substring(0, 50) + '...'
-          : dto.content
-        : 'Sent an attachment',
-      entity_id: message.id,
-      entity_type: 'message',
-    });
+    // Parse @mentions from content and track who was mentioned
+    const mentionedUserIds = new Set<string>();
+    if (dto.content) {
+      const mentionedUsernames = this.parseMentions(dto.content);
+      if (mentionedUsernames.length > 0) {
+        const mentionedUsers = await this.prisma.users.findMany({
+          where: {
+            username: { in: mentionedUsernames },
+          },
+          select: { id: true, username: true },
+        });
+
+        // Create MENTION notifications (excluding the sender)
+        const notificationPromises = mentionedUsers
+          .filter((user) => user.id !== senderId)
+          .map((user) => {
+            mentionedUserIds.add(user.id);
+            return this.notificationsService.create({
+              user_id: user.id,
+              actor_id: senderId,
+              type: 'MENTION',
+              title: 'You were mentioned',
+              content: dto.content!.length > 50
+                ? dto.content!.substring(0, 50) + '...'
+                : dto.content!,
+              entity_id: message.id,
+              entity_type: 'message',
+            });
+          });
+
+        await Promise.all(notificationPromises);
+      }
+    }
+
+    // Create MESSAGE notification only if receiver was NOT mentioned
+    // This prevents duplicate notifications (MENTION takes priority)
+    if (!mentionedUserIds.has(dto.receiverId)) {
+      await this.notificationsService.create({
+        user_id: dto.receiverId,
+        actor_id: senderId,
+        type: 'MESSAGE',
+        title: 'New Message',
+        content: dto.content
+          ? dto.content.length > 50
+            ? dto.content.substring(0, 50) + '...'
+            : dto.content
+          : 'Sent an attachment',
+        entity_id: message.id,
+        entity_type: 'message',
+      });
+    }
 
     return message;
+  }
+
+  /**
+   * Parse @username mentions from content
+   */
+  private parseMentions(content: string): string[] {
+    const mentionRegex = /@(\w+)/g;
+    const matches: string[] = [];
+    let match;
+    while ((match = mentionRegex.exec(content)) !== null) {
+      matches.push(match[1]);
+    }
+    return [...new Set(matches)]; // Dedupe
   }
 
   /**

@@ -25,12 +25,55 @@ export function useMessages(userId: string | null): UseMessagesResult {
   const currentUserIdRef = useRef<string | null>(null);
 
   // Silent fetch - doesn't trigger loading state, doesn't mark as read
+  // Uses intelligent merge to preserve optimistic messages during polling
   const silentFetch = useCallback(async () => {
     if (!userId) return;
 
     try {
       const data = await messagingApi.getMessages(userId);
-      setMessages(data.messages);
+
+      // Merge strategy: preserve unconfirmed optimistic messages
+      setMessages((prev) => {
+        // Extract optimistic messages from current state
+        const optimisticMessages = prev.filter((m) =>
+          m.id.startsWith('optimistic-')
+        );
+
+        // Fast path: no optimistic messages, simple replacement
+        if (optimisticMessages.length === 0) {
+          return data.messages;
+        }
+
+        // Filter optimistic messages that haven't been "confirmed" by server
+        // A message is confirmed when server has a matching message with:
+        // - same sender/receiver
+        // - same content
+        // - created within 10 seconds (clock drift tolerance)
+        const unconfirmedOptimistic = optimisticMessages.filter((opt) => {
+          const isConfirmed = data.messages.some(
+            (server) =>
+              server.sender_id === opt.sender_id &&
+              server.receiver_id === opt.receiver_id &&
+              server.content === opt.content &&
+              Math.abs(
+                new Date(server.created_at).getTime() -
+                  new Date(opt.created_at).getTime()
+              ) < 10000
+          );
+          return !isConfirmed;
+        });
+
+        // Merge: server messages + unconfirmed optimistic (sorted by created_at)
+        if (unconfirmedOptimistic.length === 0) {
+          return data.messages;
+        }
+
+        return [...data.messages, ...unconfirmedOptimistic].sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      });
+
       setOtherUser(data.user);
       setError(null);
     } catch (err) {

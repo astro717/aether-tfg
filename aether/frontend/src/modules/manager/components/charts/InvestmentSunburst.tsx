@@ -6,6 +6,7 @@
  */
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { Info } from 'lucide-react';
 
 interface InvestmentData {
   labels: string[];
@@ -69,9 +70,30 @@ export function InvestmentSunburst({
       data-chart-id="investment-profile"
     >
       {/* Header */}
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
-        {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
+          {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
+        </div>
+        {/* Info Tooltip */}
+        <div className="relative group">
+          <button
+            type="button"
+            className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700/50 transition-colors"
+            aria-label="Understanding Investment"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+          {/* Glassmorphism Popover */}
+          <div className="absolute right-0 top-full mt-2 w-72 p-4 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 bg-zinc-900/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/20 border border-zinc-700/50">
+            <h4 className="text-sm font-semibold text-white mb-2">Understanding Investment</h4>
+            <p className="text-xs text-zinc-300 leading-relaxed">
+              A visual breakdown of where your team invests effort. Grouped by task type (<span className="text-blue-400 font-medium">Feature</span>, <span className="text-red-400 font-medium">Bug</span>, <span className="text-gray-400 font-medium">Chore</span>) to ensure a healthy balance between value creation and technical debt management.
+            </p>
+            {/* Arrow */}
+            <div className="absolute -top-1.5 right-4 w-3 h-3 bg-zinc-900/95 dark:bg-zinc-900/95 rotate-45 border-l border-t border-zinc-700/50" />
+          </div>
+        </div>
       </div>
 
       {/* Chart */}

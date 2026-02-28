@@ -8,6 +8,7 @@
 
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { InfoTooltip, type InfoTooltipContent } from './InfoTooltip';
 
 interface SparklineCardProps {
   title: string;
@@ -19,6 +20,7 @@ interface SparklineCardProps {
   subtitle?: string;
   /** When true, formats value as a velocity rate with arrows (↑/↓) */
   isVelocityRate?: boolean;
+  infoTooltip?: InfoTooltipContent;
 }
 
 const COLOR_MAP = {
@@ -63,6 +65,7 @@ export function SparklineCard({
   trend,
   subtitle,
   isVelocityRate = false,
+  infoTooltip,
 }: SparklineCardProps) {
   // Transform data for Recharts
   const chartData = sparklineData.map((val, idx) => ({ value: val, index: idx }));
@@ -109,16 +112,20 @@ export function SparklineCard({
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl border border-gray-100 dark:border-zinc-700/50 p-6 shadow-sm hover:shadow-md transition-all duration-300"
+      className="relative rounded-2xl bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl border border-gray-100 dark:border-zinc-700/50 p-6 shadow-sm hover:shadow-md transition-all duration-300"
       data-chart-id={`sparkline-${title.toLowerCase().replace(/\s+/g, '-')}`}
     >
       {/* Gradient Overlay (subtle) */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${effectiveColors.gradient} opacity-5`} />
+      <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${effectiveColors.gradient} opacity-5`} />
 
       <div className="relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</h3>
+            {/* Info Tooltip (Portal-based) */}
+            {infoTooltip && <InfoTooltip content={infoTooltip} />}
+          </div>
           <div className={`p-1.5 rounded-lg ${effectiveColors.bg}`}>
             <TrendIcon className={`w-4 h-4 ${effectiveColors.text}`} />
           </div>

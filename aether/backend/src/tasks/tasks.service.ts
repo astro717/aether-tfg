@@ -1229,6 +1229,24 @@ export class TasksService {
       }
     }
 
+    // NEW: Get absolute inProgress count for all users in the org
+    const absoluteInProgress = await this.prisma.tasks.groupBy({
+      by: ['assignee_id'],
+      where: {
+        organization_id: organizationId,
+        status: 'in_progress',
+        is_archived: false,
+        assignee_id: { not: null }
+      },
+      _count: { _all: true },
+    });
+
+    for (const group of absoluteInProgress) {
+      if (group.assignee_id && performanceMap.has(group.assignee_id)) {
+        performanceMap.get(group.assignee_id)!.inProgress = group._count._all;
+      }
+    }
+
     // Count metrics from allTasks (tasks active in period)
     for (const task of allTasks) {
       if (task.assignee_id && performanceMap.has(task.assignee_id)) {
@@ -1237,11 +1255,6 @@ export class TasksService {
         // Total: tasks created in period
         if (!dateFilter || (task.created_at && new Date(task.created_at) >= dateFilter)) {
           user.total++;
-        }
-
-        // In progress: current state
-        if (this.isTaskStatus(task, 'in_progress')) {
-          user.inProgress++;
         }
 
         // Completed: tasks completed (updated) in period

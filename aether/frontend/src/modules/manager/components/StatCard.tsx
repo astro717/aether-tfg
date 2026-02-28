@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { InfoTooltip, type InfoTooltipContent } from './charts';
 
 interface StatCardProps {
   title: string;
@@ -9,6 +10,7 @@ interface StatCardProps {
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
   color?: 'blue' | 'green' | 'amber' | 'red' | 'purple' | 'zinc';
+  infoTooltip?: InfoTooltipContent;
 }
 
 const colorClasses = {
@@ -52,12 +54,13 @@ export function StatCard({
   trend,
   trendValue,
   color = 'blue',
+  infoTooltip,
 }: StatCardProps) {
   const colors = colorClasses[color];
 
   return (
     <div className={`
-      relative overflow-hidden rounded-2xl p-6
+      relative rounded-2xl p-6
       bg-white/70 dark:bg-zinc-800/70
       backdrop-blur-xl
       border ${colors.border}
@@ -65,13 +68,17 @@ export function StatCard({
       transition-all duration-300
     `}>
       {/* Gradient overlay */}
-      <div className={`absolute inset-0 opacity-30 ${colors.bg}`} />
+      <div className={`absolute inset-0 rounded-2xl opacity-30 ${colors.bg}`} />
 
       <div className="relative">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <div className={`p-2.5 rounded-xl ${colors.bg}`}>
-            <div className={colors.icon}>{icon}</div>
+          <div className="flex items-center gap-2">
+            <div className={`p-2.5 rounded-xl ${colors.bg}`}>
+              <div className={colors.icon}>{icon}</div>
+            </div>
+            {/* Info Tooltip (Portal-based) */}
+            {infoTooltip && <InfoTooltip content={infoTooltip} />}
           </div>
           {trend && (
             <div className={`

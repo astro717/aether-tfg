@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Search, Loader2 } from "lucide-react";
 import { organizationApi, type OrganizationMember } from "@/modules/organization/api/organizationApi";
+import { getAvatarColorClasses } from "../../../lib/avatarColors";
 
 interface UserSearchModalProps {
   isOpen: boolean;
@@ -215,6 +216,8 @@ function MemberItem({ member, hasExistingConversation, onClick }: MemberItemProp
     .toUpperCase()
     .slice(0, 2) || member.username.slice(0, 2).toUpperCase();
 
+  const avatarColors = getAvatarColorClasses(member.avatar_color, member.username);
+
   return (
     <button
       onClick={onClick}
@@ -227,13 +230,13 @@ function MemberItem({ member, hasExistingConversation, onClick }: MemberItemProp
     >
       {/* Avatar */}
       <div
-        className="
+        className={`
           w-10 h-10 flex-shrink-0
           rounded-full
-          bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-600 dark:to-zinc-700
           flex items-center justify-center
-          font-semibold text-gray-600 dark:text-gray-300 text-sm
-        "
+          font-semibold text-sm
+          ${avatarColors.bg} ${avatarColors.text}
+        `}
       >
         {initials}
       </div>

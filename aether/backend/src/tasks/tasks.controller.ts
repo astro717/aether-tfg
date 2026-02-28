@@ -2,6 +2,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, ParseUUIDPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TasksService } from './tasks.service';
+import { MetricsCronService } from './metrics-cron.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
@@ -21,7 +22,10 @@ type AuthedRequest = Request & { user: User };
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
 export class TasksController {
-  constructor(private readonly tasksService: TasksService) { }
+  constructor(
+    private readonly tasksService: TasksService,
+    private readonly metricsCronService: MetricsCronService,
+  ) { }
 
   @Post()
   create(@Body() dto: CreateTaskDto, @CurrentUser() user: User) {
@@ -95,6 +99,31 @@ export class TasksController {
     @CurrentUser() user: User,
   ) {
     return this.tasksService.getDailyMetrics(organizationId, range);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('"manager"', '"admin"')
+  @Post('organization/:organizationId/metrics/backfill')
+  async backfillMetrics(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Body() body: { startDate?: string },
+    @CurrentUser() user: User,
+  ) {
+    // Default to 30 days ago if no start date provided
+    const startDate = body.startDate
+      ? new Date(body.startDate)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const count = await this.metricsCronService.backfillSnapshots(
+      startDate,
+      organizationId,
+    );
+
+    return {
+      success: true,
+      message: `Backfill complete. Generated ${count} snapshot(s).`,
+      snapshotsGenerated: count,
+    };
   }
 
   @Get('organization/:organizationId/daily-pulse')

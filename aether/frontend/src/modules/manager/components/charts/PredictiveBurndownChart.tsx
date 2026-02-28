@@ -16,6 +16,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
+import { Info } from 'lucide-react';
 
 interface BurndownData {
   real: Array<{ day: number; tasks: number }>;
@@ -110,9 +111,30 @@ export function PredictiveBurndownChart({
       data-chart-id="burndown-predictive"
     >
       {/* Header */}
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
-        {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
+          {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
+        </div>
+        {/* Info Tooltip */}
+        <div className="relative group">
+          <button
+            type="button"
+            className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700/50 transition-colors"
+            aria-label="Understanding Predictive Burndown"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+          {/* Glassmorphism Popover */}
+          <div className="absolute right-0 top-full mt-2 w-72 p-4 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 bg-zinc-900/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/20 border border-zinc-700/50">
+            <h4 className="text-sm font-semibold text-white mb-2">Understanding Predictive Burndown</h4>
+            <p className="text-xs text-zinc-300 leading-relaxed">
+              Aether's predictive model uses your team's historical velocity to plot the <span className="text-purple-400 font-medium">'Uncertainty Cone'</span> (shaded area). It represents the statistical deviation and most likely date range for sprint completion.
+            </p>
+            {/* Arrow */}
+            <div className="absolute -top-1.5 right-4 w-3 h-3 bg-zinc-900/95 dark:bg-zinc-900/95 rotate-45 border-l border-t border-zinc-700/50" />
+          </div>
+        </div>
       </div>
 
       {/* Chart */}

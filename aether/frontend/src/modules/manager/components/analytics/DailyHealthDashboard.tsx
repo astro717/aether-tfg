@@ -2,6 +2,7 @@ import { Loader2, AlertTriangle, Brain } from 'lucide-react';
 import { useDailyHealth } from '../../hooks/useDailyHealth';
 import { DailyWorkloadDistribution } from './DailyWorkloadDistribution';
 import { ActiveTaskMonitor } from './ActiveTaskMonitor';
+import { InfoTooltip, type InfoTooltipContent } from '../charts';
 
 interface DailyHealthDashboardProps {
   organizationId: string;
@@ -12,10 +13,12 @@ function PulseStat({
   label,
   value,
   color,
+  infoTooltip,
 }: {
   label: string;
   value: number;
   color: 'emerald' | 'amber' | 'red' | 'violet';
+  infoTooltip?: InfoTooltipContent;
 }) {
   const colorMap = {
     emerald: 'text-emerald-600 dark:text-emerald-400',
@@ -26,7 +29,10 @@ function PulseStat({
   return (
     <div className="text-center">
       <p className={`text-2xl font-bold tabular-nums ${colorMap[color]}`}>{value}</p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</p>
+      <div className="flex items-center justify-center gap-1 mt-0.5">
+        <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+        {infoTooltip && <InfoTooltip content={infoTooltip} size="sm" />}
+      </div>
     </div>
   );
 }
@@ -85,10 +91,42 @@ export function DailyHealthDashboard({ organizationId }: DailyHealthDashboardPro
       {/* ── Pulse Stats ── */}
       {healthData.length > 0 && (
         <div className="grid grid-cols-4 gap-4 p-4 rounded-xl bg-gray-50/50 dark:bg-zinc-800/30 border border-gray-100 dark:border-zinc-700/50">
-          <PulseStat label="Healthy" value={healthy} color="emerald" />
-          <PulseStat label="Stagnant" value={stagnant} color="amber" />
-          <PulseStat label="At Risk" value={atRisk} color="red" />
-          <PulseStat label="Blocked" value={blocked} color="red" />
+          <PulseStat
+            label="Healthy"
+            value={healthy}
+            color="emerald"
+            infoTooltip={{
+              title: 'Healthy Tasks',
+              description: 'Tasks progressing at a good pace with recent activity (commits, comments, or status changes) and sufficient margin before their deadline.',
+            }}
+          />
+          <PulseStat
+            label="Stagnant"
+            value={stagnant}
+            color="amber"
+            infoTooltip={{
+              title: 'Stagnant Tasks',
+              description: 'Tasks that remain assigned or in progress but have not recorded any advancement or interaction in the last 3 business days.',
+            }}
+          />
+          <PulseStat
+            label="At Risk"
+            value={atRisk}
+            color="red"
+            infoTooltip={{
+              title: 'At Risk',
+              description: 'Tasks whose deadline expires in less than 48 hours or that present a high complexity level relative to the team\'s usual cycle time.',
+            }}
+          />
+          <PulseStat
+            label="Blocked"
+            value={blocked}
+            color="red"
+            infoTooltip={{
+              title: 'Blocked Tasks',
+              description: 'Tasks explicitly marked as blocked by the assignee due to external dependencies, lack of definition, or insurmountable technical impediments.',
+            }}
+          />
         </div>
       )}
 
