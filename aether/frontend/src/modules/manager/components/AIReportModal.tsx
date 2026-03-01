@@ -19,6 +19,8 @@ import {
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { managerApi, type AIReport, type AIReportRequest, type ReportAvailability } from '../api/managerApi';
 import { generateManagerReportPDF } from '../../../utils/pdfGenerator';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   RadarMetricChart,
   ScatterCycleChart,
@@ -291,46 +293,23 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
   };
 
 
-  const formatBoldText = (text: string) => {
-    if (!text) return null;
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part, index) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return (
-          <strong key={index} className="font-bold text-gray-900 dark:text-white">
-            {part.slice(2, -2)}
-          </strong>
-        );
-      }
-      return part;
-    });
-  };
-
-  const formatReportContent = (text: string) => {
-    if (!text) return null;
-    // Split by numbered list items (e.g. "1. ", "2. ")
-    // We use a lookahead to keep the number with the item
-    const parts = text.split(/(?=\b\d+\.\s)/g);
-
-    // If no numbering found or just one part, render normally with bold formatting
-    if (parts.length <= 1) {
-      return formatBoldText(text);
-    }
-
-    return (
-      <div className="space-y-3">
-        {parts.map((part, index) => {
-          const trimmedPart = part.trim();
-          if (!trimmedPart) return null;
-
-          return (
-            <div key={index} className={trimmedPart.match(/^\d+\.\s/) ? "pl-2" : ""}>
-              {formatBoldText(trimmedPart)}
-            </div>
-          );
-        })}
-      </div>
-    );
+  const markdownComponents = {
+    p: ({ node, ...props }: any) => <p className="mb-3 last:mb-0" {...props} />,
+    ul: ({ node, ...props }: any) => <ul className="list-disc pl-5 mb-3 space-y-1 marker:text-blue-500" {...props} />,
+    ol: ({ node, ...props }: any) => <ol className="list-decimal pl-5 mb-3 space-y-1 marker:text-blue-500" {...props} />,
+    li: ({ node, ...props }: any) => <li {...props} />,
+    strong: ({ node, ...props }: any) => <strong className="font-semibold text-gray-900 dark:text-gray-100" {...props} />,
+    h1: ({ node, ...props }: any) => <h1 className="text-lg font-bold text-gray-900 dark:text-white mt-4 mb-2" {...props} />,
+    h2: ({ node, ...props }: any) => <h2 className="text-base font-bold text-gray-900 dark:text-white mt-3 mb-2" {...props} />,
+    h3: ({ node, ...props }: any) => <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-2 mb-1" {...props} />,
+    code: ({ node, className, children, ...props }: any) => {
+      const match = /language-(\w+)/.exec(className || '');
+      const isInline = !match && !String(children).includes('\n');
+      return isInline
+        ? <code className="bg-gray-100 dark:bg-zinc-800 flex-shrink-0 text-blue-600 dark:text-blue-400 px-1 py-0.5 rounded text-[11px] font-mono whitespace-nowrap" {...props}>{children}</code>
+        : <pre className="bg-gray-100 dark:bg-zinc-800 p-3 rounded-lg text-xs font-mono mb-3 overflow-x-auto text-gray-800 dark:text-gray-200"><code className={className} {...props}>{children}</code></pre>;
+    },
+    blockquote: ({ node, ...props }: any) => <blockquote className="border-l-2 border-blue-400 pl-3 italic text-gray-500 dark:text-gray-400 my-2" {...props} />,
   };
 
   if (!isVisible) return null;
@@ -604,8 +583,10 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                   Executive Summary
                 </h4>
-                <div className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {formatReportContent(report.summary)}
+                <div className="text-gray-600 dark:text-gray-300 leading-relaxed max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {report.summary}
+                  </ReactMarkdown>
                 </div>
               </div>
 
@@ -828,8 +809,10 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                     <ChevronRight className="w-4 h-4 text-blue-500" />
                     {section.title}
                   </h4>
-                  <div className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                    {formatReportContent(section.content)}
+                  <div className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                      {section.content}
+                    </ReactMarkdown>
                   </div>
                 </div>
               ))}

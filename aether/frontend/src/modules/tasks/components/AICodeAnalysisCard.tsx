@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock, GitCommit, Download, RefreshCw } from "lucide-react";
+import { Maximize2, X, ShieldAlert, CheckCircle2, ShieldCheck, AlertTriangle, Clock, GitCommit, Download, RefreshCw, Quote } from "lucide-react";
 import { tasksApi, type CodeAnalysisResult } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
@@ -224,8 +224,9 @@ export function AICodeAnalysisCard({ commitSha, className = "" }: AICodeAnalysis
                         </div>
 
                         {/* Content Area */}
-                        <div className="flex-1 px-3 py-2.5">
-                            <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-3">
+                        <div className="flex-1 relative px-4 py-5 flex flex-col justify-center items-center overflow-hidden">
+                            <Quote className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 text-amber-500/15 dark:text-amber-400/15 -rotate-12 pointer-events-none" />
+                            <p className="relative z-10 text-[12px] text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-4 text-center font-medium italic">
                                 {analysis.summary}
                             </p>
                         </div>
