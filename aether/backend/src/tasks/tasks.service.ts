@@ -297,6 +297,16 @@ export class TasksService {
 
     const task = await this.prisma.tasks.create({ data });
 
+    // Record initial status in task_history (Event Sourcing)
+    await this.prisma.task_history.create({
+      data: {
+        task_id: task.id,
+        previous_status: null,
+        new_status: initialStatus,
+        changed_by: creator.id,
+      },
+    });
+
     // Create notification if task is assigned to someone other than creator
     if (dto.assignee_id && dto.assignee_id !== creator.id) {
       await this.notificationsService.create({
@@ -415,9 +425,9 @@ export class TasksService {
 
   async updateOwned(id: string, userId: string, dto: UpdateTaskDto) {
     // comprueba propiedad
-    await this.findOneOwned(id, userId);
+    const oldTask = await this.findOneOwned(id, userId);
 
-    return this.prisma.tasks.update({
+    const updatedTask = await this.prisma.tasks.update({
       where: { id },
       data: {
         title: dto.title,
@@ -427,6 +437,20 @@ export class TasksService {
         comments: dto.comments,
       },
     });
+
+    // Record status change in task_history if status changed (Event Sourcing)
+    if (dto.status && dto.status !== oldTask.status) {
+      await this.prisma.task_history.create({
+        data: {
+          task_id: id,
+          previous_status: oldTask.status,
+          new_status: dto.status,
+          changed_by: userId,
+        },
+      });
+    }
+
+    return updatedTask;
   }
 
   async removeOwned(id: string, userId: string) {
@@ -451,11 +475,12 @@ export class TasksService {
     }
 
     // Update task: set validated_by and move status from pending_validation to todo
+    const newStatus = task.status === 'pending_validation' ? 'todo' : task.status;
     const updatedTask = await this.prisma.tasks.update({
       where: { id },
       data: {
         validated_by: managerId,
-        status: task.status === 'pending_validation' ? 'todo' : task.status,
+        status: newStatus,
       },
       include: {
         users_tasks_assignee_idTousers: {
@@ -468,6 +493,18 @@ export class TasksService {
         },
       },
     });
+
+    // Record status change in task_history if status changed (Event Sourcing)
+    if (newStatus && newStatus !== task.status) {
+      await this.prisma.task_history.create({
+        data: {
+          task_id: id,
+          previous_status: task.status,
+          new_status: newStatus,
+          changed_by: managerId,
+        },
+      });
+    }
 
     // Create notification for assignee (if assignee != manager)
     if (task.assignee_id && task.assignee_id !== managerId) {
@@ -905,10 +942,24 @@ export class TasksService {
       }
     }
 
-    return this.prisma.tasks.update({
+    const updatedTask = await this.prisma.tasks.update({
       where: { id },
       data: dto,
     });
+
+    // Record status change in task_history if status changed (Event Sourcing)
+    if (dto.status && dto.status !== task.status) {
+      await this.prisma.task_history.create({
+        data: {
+          task_id: id,
+          previous_status: task.status,
+          new_status: dto.status,
+          changed_by: user.id,
+        },
+      });
+    }
+
+    return updatedTask;
   }
 
   async remove(id: string) {
@@ -2266,9 +2317,14 @@ export class TasksService {
     in_progress: number;
     todo: number;
   }>> {
-    // Step 1: Calculate exact startDate and endDate (today)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EVENT SOURCING IMPLEMENTATION
+    // Reconstructs CFD data from task_history events for perfect historical accuracy
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Step 1: Calculate date range
     const endDate = new Date();
-    endDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999); // End of today
 
     let startDate: Date;
     let daysAgo: number | null = null;
@@ -2280,66 +2336,92 @@ export class TasksService {
     if (daysAgo !== null) {
       startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - daysAgo);
+      startDate.setHours(0, 0, 0, 0);
     } else {
-      // 'all' → fetch oldest record to determine startDate
-      const oldest = await this.prisma.daily_metrics.findFirst({
-        where: { organization_id: organizationId },
-        orderBy: { date: 'asc' },
+      // 'all' → find oldest task_history event
+      const oldest = await this.prisma.task_history.findFirst({
+        where: {
+          tasks: { organization_id: organizationId },
+        },
+        orderBy: { changed_at: 'asc' },
       });
-      if (!oldest) return [];
-      startDate = new Date(oldest.date);
+      if (!oldest || !oldest.changed_at) return [];
+      startDate = new Date(oldest.changed_at);
       startDate.setHours(0, 0, 0, 0);
     }
 
-    // Step 2: Fetch raw metrics within range + last record before startDate for base state
-    const [metricsInRange, baseMetric] = await Promise.all([
-      this.prisma.daily_metrics.findMany({
-        where: {
-          organization_id: organizationId,
-          date: { gte: startDate, lte: endDate },
-        },
-        orderBy: { date: 'asc' },
-      }),
-      this.prisma.daily_metrics.findFirst({
-        where: {
-          organization_id: organizationId,
-          date: { lt: startDate },
-        },
-        orderBy: { date: 'desc' },
-      }),
-    ]);
+    // Step 2: Fetch ALL task_history events for this organization (small payload)
+    const allEvents = await this.prisma.task_history.findMany({
+      where: {
+        tasks: { organization_id: organizationId },
+      },
+      orderBy: { changed_at: 'asc' },
+      select: {
+        task_id: true,
+        new_status: true,
+        changed_at: true,
+      },
+    });
 
-    // Build a lookup map for quick access by date string
-    const metricsMap = new Map<string, { done: number; in_progress: number; todo: number }>();
-    for (const m of metricsInRange) {
-      const dateStr = (m.date as Date).toISOString().split('T')[0];
-      metricsMap.set(dateStr, {
-        done: m.done_count,
-        in_progress: m.in_progress_count,
-        todo: m.todo_count,
-      });
+    if (allEvents.length === 0) return [];
+
+    // Step 3: Build per-task event timeline (sorted by changed_at)
+    const taskEvents = new Map<string, Array<{ status: string; changedAt: Date }>>();
+    for (const event of allEvents) {
+      if (!event.changed_at) continue;
+      const events = taskEvents.get(event.task_id) || [];
+      events.push({ status: event.new_status, changedAt: new Date(event.changed_at) });
+      taskEvents.set(event.task_id, events);
     }
 
-    // Step 3 & 4: Iterate continuously from startDate to endDate, forward-filling gaps
+    // Step 4: For each day in range, compute snapshot by finding last event before end of day
     const result: Array<{ date: string; done: number; in_progress: number; todo: number }> = [];
-
-    // Initialize carry-forward values from base metric or zeros
-    let lastKnown = baseMetric
-      ? { done: baseMetric.done_count, in_progress: baseMetric.in_progress_count, todo: baseMetric.todo_count }
-      : { done: 0, in_progress: 0, todo: 0 };
-
     const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
-      const existing = metricsMap.get(dateStr);
 
-      if (existing) {
-        lastKnown = existing;
+    while (currentDate <= endDate) {
+      const endOfDay = new Date(currentDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      let todoCount = 0;
+      let inProgressCount = 0;
+      let doneCount = 0;
+
+      // For each task, find its status at end of this day
+      for (const [, events] of taskEvents) {
+        // Find the last event at or before endOfDay
+        let lastStatus: string | null = null;
+        for (const event of events) {
+          if (event.changedAt <= endOfDay) {
+            lastStatus = event.status;
+          } else {
+            break; // Events are sorted, so we can stop
+          }
+        }
+
+        // If task didn't exist yet on this day, skip it
+        if (lastStatus === null) continue;
+
+        // Count by status (map pending_validation to review for CFD)
+        switch (lastStatus) {
+          case 'todo':
+          case 'pending_validation': // Treat as backlog for CFD purposes
+            todoCount++;
+            break;
+          case 'in_progress':
+            inProgressCount++;
+            break;
+          case 'done':
+            doneCount++;
+            break;
+          // Archived/rejected tasks are excluded from CFD
+        }
       }
 
       result.push({
-        date: dateStr,
-        ...lastKnown,
+        date: currentDate.toISOString().split('T')[0],
+        todo: todoCount,
+        in_progress: inProgressCount,
+        done: doneCount,
       });
 
       currentDate.setDate(currentDate.getDate() + 1);
@@ -2414,10 +2496,12 @@ export class TasksService {
     todayStart.setHours(0, 0, 0, 0);
 
     // Optimized query: only tasks with "signs of life" today or in_progress
+    // Zero Garbage Truth: exclude orphan tasks without assignee
     const rawTasks = await this.prisma.tasks.findMany({
       where: {
         organization_id: organizationId,
         is_archived: false,
+        assignee_id: { not: null },
         OR: [
           { updated_at: { gte: todayStart } },
           { created_at: { gte: todayStart } },

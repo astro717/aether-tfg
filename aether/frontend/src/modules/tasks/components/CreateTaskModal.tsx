@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Loader2, Clock } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { useAuth } from "../../auth/context/AuthContext";
 import { useOrganization } from "../../organization/context/OrganizationContext";
 import { organizationApi, type OrganizationMember } from "../../organization/api/organizationApi";
 import { tasksApi } from "../../dashboard/api/tasksApi";
 import { SmartSelect, type SmartSelectOption } from "../../../components/ui/SmartSelect";
 import { PremiumDatePicker } from "../../../components/ui/PremiumDatePicker";
+import { PremiumTimePicker } from "../../../components/ui/PremiumTimePicker";
 import { useToast } from "../../../components/ui/Toast";
 import { taskEvents } from "../../../lib/taskEvents";
 
@@ -252,18 +253,11 @@ export function CreateTaskModal({ isOpen, onClose, onSuccess }: CreateTaskModalP
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Time <span className="text-xs text-gray-400 font-normal">(Optional)</span>
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Clock size={16} className="text-gray-400 dark:text-gray-500" />
-                </div>
-                <input
-                  type="time"
-                  value={dueTime}
-                  onChange={(e) => setDueTime(e.target.value)}
-                  disabled={!dueDate}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl text-sm text-gray-800 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </div>
+              <PremiumTimePicker
+                value={dueTime}
+                onChange={setDueTime}
+                disabled={!dueDate}
+              />
             </div>
           </div>
 

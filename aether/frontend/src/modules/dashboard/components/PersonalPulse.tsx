@@ -77,7 +77,7 @@ export function PersonalPulse() {
                 </div>
                 <div className="flex flex-col">
                     <h2 className="text-gray-600 dark:text-gray-300 font-semibold text-lg tracking-tight leading-tight">Personal Pulse</h2>
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">Last 30 days & current week</span>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium"></span>
                 </div>
             </div>
 

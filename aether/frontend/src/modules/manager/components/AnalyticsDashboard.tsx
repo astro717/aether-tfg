@@ -118,12 +118,12 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
   const isRelativeView = selectedPeriod !== 'all' && realCFDData.length > 0;
   const chartCFDData = isRelativeView
     ? (() => {
-        const baseDone = realCFDData[0].done;
-        return realCFDData.map((point) => ({
-          ...point,
-          done: Math.max(0, point.done - baseDone),
-        }));
-      })()
+      const baseDone = realCFDData[0].done;
+      return realCFDData.map((point) => ({
+        ...point,
+        done: Math.max(0, point.done - baseDone),
+      }));
+    })()
     : realCFDData;
 
   const cfdSubtitle = isRelativeView
@@ -308,7 +308,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
 
       {/* Secondary Charts: Heatmap + Burndown */}
       <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
-        {analytics.premiumCharts?.heatmap && (
+        {selectedPeriod !== 'today' && analytics.premiumCharts?.heatmap && (
           <WorkloadHeatmap data={analytics.premiumCharts.heatmap} />
         )}
         {/* SmartAnalyticsWidget: renders DailyHealthDashboard for 'today',

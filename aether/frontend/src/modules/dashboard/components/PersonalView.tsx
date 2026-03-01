@@ -14,20 +14,51 @@ import { CSS } from '@dnd-kit/utilities';
 import {
     Siren,
     Goal,
-    Coffee
+    Coffee,
+    ChevronLeft,
+    ChevronRight,
+    RotateCcw,
+    CalendarDays,
 } from "lucide-react";
 import { Link } from 'react-router-dom';
 import { tasksApi, type Task } from '../api/tasksApi';
 import { useAuth } from '../../auth/context/AuthContext';
 import { getAvatarColorClasses } from '../../../lib/avatarColors';
 import { PersonalPulse } from './PersonalPulse';
+import { PremiumCalendarModal } from './PremiumCalendarModal';
 
 // --- Helper Utilities ---
 
-function getCurrentWeekDays() {
+/**
+ * Determines the base week offset based on current time.
+ * If it's Sunday after 12pm, we treat "current week" as next week
+ * (since Monday is tomorrow and past week is no longer relevant).
+ */
+function getBaseWeekOffset(): number {
+    const now = new Date();
+    const isSunday = now.getDay() === 0;
+    const isAfterNoon = now.getHours() >= 12;
+    return isSunday && isAfterNoon ? 1 : 0;
+}
+
+/**
+ * Get the Monday-Friday days for a given week offset.
+ * @param offset - 0 = current week, -1 = previous week, 1 = next week, etc.
+ * @param applyBaseOffset - whether to apply the Sunday afternoon adjustment (default: true)
+ */
+function getWeekDays(offset: number = 0, applyBaseOffset: boolean = true): Date[] {
     const curr = new Date();
+    // Move to Monday of current week
+    const dayOfWeek = curr.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Sunday = go back 6 days
+    curr.setDate(curr.getDate() + diffToMonday);
+
+    // Apply base offset (Sunday after noon → show next week)
+    const baseOffset = applyBaseOffset ? getBaseWeekOffset() : 0;
+    // Apply combined offset
+    curr.setDate(curr.getDate() + (offset + baseOffset) * 7);
+
     const week: Date[] = [];
-    curr.setDate(curr.getDate() - curr.getDay() + 1);
     for (let i = 0; i < 5; i++) {
         week.push(new Date(curr));
         curr.setDate(curr.getDate() + 1);
@@ -35,15 +66,28 @@ function getCurrentWeekDays() {
     return week;
 }
 
-function isDateInCurrentWeek(dateStr: string | null): boolean {
-    if (!dateStr) return false;
+/**
+ * Check if a date string falls within a specific week.
+ */
+function isDateInWeek(dateStr: string | null, weekDays: Date[]): boolean {
+    if (!dateStr || weekDays.length < 5) return false;
     const date = new Date(dateStr);
-    const weekDays = getCurrentWeekDays();
-    const start = weekDays[0];
-    const end = weekDays[4];
+    const start = new Date(weekDays[0]);
+    const end = new Date(weekDays[4]);
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
     return date >= start && date <= end;
+}
+
+/**
+ * Format a week range as "Mon D - Mon D" (e.g., "Oct 12 - Oct 16")
+ */
+function formatWeekRange(weekDays: Date[]): string {
+    if (weekDays.length < 5) return '';
+    const start = weekDays[0];
+    const end = weekDays[4];
+    const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+    return `${start.toLocaleDateString('en-GB', opts)} – ${end.toLocaleDateString('en-GB', opts)}`;
 }
 
 function getTaskPriority(dateStr: string | null): 'urgent' | 'important' | 'far-deadline' {
@@ -122,6 +166,8 @@ export function PersonalView() {
     const [loading, setLoading] = useState(true);
     const [activeTask, setActiveTask] = useState<Task | null>(null);
     const [pulseKey, setPulseKey] = useState(0); // Key to force pulse refresh
+    const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = previous, 1 = next
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -204,11 +250,16 @@ export function PersonalView() {
 
     const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
     const assignedTasks = tasks.filter(t => t.status === 'pending' || t.status === 'todo');
+
+    // Week navigation: compute the displayed week based on offset
+    const weekDays = getWeekDays(weekOffset);
+    const weekRangeLabel = formatWeekRange(weekDays);
+    const isCurrentWeek = weekOffset === 0;
+
     const timelineTasks = tasks
-        .filter(t => t.due_date && isDateInCurrentWeek(t.due_date) && t.status !== 'done')
+        .filter(t => t.due_date && isDateInWeek(t.due_date, weekDays) && t.status !== 'done')
         .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime());
 
-    const weekDays = getCurrentWeekDays();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -221,6 +272,7 @@ export function PersonalView() {
     }
 
     return (
+        <>
         <DndContext
             sensors={sensors}
             onDragStart={handleDragStart}
@@ -263,7 +315,66 @@ export function PersonalView() {
 
                     {/* --- Deadlines Section (Bottom Left) --- */}
                     <section className="col-span-8 row-start-2 pt-4 flex flex-col min-h-0 h-full">
-                        <h2 className="text-gray-500 dark:text-gray-300 font-medium text-lg mb-8 pl-2 flex-shrink-0">Deadlines</h2>
+                        {/* Deadlines Header with Week Navigation */}
+                        <div className="flex items-center justify-between mb-6 pl-2 pr-4 flex-shrink-0">
+                            <h2 className="text-gray-500 dark:text-gray-300 font-medium text-lg">Deadlines</h2>
+
+                            {/* Week Navigator */}
+                            <div className="flex items-center gap-2">
+                                {/* Reset to Current Week Button - always occupies space for layout stability */}
+                                <button
+                                    onClick={() => setWeekOffset(0)}
+                                    className={`mr-1 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-500/15 to-purple-500/15 dark:from-violet-500/25 dark:to-purple-500/25 text-violet-600 dark:text-violet-300 text-[10px] font-bold uppercase tracking-wider hover:from-violet-500/25 hover:to-purple-500/25 dark:hover:from-violet-500/35 dark:hover:to-purple-500/35 hover:scale-105 active:scale-95 transition-all duration-200 border border-violet-500/20 dark:border-violet-400/20 shadow-sm ${
+                                        isCurrentWeek ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                                    }`}
+                                    aria-label="Return to current week"
+                                    tabIndex={isCurrentWeek ? -1 : 0}
+                                >
+                                    <RotateCcw size={11} className="opacity-80" />
+                                    <span>This Week</span>
+                                </button>
+
+                                {/* Previous Week */}
+                                <button
+                                    onClick={() => setWeekOffset(prev => prev - 1)}
+                                    className="p-1.5 rounded-full bg-white/60 dark:bg-white/10 backdrop-blur-md border border-white/50 dark:border-white/10 hover:bg-white/80 dark:hover:bg-white/20 hover:scale-105 active:scale-95 transition-all duration-200 shadow-sm"
+                                    aria-label="Previous week"
+                                >
+                                    <ChevronLeft size={16} className="text-gray-500 dark:text-gray-400" />
+                                </button>
+
+                                {/* Week Range Label */}
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/60 dark:bg-white/10 backdrop-blur-md border border-white/50 dark:border-white/10 shadow-sm min-w-[140px] justify-center">
+                                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 tabular-nums">
+                                        {weekRangeLabel}
+                                    </span>
+                                    {isCurrentWeek && (
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500 dark:text-emerald-400">
+                                            Now
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Next Week */}
+                                <button
+                                    onClick={() => setWeekOffset(prev => prev + 1)}
+                                    className="p-1.5 rounded-full bg-white/60 dark:bg-white/10 backdrop-blur-md border border-white/50 dark:border-white/10 hover:bg-white/80 dark:hover:bg-white/20 hover:scale-105 active:scale-95 transition-all duration-200 shadow-sm"
+                                    aria-label="Next week"
+                                >
+                                    <ChevronRight size={16} className="text-gray-500 dark:text-gray-400" />
+                                </button>
+
+                                {/* Full Calendar Button */}
+                                <button
+                                    onClick={() => setIsCalendarOpen(true)}
+                                    className="ml-2 p-1.5 rounded-full bg-gradient-to-br from-violet-500/15 to-indigo-500/15 dark:from-violet-500/25 dark:to-indigo-500/25 border border-violet-500/20 dark:border-violet-400/20 hover:from-violet-500/25 hover:to-indigo-500/25 dark:hover:from-violet-500/35 dark:hover:to-indigo-500/35 hover:scale-105 active:scale-95 transition-all duration-200 shadow-sm"
+                                    aria-label="Open full calendar"
+                                    title="Full Month View"
+                                >
+                                    <CalendarDays size={16} className="text-violet-600 dark:text-violet-400" />
+                                </button>
+                            </div>
+                        </div>
 
                         {/* Timeline Visualization */}
                         <div className="relative w-full flex-1">
@@ -391,6 +502,14 @@ export function PersonalView() {
                 ) : null}
             </DragOverlay>
         </DndContext>
+
+        {/* Premium Calendar Modal */}
+        <PremiumCalendarModal
+            isOpen={isCalendarOpen}
+            onClose={() => setIsCalendarOpen(false)}
+            tasks={tasks}
+        />
+    </>
     );
 }
 

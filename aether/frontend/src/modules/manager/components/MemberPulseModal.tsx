@@ -161,7 +161,7 @@ function PulseContent({ pulse }: { pulse: UserPulseData }) {
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 leading-tight">Performance Pulse</span>
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">Last 30 days & current week</span>
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium"></span>
         </div>
       </div>
 
