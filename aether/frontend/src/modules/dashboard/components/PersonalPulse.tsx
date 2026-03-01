@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Activity, TrendingUp, TrendingDown, Minus, Clock, Flame, Zap, Info } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Minus, Clock, Flame, Zap } from 'lucide-react';
 import { tasksApi, type PersonalPulseData } from '../api/tasksApi';
+import { useOrganization } from '../../organization/context/OrganizationContext';
+import { MetricTooltip } from '../../../components/ui/MetricTooltip';
 
 // Gradient text component for KPI values
 function GradientValue({ children, variant = 'default' }: { children: React.ReactNode; variant?: 'default' | 'success' | 'streak' }) {
@@ -20,11 +22,13 @@ function GradientValue({ children, variant = 'default' }: { children: React.Reac
 export function PersonalPulse() {
     const [pulse, setPulse] = useState<PersonalPulseData | null>(null);
     const [loading, setLoading] = useState(true);
+    const { currentOrganization } = useOrganization();
 
     useEffect(() => {
         async function loadPulse() {
             try {
-                const data = await tasksApi.getMyPulse();
+                // Pass organization ID to scope KPIs to current org
+                const data = await tasksApi.getMyPulse(currentOrganization?.id);
                 setPulse(data);
             } catch (error) {
                 console.error('Failed to load personal pulse', error);
@@ -33,7 +37,7 @@ export function PersonalPulse() {
             }
         }
         loadPulse();
-    }, []);
+    }, [currentOrganization?.id]);
 
     if (loading) {
         return (
@@ -71,13 +75,16 @@ export function PersonalPulse() {
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500/20 to-purple-500/20 dark:from-violet-500/30 dark:to-purple-500/30 flex items-center justify-center ring-1 ring-violet-500/20">
                     <Activity size={14} className="text-violet-500" />
                 </div>
-                <h2 className="text-gray-600 dark:text-gray-300 font-semibold text-lg tracking-tight">Personal Pulse</h2>
+                <div className="flex flex-col">
+                    <h2 className="text-gray-600 dark:text-gray-300 font-semibold text-lg tracking-tight leading-tight">Personal Pulse</h2>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">Last 30 days & current week</span>
+                </div>
             </div>
 
             {/* KPIs Grid */}
             <div className="grid grid-cols-2 gap-3 mb-6 flex-shrink-0">
                 {/* Weekly Velocity */}
-                <div className="group bg-white/60 dark:bg-white/5 backdrop-blur-md rounded-3xl p-4 border border-white/50 dark:border-white/10 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 flex flex-col justify-center">
+                <div className="group relative bg-white/60 dark:bg-white/5 backdrop-blur-md rounded-3xl p-4 border border-white/50 dark:border-white/10 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 flex flex-col justify-center">
                     <div className="flex items-center justify-between mb-2">
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">Velocity</p>
                         <Zap size={12} className="text-gray-300 dark:text-gray-600 group-hover:text-amber-400 transition-colors" />
@@ -93,10 +100,14 @@ export function PersonalPulse() {
                             </span>
                         </div>
                     </div>
+                    <MetricTooltip
+                        title="Weekly Velocity"
+                        description="Number of tasks completed during the current week. The trend indicates the difference compared to the previous week."
+                    />
                 </div>
 
                 {/* On-Time Rate */}
-                <div className="group bg-white/60 dark:bg-white/5 backdrop-blur-md rounded-3xl p-4 border border-white/50 dark:border-white/10 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 flex flex-col justify-center">
+                <div className="group relative bg-white/60 dark:bg-white/5 backdrop-blur-md rounded-3xl p-4 border border-white/50 dark:border-white/10 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 flex flex-col justify-center">
                     <div className="flex items-center justify-between mb-2">
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">On-time</p>
                         <Clock size={12} className="text-gray-300 dark:text-gray-600 group-hover:text-emerald-400 transition-colors" />
@@ -107,10 +118,15 @@ export function PersonalPulse() {
                         </span>
                         <span className="text-lg font-semibold text-gray-400 dark:text-gray-500">%</span>
                     </div>
+                    <MetricTooltip
+                        title="30-Day On-Time Rate"
+                        description="Percentage of tasks completed before their deadline over the past 30 days. It doesn't penalize tasks without deadlines."
+                        align="right"
+                    />
                 </div>
 
                 {/* Avg Cycle Time */}
-                <div className="group bg-white/60 dark:bg-white/5 backdrop-blur-md rounded-3xl p-4 border border-white/50 dark:border-white/10 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 flex flex-col justify-center">
+                <div className="group relative bg-white/60 dark:bg-white/5 backdrop-blur-md rounded-3xl p-4 border border-white/50 dark:border-white/10 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 flex flex-col justify-center">
                     <div className="flex items-center justify-between mb-2">
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">Cycle Time</p>
                     </div>
@@ -120,6 +136,10 @@ export function PersonalPulse() {
                         </span>
                         <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">days</span>
                     </div>
+                    <MetricTooltip
+                        title="30-Day Cycle Time"
+                        description="Average number of days taken to complete a task over the past 30 days. Shorter times indicate faster workflow."
+                    />
                 </div>
 
                 {/* Current Streak */}
@@ -140,25 +160,15 @@ export function PersonalPulse() {
                         </span>
                         <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">days</span>
                     </div>
-                    {/* Info Tooltip - Bottom Right, aligned with fire icon */}
-                    <div className="absolute bottom-3 right-4 group/tooltip">
-                        <button
-                            type="button"
-                            className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700/50 transition-colors"
-                            aria-label="Momentum & Streaks"
-                        >
-                            <Info className="w-3.5 h-3.5" />
-                        </button>
-                        {/* Glassmorphism Popover */}
-                        <div className="absolute right-0 bottom-full mb-2 w-64 p-4 rounded-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50 bg-zinc-900/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/20 border border-zinc-700/50">
-                            <h4 className="text-sm font-semibold text-white mb-2">Momentum & Streaks</h4>
-                            <p className="text-xs text-zinc-300 leading-relaxed">
+                    <MetricTooltip
+                        title="Momentum & Streaks"
+                        description={
+                            <>
                                 The number of consecutive days you've closed at least one task or logged significant progress. Keeping your <span className="text-orange-400 font-medium">Streak</span> alive is key to building high-impact habits.
-                            </p>
-                            {/* Arrow (pointing down since popover is above) */}
-                            <div className="absolute -bottom-1.5 right-3 w-3 h-3 bg-zinc-900/95 dark:bg-zinc-900/95 rotate-45 border-r border-b border-zinc-700/50" />
-                        </div>
-                    </div>
+                            </>
+                        }
+                        align="right"
+                    />
                 </div>
             </div>
 

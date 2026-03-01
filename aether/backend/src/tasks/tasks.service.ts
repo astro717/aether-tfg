@@ -576,9 +576,12 @@ export class TasksService {
 
   /**
    * Personal Pulse: weekly velocity, trend, and on-time rate for a single user.
+   * @param organizationId - When provided, only count tasks in this organization
    */
-  async getMyPulse(userId: string) {
+  async getMyPulse(userId: string, organizationId?: string) {
     const now = new Date();
+    // Base filter: apply organization filter when provided
+    const orgFilter = organizationId ? { organization_id: organizationId } : {};
 
     // Get start of current week (Monday)
     const currentWeekStart = new Date(now);
@@ -599,6 +602,7 @@ export class TasksService {
         assignee_id: userId,
         status: 'done',
         updated_at: { gte: currentWeekStart },
+        ...orgFilter,
       },
     });
 
@@ -611,20 +615,22 @@ export class TasksService {
           gte: lastWeekStart,
           lte: lastWeekEnd,
         },
+        ...orgFilter,
       },
     });
 
     // Calculate on-time rate (done tasks where done before due_date)
     // Look at last 30 days of completed tasks
+    // Tasks WITHOUT a due_date count as on-time (rewarding consistent delivery)
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const completedWithDueDate = await this.prisma.tasks.findMany({
+    const allCompletedTasks = await this.prisma.tasks.findMany({
       where: {
         assignee_id: userId,
         status: 'done',
-        due_date: { not: null },
         updated_at: { gte: thirtyDaysAgo },
+        ...orgFilter,
       },
       select: {
         due_date: true,
@@ -632,12 +638,15 @@ export class TasksService {
       },
     });
 
-    const onTimeCount = completedWithDueDate.filter(
-      (t) => t.updated_at && t.due_date && new Date(t.updated_at) <= new Date(t.due_date)
-    ).length;
+    const onTimeCount = allCompletedTasks.filter((t) => {
+      // Tasks without due_date are always considered on-time
+      if (!t.due_date) return true;
+      // Tasks with due_date: check if completed before deadline
+      return t.updated_at && new Date(t.updated_at) <= new Date(t.due_date);
+    }).length;
 
-    const onTimeRate = completedWithDueDate.length > 0
-      ? Math.round((onTimeCount / completedWithDueDate.length) * 100)
+    const onTimeRate = allCompletedTasks.length > 0
+      ? Math.round((onTimeCount / allCompletedTasks.length) * 100)
       : 100; // Default to 100% if no data
 
     // Get current task counts for progress bar
@@ -645,20 +654,113 @@ export class TasksService {
     // doneCount uses thisWeekDone so archived tasks still count toward weekly progress
     const [todoCount, inProgressCount] = await Promise.all([
       this.prisma.tasks.count({
-        where: { assignee_id: userId, status: { in: ['todo', 'pending'] }, is_archived: false },
+        where: { assignee_id: userId, status: { in: ['todo', 'pending'] }, is_archived: false, ...orgFilter },
       }),
       this.prisma.tasks.count({
-        where: { assignee_id: userId, status: 'in_progress', is_archived: false },
+        where: { assignee_id: userId, status: 'in_progress', is_archived: false, ...orgFilter },
       }),
     ]);
 
     // Weekly progress: completed THIS week, archived or not
     const doneCount = thisWeekDone;
 
+    // Calculate average cycle time (days from created_at to updated_at for done tasks)
+    const completedTasksForCycleTime = await this.prisma.tasks.findMany({
+      where: {
+        assignee_id: userId,
+        status: 'done',
+        updated_at: { gte: thirtyDaysAgo },
+        ...orgFilter,
+      },
+      select: {
+        created_at: true,
+        updated_at: true,
+      },
+    });
+
+    let cycleTime = 0;
+    if (completedTasksForCycleTime.length > 0) {
+      const validTasks = completedTasksForCycleTime.filter(
+        (task) => task.created_at && task.updated_at
+      );
+      if (validTasks.length > 0) {
+        const totalDays = validTasks.reduce((sum, task) => {
+          const created = new Date(task.created_at!);
+          const completed = new Date(task.updated_at!);
+          const diffMs = completed.getTime() - created.getTime();
+          const diffDays = diffMs / (1000 * 60 * 60 * 24);
+          return sum + Math.max(0, diffDays); // Ensure non-negative
+        }, 0);
+        cycleTime = Math.round((totalDays / validTasks.length) * 10) / 10; // One decimal place
+      }
+    }
+
+    // Calculate daily streak (consecutive days with at least one task completed)
+    // Look back up to 30 days for streak calculation
+    const completedTasksForStreak = await this.prisma.tasks.findMany({
+      where: {
+        assignee_id: userId,
+        status: 'done',
+        updated_at: { gte: thirtyDaysAgo },
+        ...orgFilter,
+      },
+      select: {
+        updated_at: true,
+      },
+      orderBy: { updated_at: 'desc' },
+    });
+
+    // Build a set of dates (YYYY-MM-DD) when tasks were completed
+    const completionDates = new Set<string>();
+    completedTasksForStreak.forEach((task) => {
+      if (task.updated_at) {
+        const dateStr = new Date(task.updated_at).toISOString().split('T')[0];
+        completionDates.add(dateStr);
+      }
+    });
+
+    // Count consecutive days starting from today (or yesterday if today has no completions yet)
+    let streak = 0;
+    const checkDate = new Date(now);
+    checkDate.setHours(0, 0, 0, 0);
+
+    // Check if today has completions, if not start from yesterday
+    const todayStr = checkDate.toISOString().split('T')[0];
+    if (!completionDates.has(todayStr)) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    // Count consecutive days
+    for (let i = 0; i < 30; i++) {
+      const dateStr = checkDate.toISOString().split('T')[0];
+      if (completionDates.has(dateStr)) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    // Count overdue tasks for the user
+    // Exclude completed, archived, or pending_validation tasks
+    // Tasks in pending_validation have been submitted and await manager review
+    const overdueTasks = await this.prisma.tasks.count({
+      where: {
+        assignee_id: userId,
+        due_date: { lt: now },
+        status: { notIn: ['done', 'completed', 'Done', 'Completed', 'pending_validation'] },
+        is_archived: false,
+        ...orgFilter,
+      },
+    });
+
     return {
       weeklyVelocity: thisWeekDone,
       trend: thisWeekDone - lastWeekDone,
       onTimeRate,
+      cycleTime,
+      streak,
+      overdueTasks,
       progress: {
         todo: todoCount,
         inProgress: inProgressCount,

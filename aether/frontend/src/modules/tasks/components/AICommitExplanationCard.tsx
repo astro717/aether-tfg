@@ -252,7 +252,7 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             layoutId="explanation-card"
-            className={`relative flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm rounded-xl border border-green-200/60 dark:border-green-500/20 min-h-[120px] overflow-hidden ${className}`}
+            className={`relative flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm rounded-xl border border-green-200/60 dark:border-green-500/20 min-h-[120px] h-full overflow-hidden ${className}`}
           >
             {/* Compact Header Bar */}
             <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-green-50/80 to-emerald-50/50 dark:from-green-900/20 dark:to-emerald-900/10 border-b border-green-100/50 dark:border-green-800/30">

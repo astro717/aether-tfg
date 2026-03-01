@@ -210,6 +210,21 @@ export interface DailyPulseResponse {
   recentTasks: DailyPulseTask[];
 }
 
+export interface UserPulseData {
+  weeklyVelocity: number;
+  trend: number;
+  onTimeRate: number;
+  cycleTime: number;
+  streak: number;
+  overdueTasks: number;
+  progress: {
+    todo: number;
+    inProgress: number;
+    done: number;
+    total: number;
+  };
+}
+
 class ManagerApi {
   private getAuthHeaders() {
     const token = localStorage.getItem('token');
@@ -336,6 +351,18 @@ class ManagerApi {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || 'Failed to check report availability');
+    }
+    return response.json();
+  }
+
+  async getUserPulse(organizationId: string, userId: string): Promise<UserPulseData> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/organization/${organizationId}/users/${userId}/pulse`,
+      { headers: this.getAuthHeaders() }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch user pulse');
     }
     return response.json();
   }

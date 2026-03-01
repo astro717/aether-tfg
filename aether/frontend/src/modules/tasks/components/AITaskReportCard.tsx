@@ -213,7 +213,7 @@ export function AITaskReportCard({ taskId, commitSha, className = "" }: AITaskRe
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         layoutId="task-report-card"
-                        className={`relative flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm rounded-xl border border-blue-200/60 dark:border-blue-500/20 min-h-[120px] w-full overflow-hidden ${className}`}
+                        className={`relative flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm rounded-xl border border-blue-200/60 dark:border-blue-500/20 min-h-[120px] h-full w-full overflow-hidden ${className}`}
                     >
                         {/* Compact Header Bar */}
                         <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50/80 to-cyan-50/50 dark:from-blue-900/20 dark:to-cyan-900/10 border-b border-blue-100/50 dark:border-blue-800/30">

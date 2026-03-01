@@ -195,7 +195,7 @@ export function AICodeAnalysisCard({ commitSha, className = "" }: AICodeAnalysis
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         layoutId="code-analysis-card"
-                        className={`relative flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm rounded-xl border border-amber-200/60 dark:border-amber-500/20 min-h-[120px] w-full overflow-hidden ${className}`}
+                        className={`relative flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm rounded-xl border border-amber-200/60 dark:border-amber-500/20 min-h-[120px] h-full w-full overflow-hidden ${className}`}
                     >
                         {/* Compact Header Bar */}
                         <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-amber-50/80 to-orange-50/50 dark:from-amber-900/20 dark:to-orange-900/10 border-b border-amber-100/50 dark:border-amber-800/30">

@@ -39,8 +39,11 @@ export class TasksController {
   }
 
   @Get('my-pulse')
-  async getMyPulse(@CurrentUser() user: User) {
-    return this.tasksService.getMyPulse(user.id);
+  async getMyPulse(
+    @CurrentUser() user: User,
+    @Query('organizationId') organizationId?: string,
+  ) {
+    return this.tasksService.getMyPulse(user.id, organizationId);
   }
 
   @Get(':id')
@@ -102,7 +105,7 @@ export class TasksController {
   }
 
   @UseGuards(RolesGuard)
-  @Roles('"manager"', '"admin"')
+  @Roles('manager', 'admin')
   @Post('organization/:organizationId/metrics/backfill')
   async backfillMetrics(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
@@ -132,6 +135,18 @@ export class TasksController {
     @CurrentUser() user: User,
   ) {
     return this.tasksService.getDailyPulse(organizationId, user.id);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('manager', 'admin')
+  @Get('organization/:organizationId/users/:userId/pulse')
+  async getUserPulse(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @CurrentUser() user: User,
+  ) {
+    // Managers can view any team member's pulse within their organization
+    return this.tasksService.getMyPulse(userId, organizationId);
   }
 
   @UseGuards(JwtAuthGuard)

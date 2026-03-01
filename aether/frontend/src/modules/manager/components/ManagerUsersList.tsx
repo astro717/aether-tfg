@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, User, Loader2, Users } from 'lucide-react';
+import { ShieldCheck, User, Loader2, Users, Activity } from 'lucide-react';
 import { organizationApi, type OrganizationMember } from '../../organization/api/organizationApi';
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { useAuth } from '../../auth/context/AuthContext';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { useToast } from '../../../components/ui/Toast';
+import { MemberPulseModal } from './MemberPulseModal';
 
 export function ManagerUsersList() {
   const { currentOrganization, refetch: refetchOrgs } = useOrganization();
@@ -13,6 +14,7 @@ export function ManagerUsersList() {
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedMemberForPulse, setSelectedMemberForPulse] = useState<OrganizationMember | null>(null);
 
   const fetchMembers = useCallback(async () => {
     if (!currentOrganization) return;
@@ -171,8 +173,24 @@ export function ManagerUsersList() {
                   </div>
                 </div>
 
-                {/* Role Selector */}
-                <div className="flex items-center gap-3">
+                {/* Actions & Role Selector */}
+                <div className="flex items-center gap-2">
+                  {/* Pulse Button */}
+                  <button
+                    onClick={() => setSelectedMemberForPulse(member)}
+                    className="
+                      p-2 rounded-xl
+                      bg-violet-50 dark:bg-violet-900/20
+                      text-violet-600 dark:text-violet-400
+                      hover:bg-violet-100 dark:hover:bg-violet-900/40
+                      hover:scale-105
+                      transition-all duration-200
+                    "
+                    title={`View ${member.username}'s pulse`}
+                  >
+                    <Activity className="w-4 h-4" />
+                  </button>
+
                   {actionLoading === member.id ? (
                     <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                   ) : (
@@ -217,6 +235,16 @@ export function ManagerUsersList() {
           })}
         </div>
       </div>
+
+      {/* Member Pulse Modal */}
+      {currentOrganization && selectedMemberForPulse && (
+        <MemberPulseModal
+          isOpen={!!selectedMemberForPulse}
+          onClose={() => setSelectedMemberForPulse(null)}
+          organizationId={currentOrganization.id}
+          member={selectedMemberForPulse}
+        />
+      )}
     </div>
   );
 }

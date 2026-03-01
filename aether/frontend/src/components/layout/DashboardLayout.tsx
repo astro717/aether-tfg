@@ -381,7 +381,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                         >
                             <div className="relative">
                                 <div className={`
-                                    p-1.5 rounded-lg
+                                    p-1.5 rounded-xl
                                     ${isManagerActive
                                         ? 'bg-emerald-500/20 dark:bg-emerald-500/30'
                                         : 'bg-emerald-500/10 dark:bg-emerald-500/20 group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-500/30'

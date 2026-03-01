@@ -145,6 +145,7 @@ export interface PersonalPulseData {
   onTimeRate: number;
   cycleTime: number; // in days
   streak: number; // in days
+  overdueTasks: number;
   progress: {
     todo: number;
     inProgress: number;
@@ -193,11 +194,11 @@ class TasksApi {
     return response.json();
   }
 
-  async getMyPulse(): Promise<PersonalPulseData> {
-    const response = await fetch(
-      `${API_BASE_URL}/tasks/my-pulse`,
-      { headers: this.getAuthHeaders() }
-    );
+  async getMyPulse(organizationId?: string): Promise<PersonalPulseData> {
+    const url = organizationId
+      ? `${API_BASE_URL}/tasks/my-pulse?organizationId=${organizationId}`
+      : `${API_BASE_URL}/tasks/my-pulse`;
+    const response = await fetch(url, { headers: this.getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch personal pulse');
     return response.json();
   }
