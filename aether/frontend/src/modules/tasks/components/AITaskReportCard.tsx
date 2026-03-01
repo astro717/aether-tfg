@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Maximize2, X, CheckCircle2, ClipboardList, Clock, Download } from "lucide-react";
+import { Bot, Maximize2, X, CheckCircle2, ClipboardList, Clock, Download, RefreshCw } from "lucide-react";
 import { tasksApi, type TaskReportResult } from "../../dashboard/api/tasksApi";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
 import { generateTaskReportPDF } from "../../../utils/pdfGenerator";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface AITaskReportCardProps {
     taskId?: string;
@@ -211,59 +213,56 @@ export function AITaskReportCard({ taskId, commitSha, className = "" }: AITaskRe
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         layoutId="task-report-card"
-                        className={`relative flex flex-col bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-blue-200/50 dark:border-blue-500/30 min-h-[120px] w-full ${className}`}
+                        className={`relative flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm rounded-xl border border-blue-200/60 dark:border-blue-500/20 min-h-[120px] w-full overflow-hidden ${className}`}
                     >
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2 gap-2">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                                    <CheckCircle2 size={12} className="text-blue-600 dark:text-blue-400 sm:w-[14px] sm:h-[14px]" />
+                        {/* Compact Header Bar */}
+                        <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50/80 to-cyan-50/50 dark:from-blue-900/20 dark:to-cyan-900/10 border-b border-blue-100/50 dark:border-blue-800/30">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-5 h-5 rounded-full bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center">
+                                    <CheckCircle2 size={11} className="text-blue-600 dark:text-blue-400" />
                                 </div>
-                                <span className="text-[11px] sm:text-xs font-medium text-blue-700 dark:text-blue-400 flex items-center gap-1 truncate">
+                                <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 truncate">
                                     Task Report Ready
-                                    {report.cached && (
-                                        <span className="hidden sm:inline text-[10px] text-gray-400 dark:text-gray-500 font-normal shrink-0">(cached)</span>
-                                    )}
                                 </span>
+                                {report.cached && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 font-medium">
+                                        cached
+                                    </span>
+                                )}
                             </div>
                             <motion.button
                                 onClick={() => setIsModalOpen(true)}
-                                className="self-end sm:self-auto p-1.5 rounded-lg hover:bg-white/50 dark:hover:bg-zinc-800 transition-colors group shrink-0"
-                                whileHover={{ scale: 1.1 }}
+                                className="p-1 rounded-md hover:bg-white/60 dark:hover:bg-zinc-800 transition-colors"
+                                whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
+                                title="Expand"
                             >
-                                <Maximize2 size={14} className="text-blue-500 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300" />
+                                <Maximize2 size={12} className="text-blue-600/70 dark:text-blue-400/70" />
                             </motion.button>
                         </div>
 
-                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-3">
-                            {report.summary}
-                        </p>
+                        {/* Content Area */}
+                        <div className="flex-1 px-3 py-2.5">
+                            <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-3">
+                                {report.summary}
+                            </p>
+                        </div>
 
-                        {/* Footer with timestamp and actions */}
-                        <div className="mt-auto pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between gap-2 min-w-0">
-                            <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1 min-w-0 truncate shrink">
-                                <Clock size={10} className="text-gray-400 dark:text-gray-500 shrink-0" />
-                                <span className="truncate">Generated {formatTimeAgo(report.timestamp)}</span>
+                        {/* Minimal Footer */}
+                        <div className="px-3 py-2 flex items-center justify-between bg-gray-50/50 dark:bg-zinc-800/30">
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                                <Clock size={9} className="opacity-70" />
+                                {formatTimeAgo(report.timestamp)}
                             </span>
-                            <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                    onClick={() => {
-                                        const taskTitle = taskId ? `Task ${taskId}` : 'Task Report';
-                                        generateTaskReportPDF(report, taskTitle);
-                                    }}
-                                    className="p-1.5 rounded-md text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                    title="Download PDF"
-                                >
-                                    <Download size={12} />
-                                </button>
-                                <button
-                                    onClick={handleRegenerateClick}
-                                    className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
-                                    title="Regenerate"
-                                >
-                                    <Bot size={12} />
-                                </button>
-                            </div>
+                            <motion.button
+                                onClick={handleRegenerateClick}
+                                className="p-1 rounded-md text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.95 }}
+                                title="Regenerate"
+                            >
+                                <RefreshCw size={11} />
+                            </motion.button>
                         </div>
                     </motion.div>
                 )}
@@ -340,7 +339,7 @@ function ReportModal({ isOpen, onClose, report, taskId }: { isOpen: boolean; onC
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative w-full max-w-4xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+                        className="relative w-full max-w-5xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
                     >
                         {/* Header - Blue Theme */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 flex-shrink-0">
@@ -361,7 +360,17 @@ function ReportModal({ isOpen, onClose, report, taskId }: { isOpen: boolean; onC
                         <div className="p-6 sm:p-8 overflow-y-auto premium-scrollbar flex-1 space-y-6">
                             <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
                                 <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">Executive Summary</h3>
-                                <p className="text-sm text-blue-800 dark:text-blue-200/80 leading-relaxed">{report.summary}</p>
+                                <div className="text-sm text-blue-800 dark:text-blue-200/80 leading-relaxed max-w-none">
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                                            strong: ({ node, ...props }) => <strong className="font-semibold text-blue-900 dark:text-blue-100" {...props} />,
+                                        }}
+                                    >
+                                        {report.summary}
+                                    </ReactMarkdown>
+                                </div>
                             </div>
 
                             {report.sections.map((section, idx) => (
@@ -370,9 +379,31 @@ function ReportModal({ isOpen, onClose, report, taskId }: { isOpen: boolean; onC
                                         <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                         {section.title}
                                     </h4>
-                                    <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-gray-100 dark:border-zinc-800">
-                                        {section.content}
-                                    </p>
+                                    <div className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed pl-4 border-l-2 border-gray-100 dark:border-zinc-800">
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                p: ({ node, ...props }) => <p className="mb-3 last:mb-0" {...props} />,
+                                                ul: ({ node, ...props }) => <ul className="list-disc pl-5 mb-3 space-y-1 marker:text-blue-500" {...props} />,
+                                                ol: ({ node, ...props }) => <ol className="list-decimal pl-5 mb-3 space-y-1 marker:text-blue-500" {...props} />,
+                                                li: ({ node, ...props }) => <li {...props} />,
+                                                strong: ({ node, ...props }) => <strong className="font-semibold text-gray-900 dark:text-gray-100" {...props} />,
+                                                h1: ({ node, ...props }) => <h1 className="text-lg font-bold text-gray-900 dark:text-white mt-4 mb-2" {...props} />,
+                                                h2: ({ node, ...props }) => <h2 className="text-base font-bold text-gray-900 dark:text-white mt-3 mb-2" {...props} />,
+                                                h3: ({ node, ...props }) => <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-2 mb-1" {...props} />,
+                                                code: ({ node, className, children, ...props }) => {
+                                                    const match = /language-(\w+)/.exec(className || '');
+                                                    const isInline = !match && !String(children).includes('\n');
+                                                    return isInline
+                                                        ? <code className="bg-gray-100 dark:bg-zinc-800 flex-shrink-0 text-blue-600 dark:text-blue-400 px-1 py-0.5 rounded text-[11px] font-mono whitespace-nowrap" {...props}>{children}</code>
+                                                        : <pre className="bg-gray-100 dark:bg-zinc-800 p-3 rounded-lg text-xs font-mono mb-3 overflow-x-auto text-gray-800 dark:text-gray-200"><code className={className} {...props}>{children}</code></pre>;
+                                                },
+                                                blockquote: ({ node, ...props }) => <blockquote className="border-l-2 border-blue-400 pl-3 italic text-gray-500 dark:text-gray-400 my-2" {...props} />,
+                                            }}
+                                        >
+                                            {section.content}
+                                        </ReactMarkdown>
+                                    </div>
                                 </div>
                             ))}
                         </div>

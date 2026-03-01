@@ -6,6 +6,8 @@ import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 import { formatTimeAgo } from "../../../lib/utils";
 import { useSettings } from "../../settings/context/SettingsContext";
 import { generateCommitExplanationPDF } from "../../../utils/pdfGenerator";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface AICommitExplanationCardProps {
   taskId: string;
@@ -250,60 +252,56 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             layoutId="explanation-card"
-            className={`relative flex flex-col bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 dark:border-green-500/30 min-h-[120px] ${className}`}
+            className={`relative flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm rounded-xl border border-green-200/60 dark:border-green-500/20 min-h-[120px] overflow-hidden ${className}`}
           >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                  <CheckCircle2 size={14} className="text-green-600 dark:text-green-400" />
+            {/* Compact Header Bar */}
+            <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-green-50/80 to-emerald-50/50 dark:from-green-900/20 dark:to-emerald-900/10 border-b border-green-100/50 dark:border-green-800/30">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-5 h-5 rounded-full bg-green-500/10 dark:bg-green-500/20 flex items-center justify-center">
+                  <CheckCircle2 size={11} className="text-green-600 dark:text-green-400" />
                 </div>
-                <span className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1">
+                <span className="text-[11px] font-semibold text-green-700 dark:text-green-400 truncate">
                   AI Explanation
-                  {explanation.cached && (
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-normal">(cached)</span>
-                  )}
                 </span>
+                {explanation.cached && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 font-medium">
+                    cached
+                  </span>
+                )}
               </div>
-
-              {/* Expand Button */}
               <motion.button
                 onClick={() => setIsModalOpen(true)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors group"
-                whileHover={{ scale: 1.1 }}
+                className="p-1 rounded-md hover:bg-white/60 dark:hover:bg-zinc-800 transition-colors"
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                title="Expand"
               >
-                <Maximize2 size={14} className="text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
+                <Maximize2 size={12} className="text-green-600/70 dark:text-green-400/70" />
               </motion.button>
             </div>
 
-            {/* Explanation Preview (truncated) */}
-            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-3">
-              {explanation.explanation}
-            </p>
+            {/* Content Area */}
+            <div className="flex-1 px-3 py-2.5">
+              <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-3">
+                {explanation.explanation}
+              </p>
+            </div>
 
-            {/* Footer with timestamp and actions */}
-            <div className="mt-auto pt-2 border-t border-gray-100 dark:border-zinc-700/50 flex items-center justify-between gap-2 min-w-0">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1 min-w-0 truncate shrink">
-                <Clock size={10} className="text-gray-400 dark:text-gray-500 shrink-0" />
-                <span className="truncate">Generated {formatTimeAgo(explanation.timestamp)}</span>
+            {/* Minimal Footer */}
+            <div className="px-3 py-2 flex items-center justify-between bg-gray-50/50 dark:bg-zinc-800/30">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                <Clock size={9} className="opacity-70" />
+                {formatTimeAgo(explanation.timestamp)}
               </span>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => generateCommitExplanationPDF(explanation)}
-                  className="p-1.5 rounded-md text-purple-500 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
-                  title="Download PDF"
-                >
-                  <Download size={12} />
-                </button>
-                <button
-                  onClick={handleRegenerateClick}
-                  className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
-                  title="Regenerate"
-                >
-                  <RefreshCw size={12} />
-                </button>
-              </div>
+              <motion.button
+                onClick={handleRegenerateClick}
+                className="p-1 rounded-md text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                title="Regenerate"
+              >
+                <RefreshCw size={11} />
+              </motion.button>
             </div>
           </motion.div>
         )}
@@ -354,6 +352,26 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
   );
 }
 
+// Reusable Markdown Styling Configuration for this Card
+const markdownComponents = {
+  p: ({ node, ...props }: any) => <p className="mb-3 last:mb-0" {...props} />,
+  ul: ({ node, ...props }: any) => <ul className="list-disc pl-5 mb-3 space-y-1 marker:text-purple-500" {...props} />,
+  ol: ({ node, ...props }: any) => <ol className="list-decimal pl-5 mb-3 space-y-1 marker:text-purple-500" {...props} />,
+  li: ({ node, ...props }: any) => <li {...props} />,
+  strong: ({ node, ...props }: any) => <strong className="font-semibold text-gray-900 dark:text-gray-100" {...props} />,
+  h1: ({ node, ...props }: any) => <h1 className="text-lg font-bold text-gray-900 dark:text-white mt-4 mb-2" {...props} />,
+  h2: ({ node, ...props }: any) => <h2 className="text-base font-bold text-gray-900 dark:text-white mt-3 mb-2" {...props} />,
+  h3: ({ node, ...props }: any) => <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-2 mb-1" {...props} />,
+  code: ({ node, className, children, ...props }: any) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const isInline = !match && !String(children).includes('\n');
+    return isInline
+      ? <code className="bg-gray-100 dark:bg-zinc-800 flex-shrink-0 text-purple-600 dark:text-purple-400 px-1 py-0.5 rounded text-[11px] font-mono whitespace-nowrap" {...props}>{children}</code>
+      : <pre className="bg-gray-100 dark:bg-zinc-800 p-3 rounded-lg text-xs font-mono mb-3 overflow-x-auto text-gray-800 dark:text-gray-200"><code className={className} {...props}>{children}</code></pre>;
+  },
+  blockquote: ({ node, ...props }: any) => <blockquote className="border-l-2 border-purple-400 pl-3 italic text-gray-500 dark:text-gray-400 my-2" {...props} />,
+};
+
 // Modal Component
 interface ExplanationModalProps {
   isOpen: boolean;
@@ -385,7 +403,7 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-4xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            className="relative w-full max-w-5xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 flex-shrink-0">
@@ -415,27 +433,45 @@ function ExplanationModal({ isOpen, onClose, explanation, commitSha }: Explanati
             <div className="p-6 sm:p-8 overflow-y-auto premium-scrollbar flex-1">
               {/* Explanation Section */}
               <Section title="What This Commit Does">
-                <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">{explanation.explanation}</p>
+                <div className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {explanation.explanation}
+                  </ReactMarkdown>
+                </div>
               </Section>
 
               {/* How It Fulfills Task Section */}
               <Section title="How It Fulfills the Task">
-                <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">{explanation.howItFulfillsTask}</p>
+                <div className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {explanation.howItFulfillsTask}
+                  </ReactMarkdown>
+                </div>
               </Section>
 
               {/* Technical Details Section */}
               <Section title="Technical Details">
-                <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">{explanation.technicalDetails}</p>
+                <div className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {explanation.technicalDetails}
+                  </ReactMarkdown>
+                </div>
               </Section>
 
               {/* Remaining Work Section */}
               {explanation.remainingWork && explanation.remainingWork.length > 0 && (
                 <Section title="Remaining Work">
-                  <ul className="space-y-2">
+                  <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                     {explanation.remainingWork.map((item, index) => (
-                      <li key={index} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <span className="text-purple-500 mt-1">•</span>
-                        <span>{item}</span>
+                      <li key={index} className="flex flex-col">
+                        <div className="flex items-start gap-2">
+                          <span className="text-purple-500 mt-1">•</span>
+                          <span className="flex-1">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                              {item}
+                            </ReactMarkdown>
+                          </span>
+                        </div>
                       </li>
                     ))}
                   </ul>
