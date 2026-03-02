@@ -5,6 +5,7 @@ import { MessageChatInput } from "./MessageChatInput";
 import { type Message, type MessageUser } from "../api/messagingApi";
 import { type UploadedFile } from "../../../hooks/useFileUpload";
 import { getAvatarColorClasses } from "../../../lib/avatarColors";
+import { useChatScroll } from "../hooks/useChatScroll";
 
 interface ChatViewProps {
   userId: string | null;
@@ -27,8 +28,6 @@ export function ChatView({
   onSendMessage,
   isDraft = false,
 }: ChatViewProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
   // Track the first unread message ID for this session (persists after mark-as-read)
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
   const hasDetectedUnreadRef = useRef(false);
@@ -63,53 +62,14 @@ export function ChatView({
   };
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  // Scroll to bottom helper
-  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  };
+  const { scrollToBottom } = useChatScroll(scrollContainerRef, messages, currentUserId);
 
   // 1. Initial scroll to bottom on mount / load
   useEffect(() => {
     if (!loading && messages.length > 0) {
       scrollToBottom("auto"); // Instant scroll on load
     }
-  }, [loading, userId]); // Only on user switch or done loading
-
-  const prevLastMessageIdRef = useRef<string | null>(null);
-
-  // 2. Smart auto-scroll on new messages
-  useEffect(() => {
-    // Check if we actually have a *new* message at the end
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage) return;
-
-    // If the last message ID hasn't changed, do NOTHING.
-    // This prevents scrolling on polling updates when content is stable.
-    if (lastMessage.id === prevLastMessageIdRef.current) {
-      return;
-    }
-
-    // Update ref for next time
-    prevLastMessageIdRef.current = lastMessage.id;
-
-    // Basic check: if we are close to bottom, scroll down.
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150; // 150px threshold
-
-    // Determine if we should auto-scroll
-    const isOurMessage = lastMessage.sender_id === currentUserId;
-
-    // Scroll if:
-    // 1. We were already at the bottom (reading new incoming messages)
-    // 2. We just sent the message (force scroll to see our own message)
-    if (isNearBottom || isOurMessage) {
-      scrollToBottom("smooth");
-    }
-  }, [messages, currentUserId]);
+  }, [loading, userId]); // El array de dependencias se mantiene limpio
 
   // Handle sending a new message
   const handleSend = async (content: string, attachments?: UploadedFile[]) => {
@@ -218,7 +178,6 @@ export function ChatView({
               }
               return null;
             })}
-            <div ref={messagesEndRef} />
           </div>
         )}
       </div>

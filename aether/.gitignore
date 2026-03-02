@@ -31,3 +31,7 @@ backend/prisma/migrations/
 *plan*.md
 testsprite_tests/
 claude/
+
+# Markdown and Archives
+*.md
+*.zip
