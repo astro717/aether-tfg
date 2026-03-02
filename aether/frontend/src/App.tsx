@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { HomePage } from "./modules/auth/pages/HomePage";
 import { SignupPage } from "./modules/auth/pages/SignupPage";
@@ -23,83 +24,95 @@ import { SettingsProvider } from "./modules/settings/context/SettingsContext";
 import { NotificationsProvider } from "./modules/notifications/context/NotificationsContext";
 import { ToastProvider } from "./components/ui/Toast";
 
+// Create a stable QueryClient instance outside the component
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 1,
+    },
+  },
+});
+
 function App() {
   return (
-    <ThemeProvider>
-      <SettingsProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <NotificationsProvider>
-              <OrganizationProvider>
-                <BrowserRouter>
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/signup" element={<SignupPage />} />
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/connect-github" element={<ConnectGithubPage />} />
-                    <Route path="/connect/github/callback" element={<GithubCallbackPage />} />
-                    <Route path="/organization-setup" element={<OrganizationSetupPage />} />
-                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                    <Route path="/reset-password" element={<ResetPasswordPage />} />
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <SettingsProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <NotificationsProvider>
+                <OrganizationProvider>
+                  <BrowserRouter>
+                    <Routes>
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/signup" element={<SignupPage />} />
+                      <Route path="/login" element={<LoginPage />} />
+                      <Route path="/connect-github" element={<ConnectGithubPage />} />
+                      <Route path="/connect/github/callback" element={<GithubCallbackPage />} />
+                      <Route path="/organization-setup" element={<OrganizationSetupPage />} />
+                      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-                    {/* Dashboard Routes */}
-                    <Route
-                      path="/tasks/:taskId"
-                      element={
-                        <DashboardLayout>
-                          <TaskDetailsPage />
-                        </DashboardLayout>
-                      }
-                    />
-
-                    <Route
-                      path="/dashboard"
-                      element={
-                        <DashboardLayout>
-                          <MainDashboardPage />
-                        </DashboardLayout>
-                      }
-                    />
-
-                    {/* Messaging Route */}
-                    <Route
-                      path="/messages"
-                      element={
-                        <DashboardLayout>
-                          <MessagingPage />
-                        </DashboardLayout>
-                      }
-                    />
-
-                    {/* Settings Route */}
-                    <Route
-                      path="/settings"
-                      element={
-                        <DashboardLayout>
-                          <SettingsPage />
-                        </DashboardLayout>
-                      }
-                    />
-
-                    {/* Manager Zone Route */}
-                    <Route
-                      path="/manager"
-                      element={
-                        <ProtectedManagerRoute>
+                      {/* Dashboard Routes */}
+                      <Route
+                        path="/tasks/:taskId"
+                        element={
                           <DashboardLayout>
-                            <ManagerZonePage />
+                            <TaskDetailsPage />
                           </DashboardLayout>
-                        </ProtectedManagerRoute>
-                      }
-                    />
-                  </Routes>
-                </BrowserRouter>
-              </OrganizationProvider>
-            </NotificationsProvider>
-          </AuthProvider>
-        </ToastProvider>
-      </SettingsProvider>
-    </ThemeProvider>
+                        }
+                      />
+
+                      <Route
+                        path="/dashboard"
+                        element={
+                          <DashboardLayout>
+                            <MainDashboardPage />
+                          </DashboardLayout>
+                        }
+                      />
+
+                      {/* Messaging Route */}
+                      <Route
+                        path="/messages"
+                        element={
+                          <DashboardLayout>
+                            <MessagingPage />
+                          </DashboardLayout>
+                        }
+                      />
+
+                      {/* Settings Route */}
+                      <Route
+                        path="/settings"
+                        element={
+                          <DashboardLayout>
+                            <SettingsPage />
+                          </DashboardLayout>
+                        }
+                      />
+
+                      {/* Manager Zone Route */}
+                      <Route
+                        path="/manager"
+                        element={
+                          <ProtectedManagerRoute>
+                            <DashboardLayout>
+                              <ManagerZonePage />
+                            </DashboardLayout>
+                          </ProtectedManagerRoute>
+                        }
+                      />
+                    </Routes>
+                  </BrowserRouter>
+                </OrganizationProvider>
+              </NotificationsProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </SettingsProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

@@ -34,7 +34,7 @@ type ColumnId = 'pending' | 'in_progress' | 'done';
 export function OrganizationView() {
   const { currentOrganization, isManager } = useOrganization();
   const { user } = useAuth();
-  const { data, loading, error, refetch, setData } = useKanbanData(currentOrganization?.id);
+  const { data, loading, error, refetch, updateTaskStatus } = useKanbanData(currentOrganization?.id);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
@@ -54,7 +54,7 @@ export function OrganizationView() {
   // Listen for task creation events to refresh Kanban
   useEffect(() => {
     const unsubscribe = taskEvents.onTaskCreated(() => {
-      refetch(true); // Silent refetch
+      refetch(); // React Query handles background refetch
     });
     return unsubscribe;
   }, [refetch]);
@@ -77,7 +77,7 @@ export function OrganizationView() {
     setPermissionError(null);
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveTask(null);
 
@@ -139,51 +139,27 @@ export function OrganizationView() {
       return;
     }
 
-    // Optimistic update: move task in local state immediately
-    const previousData = { ...data };
-    const movedTask = { ...task, status: targetColumn };
-
-    setData({
-      ...data,
-      [currentColumn]: data[currentColumn].filter(t => t.id !== taskId),
-      [targetColumn]: [...data[targetColumn], movedTask],
-      totals: {
-        ...data.totals,
-        [currentColumn]: data.totals[currentColumn] - 1,
-        [targetColumn]: data.totals[targetColumn] + 1,
-      },
-    });
-
-    // Sync with backend, revert on failure
-    try {
-      await tasksApi.updateTask(taskId, { status: targetColumn });
-      const newData = await tasksApi.getKanbanData(currentOrganization!.id);
-
-      // Safety net: Check if the moved task is still present in the refetched data
-      const allNewTasks = [...(newData.todo || []), ...(newData.pending || []), ...newData.in_progress, ...newData.done];
-      const taskStillExists = allNewTasks.some(t => t.id === taskId);
-
-      if (!taskStillExists) {
-        // Task disappeared after refetch - this is a bug, log it and keep optimistic state
-        console.error('[OrganizationView] Task disappeared after move!', {
-          taskId,
-          taskTitle: task.title,
-          targetColumn,
-          refetchedData: newData
-        });
-        setPermissionError('Task may not have been saved correctly. Click refresh to reload.');
-        setTimeout(() => setPermissionError(null), 5000);
-        // Keep the optimistic state since the backend might have actually saved it
-        return;
-      }
-
-      setData(newData);
-    } catch (err) {
-      console.error('Failed to update task:', err);
-      setData(previousData);
-      setPermissionError('Failed to move task. Please try again.');
-      setTimeout(() => setPermissionError(null), 3000);
+    // Calculate insertion index based on drop position
+    let insertIndex: number | undefined;
+    if (!['pending', 'in_progress', 'done'].includes(overId)) {
+      // Dropped over a task - find its index in the target column
+      const targetTasks = targetColumn === 'pending' ? todoTasks
+        : targetColumn === 'in_progress' ? data.in_progress
+        : data.done;
+      insertIndex = targetTasks.findIndex(t => t.id === overId);
     }
+    // If dropped on column itself (empty area), insertIndex stays undefined → append to end
+
+    // Launch the pure optimistic mutation (React Query handles snapshot and instant UI)
+    updateTaskStatus.mutate(
+      { taskId, newStatus: targetColumn, insertIndex },
+      {
+        onError: () => {
+          setPermissionError('Failed to move task. Reverting cleanly.');
+          setTimeout(() => setPermissionError(null), 3000);
+        },
+      }
+    );
   };
 
   const handleClearDone = () => {
@@ -206,22 +182,12 @@ export function OrganizationView() {
     try {
       const result = await tasksApi.archiveAllDone(currentOrganization.id);
 
-      // Optimistic update: clear done tasks from local state
-      setData({
-        ...data,
-        done: [],
-        totals: {
-          ...data.totals,
-          done: 0,
-        },
-      });
-
       // Show success message
       setPermissionError(`✓ Archived ${result.archived} task${result.archived > 1 ? 's' : ''} successfully`);
       setTimeout(() => setPermissionError(null), 3000);
 
-      // Refetch to ensure consistency
-      setTimeout(() => refetch(true), 1000);
+      // Refetch to sync with server state (React Query cache invalidation)
+      await refetch();
     } catch (err) {
       console.error('Failed to archive done tasks:', err);
       setPermissionError('Failed to archive tasks. Please try again.');
