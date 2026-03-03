@@ -2314,9 +2314,10 @@ export class TasksService {
   }
 
   /**
-   * Get real historical CFD data from daily_metrics table.
+   * Get real historical CFD data using PostgreSQL analytical query with date_trunc.
+   * Delegates time bucketing to the database engine for O(1) memory complexity.
    * @param organizationId - Organization to query
-   * @param range - '30d' | '90d' | 'all'
+   * @param range - '7d' | '30d' | '90d' | 'all'
    */
   async getDailyMetrics(organizationId: string, range: string): Promise<Array<{
     date: string;
@@ -2324,115 +2325,64 @@ export class TasksService {
     in_progress: number;
     todo: number;
   }>> {
-    // ═══════════════════════════════════════════════════════════════════════════
-    // EVENT SOURCING IMPLEMENTATION
-    // Reconstructs CFD data from task_history events for perfect historical accuracy
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    // Step 1: Calculate date range
     const endDate = new Date();
-    endDate.setHours(23, 59, 59, 999); // End of today
+    endDate.setHours(23, 59, 59, 999);
 
-    let startDate: Date;
-    let daysAgo: number | null = null;
-
+    let daysAgo = 30; // Default
     if (range === '7d') daysAgo = 7;
     else if (range === '30d') daysAgo = 30;
     else if (range === '90d') daysAgo = 90;
 
-    if (daysAgo !== null) {
-      startDate = new Date(endDate);
-      startDate.setDate(startDate.getDate() - daysAgo);
-      startDate.setHours(0, 0, 0, 0);
-    } else {
-      // 'all' → find oldest task_history event
+    // Calculate start date
+    let startDate: Date;
+    if (range === 'all') {
       const oldest = await this.prisma.task_history.findFirst({
-        where: {
-          tasks: { organization_id: organizationId },
-        },
+        where: { organization_id: organizationId },
         orderBy: { changed_at: 'asc' },
       });
-      if (!oldest || !oldest.changed_at) return [];
-      startDate = new Date(oldest.changed_at);
-      startDate.setHours(0, 0, 0, 0);
+      startDate = oldest?.changed_at
+        ? new Date(oldest.changed_at)
+        : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else {
+      startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - daysAgo);
     }
+    startDate.setHours(0, 0, 0, 0);
 
-    // Step 2: Fetch ALL task_history events for this organization (small payload)
-    const allEvents = await this.prisma.task_history.findMany({
-      where: {
-        tasks: { organization_id: organizationId },
-      },
-      orderBy: { changed_at: 'asc' },
-      select: {
-        task_id: true,
-        new_status: true,
-        changed_at: true,
-      },
-    });
-
-    if (allEvents.length === 0) return [];
-
-    // Step 3: Build per-task event timeline (sorted by changed_at)
-    const taskEvents = new Map<string, Array<{ status: string; changedAt: Date }>>();
-    for (const event of allEvents) {
-      if (!event.changed_at) continue;
-      const events = taskEvents.get(event.task_id) || [];
-      events.push({ status: event.new_status, changedAt: new Date(event.changed_at) });
-      taskEvents.set(event.task_id, events);
-    }
-
-    // Step 4: For each day in range, compute snapshot by finding last event before end of day
-    const result: Array<{ date: string; done: number; in_progress: number; todo: number }> = [];
-    const currentDate = new Date(startDate);
-
-    while (currentDate <= endDate) {
-      const endOfDay = new Date(currentDate);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      let todoCount = 0;
-      let inProgressCount = 0;
-      let doneCount = 0;
-
-      // For each task, find its status at end of this day
-      for (const [, events] of taskEvents) {
-        // Find the last event at or before endOfDay
-        let lastStatus: string | null = null;
-        for (const event of events) {
-          if (event.changedAt <= endOfDay) {
-            lastStatus = event.status;
-          } else {
-            break; // Events are sorted, so we can stop
-          }
-        }
-
-        // If task didn't exist yet on this day, skip it
-        if (lastStatus === null) continue;
-
-        // Count by status (map pending_validation to review for CFD)
-        switch (lastStatus) {
-          case 'todo':
-          case 'pending_validation': // Treat as backlog for CFD purposes
-            todoCount++;
-            break;
-          case 'in_progress':
-            inProgressCount++;
-            break;
-          case 'done':
-            doneCount++;
-            break;
-          // Archived/rejected tasks are excluded from CFD
-        }
-      }
-
-      result.push({
-        date: currentDate.toISOString().split('T')[0],
-        todo: todoCount,
-        in_progress: inProgressCount,
-        done: doneCount,
-      });
-
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // POSTGRESQL ANALYTICAL QUERY - Time Bucketing delegated to DB engine
+    // Uses RECURSIVE CTE for date series + window functions for last status per day
+    // ═══════════════════════════════════════════════════════════════════════════
+    const result = await this.prisma.$queryRaw<
+      Array<{ date: string; todo: number; in_progress: number; done: number }>
+    >`
+      WITH RECURSIVE date_series AS (
+        SELECT date_trunc('day', ${startDate}::timestamp) as date
+        UNION ALL
+        SELECT date + interval '1 day'
+        FROM date_series
+        WHERE date < date_trunc('day', ${endDate}::timestamp)
+      ),
+      daily_state AS (
+        SELECT
+          d.date,
+          th.task_id,
+          th.new_status,
+          ROW_NUMBER() OVER(PARTITION BY d.date, th.task_id ORDER BY th.changed_at DESC) as rn
+        FROM date_series d
+        JOIN task_history th ON date_trunc('day', th.changed_at) <= d.date
+        WHERE th.organization_id = ${organizationId}::uuid
+      )
+      SELECT
+        to_char(date, 'YYYY-MM-DD') as date,
+        COALESCE(SUM(CASE WHEN new_status IN ('todo', 'pending', 'pending_validation') THEN 1 ELSE 0 END)::int, 0) as todo,
+        COALESCE(SUM(CASE WHEN new_status = 'in_progress' THEN 1 ELSE 0 END)::int, 0) as in_progress,
+        COALESCE(SUM(CASE WHEN new_status = 'done' THEN 1 ELSE 0 END)::int, 0) as done
+      FROM daily_state
+      WHERE rn = 1
+      GROUP BY date
+      ORDER BY date ASC;
+    `;
 
     return result;
   }
