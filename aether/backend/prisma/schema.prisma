@@ -220,6 +220,7 @@ model messages {
   metadata        Json? // Stores { taskId, taskTitle } for comment notifications
   created_at      DateTime? @default(now()) @db.Timestamp(6)
   read_at         DateTime? @db.Timestamp(6)
+  sentiment_score Float? // Heuristic score (-1.0 to 1.0) from Python NLP microservice
 
   sender        users                 @relation("messages_sender", fields: [sender_id], references: [id], onDelete: Cascade)
   receiver      users                 @relation("messages_receiver", fields: [receiver_id], references: [id], onDelete: Cascade)

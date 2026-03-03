@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { SendMessageDto, AttachmentDto } from './dto/send-message.dto';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -9,6 +9,8 @@ const BUCKET_NAME = 'chat-uploads';
 
 @Injectable()
 export class MessagesService {
+  private readonly logger = new Logger(MessagesService.name);
+
   constructor(
     private prisma: PrismaService,
     private supabase: SupabaseService,
@@ -201,6 +203,16 @@ export class MessagesService {
       },
     });
 
+    // Fire-and-forget: dispatch to Python NLP microservice for sentiment analysis
+    // No await - runs asynchronously without blocking the response (event-driven simulation)
+    if (message.content) {
+      fetch('http://localhost:8000/analyze_sentiment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_id: message.id, text: message.content }),
+      }).catch((e) => this.logger.warn(`Heuristics Microservice Offline: ${e.message}`));
+    }
+
     // Parse @mentions from content and track who was mentioned
     const mentionedUserIds = new Set<string>();
     if (dto.content) {
@@ -314,6 +326,15 @@ export class MessagesService {
         },
       },
     });
+
+    // Fire-and-forget: sentiment analysis for comment notifications
+    if (message.content) {
+      fetch('http://localhost:8000/analyze_sentiment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_id: message.id, text: message.content }),
+      }).catch((e) => this.logger.warn(`Heuristics Microservice Offline: ${e.message}`));
+    }
 
     return message;
   }
