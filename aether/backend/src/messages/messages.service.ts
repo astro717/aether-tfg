@@ -166,6 +166,7 @@ export class MessagesService {
       data: {
         sender_id: senderId,
         receiver_id: dto.receiverId,
+        organization_id: dto.organizationId,
         content: dto.content || null,
         attachments: dto.attachments && dto.attachments.length > 0
           ? {
@@ -278,6 +279,7 @@ export class MessagesService {
     content: string,
     taskId: string,
     taskTitle: string,
+    organizationId: string,
   ) {
     // Don't send notification if commenter is the assignee
     if (senderId === receiverId) {
@@ -288,6 +290,7 @@ export class MessagesService {
       data: {
         sender_id: senderId,
         receiver_id: receiverId,
+        organization_id: organizationId,
         content,
         type: 'comment_notification',
         metadata: { taskId, taskTitle },

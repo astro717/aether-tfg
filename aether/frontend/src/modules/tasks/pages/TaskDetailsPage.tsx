@@ -15,6 +15,7 @@ import {
 import { tasksApi, type Task, type TaskComment, type CommitDiff } from "../../dashboard/api/tasksApi";
 import { UserAvatar } from "../../../components/ui/UserAvatar";
 import { useAuth } from "../../auth/context/AuthContext";
+import { useOrganization } from "../../organization/context/OrganizationContext";
 import { formatTimeAgo } from "../../../lib/utils";
 import { CommentModal } from "../components/CommentModal";
 import { LinkCommitModal } from "../components/LinkCommitModal";
@@ -27,6 +28,7 @@ import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
 
 export function TaskDetailsPage() {
     const { user } = useAuth();
+    const { currentOrganization } = useOrganization();
     const navigate = useNavigate();
     const { taskId } = useParams<{ taskId: string }>();
     const [task, setTask] = useState<Task | null>(null);
@@ -172,8 +174,8 @@ export function TaskDetailsPage() {
     }, [selectedCommitSha]);
 
     const handleAddComment = async (content: string) => {
-        if (!taskId) return;
-        const newComment = await tasksApi.addComment(taskId, content);
+        if (!taskId || !currentOrganization) return;
+        const newComment = await tasksApi.addComment(taskId, content, currentOrganization.id);
         setComments((prev) => [...prev, newComment]);
     };
 

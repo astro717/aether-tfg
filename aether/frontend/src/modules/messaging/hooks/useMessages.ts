@@ -14,7 +14,7 @@ export interface UseMessagesResult {
   refetch: () => Promise<void>;
 }
 
-export function useMessages(userId: string | null): UseMessagesResult {
+export function useMessages(userId: string | null, organizationId: string | null): UseMessagesResult {
   const [messages, setMessages] = useState<Message[]>([]);
   const [otherUser, setOtherUser] = useState<MessageUser | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,7 +125,7 @@ export function useMessages(userId: string | null): UseMessagesResult {
   );
 
   const sendMessage = useCallback(async (content: string, currentUserId: string, attachments?: UploadedFile[]) => {
-    if (!userId) return;
+    if (!userId || !organizationId) return;
 
     // Must have either content or attachments
     const hasContent = content.trim().length > 0;
@@ -165,6 +165,7 @@ export function useMessages(userId: string | null): UseMessagesResult {
       // Send to server
       const serverMessage = await messagingApi.sendMessage({
         receiverId: userId,
+        organizationId,
         content: hasContent ? content.trim() : undefined,
         attachments: attachments?.map(att => ({
           filePath: att.filePath,
@@ -186,7 +187,7 @@ export function useMessages(userId: string | null): UseMessagesResult {
       setMessages(prev => prev.filter(msg => msg.id !== optimisticId));
       throw err;
     }
-  }, [userId]);
+  }, [userId, organizationId]);
 
   return {
     messages,

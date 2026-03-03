@@ -23,6 +23,10 @@ export class SendMessageDto {
   @IsNotEmpty()
   receiverId!: string;
 
+  @IsUUID()
+  @IsNotEmpty()
+  organizationId!: string;
+
   @IsString()
   @IsOptional()
   content?: string;

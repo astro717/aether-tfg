@@ -52,6 +52,7 @@ export interface MessagesResponse {
 
 export interface SendMessagePayload {
   receiverId: string;
+  organizationId: string;  // Required for B2B tenant isolation
   content?: string;
   attachments?: {
     filePath: string;

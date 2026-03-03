@@ -68,18 +68,20 @@ model commit_files {
 }
 
 model commits {
-  sha           String         @id
-  repo_id       String?        @db.Uuid
-  author_login  String?
-  committed_at  DateTime?      @db.Timestamp(6)
-  message       String?
-  added_lines   Int?
-  deleted_lines Int?
-  ai_reports    ai_reports[]
-  commit_files  commit_files[]
-  repos         repos?         @relation(fields: [repo_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  pr_commits    pr_commits[]
-  task_commits  task_commits[]
+  sha             String         @id
+  repo_id         String?        @db.Uuid
+  organization_id String?        @db.Uuid
+  author_login    String?
+  committed_at    DateTime?      @db.Timestamp(6)
+  message         String?
+  added_lines     Int?
+  deleted_lines   Int?
+  ai_reports      ai_reports[]
+  commit_files    commit_files[]
+  repos           repos?         @relation(fields: [repo_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organizations   organizations? @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  pr_commits      pr_commits[]
+  task_commits    task_commits[]
 }
 
 model organizations {
@@ -92,19 +94,23 @@ model organizations {
   user_organizations user_organizations[]
   ai_reports         ai_reports[]
   daily_metrics      daily_metrics[]
+  task_comments      task_comments[]
+  task_history       task_history[]
+  commits            commits[]
+  messages           messages[]
 }
 
 model daily_metrics {
-  id                String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  organization_id   String        @db.Uuid
-  date              DateTime      @db.Date
-  todo_count        Int           @default(0)
-  in_progress_count Int           @default(0)
-  review_count      Int           @default(0)
-  done_count        Int           @default(0)
-  total_count       Int           @default(0)
+  id                String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  organization_id   String   @db.Uuid
+  date              DateTime @db.Date
+  todo_count        Int      @default(0)
+  in_progress_count Int      @default(0)
+  review_count      Int      @default(0)
+  done_count        Int      @default(0)
+  total_count       Int      @default(0)
 
-  organizations     organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  organizations organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@unique([organization_id, date])
   @@index([date])
@@ -171,14 +177,16 @@ model tasks {
 }
 
 model task_comments {
-  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  task_id    String    @db.Uuid
-  user_id    String    @db.Uuid
-  content    String
-  created_at DateTime? @default(now()) @db.Timestamp(6)
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  task_id         String    @db.Uuid
+  user_id         String    @db.Uuid
+  organization_id String    @db.Uuid
+  content         String
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
 
-  tasks tasks @relation(fields: [task_id], references: [id], onDelete: Cascade)
-  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tasks         tasks         @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  users         users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  organizations organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model task_commits {
@@ -203,18 +211,20 @@ model user_organizations {
 }
 
 model messages {
-  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  sender_id   String    @db.Uuid
-  receiver_id String    @db.Uuid
-  content     String?
-  type        String    @default("text") // 'text' | 'comment_notification'
-  metadata    Json?     // Stores { taskId, taskTitle } for comment notifications
-  created_at  DateTime? @default(now()) @db.Timestamp(6)
-  read_at     DateTime? @db.Timestamp(6)
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sender_id       String    @db.Uuid
+  receiver_id     String    @db.Uuid
+  organization_id String    @db.Uuid
+  content         String?
+  type            String    @default("text") // 'text' | 'comment_notification'
+  metadata        Json? // Stores { taskId, taskTitle } for comment notifications
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  read_at         DateTime? @db.Timestamp(6)
 
-  sender      users                 @relation("messages_sender", fields: [sender_id], references: [id], onDelete: Cascade)
-  receiver    users                 @relation("messages_receiver", fields: [receiver_id], references: [id], onDelete: Cascade)
-  attachments message_attachments[]
+  sender        users                 @relation("messages_sender", fields: [sender_id], references: [id], onDelete: Cascade)
+  receiver      users                 @relation("messages_receiver", fields: [receiver_id], references: [id], onDelete: Cascade)
+  organizations organizations         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  attachments   message_attachments[]
 
   @@index([sender_id])
   @@index([receiver_id])
@@ -224,11 +234,11 @@ model messages {
 model message_attachments {
   id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   message_id String    @db.Uuid
-  file_path  String    // Path in Supabase Storage
-  file_url   String    // Public URL
-  file_name  String    // Original filename
+  file_path  String // Path in Supabase Storage
+  file_url   String // Public URL
+  file_name  String // Original filename
   file_size  Int
-  file_type  String    // MIME type
+  file_type  String // MIME type
   created_at DateTime? @default(now()) @db.Timestamp(6)
 
   message messages @relation(fields: [message_id], references: [id], onDelete: Cascade)
@@ -240,11 +250,11 @@ model notifications {
   id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   user_id     String    @db.Uuid // Recipient
   actor_id    String?   @db.Uuid // Who triggered the notification (optional for system notifications)
-  type        String    // 'TASK_ASSIGNED', 'TASK_COMMENT', 'MENTION', 'MESSAGE'
+  type        String // 'TASK_ASSIGNED', 'TASK_COMMENT', 'MENTION', 'MESSAGE'
   title       String
   content     String?
   entity_id   String?   @db.Uuid // ID of related task/message
-  entity_type String?   // 'task', 'message'
+  entity_type String? // 'task', 'message'
   read_at     DateTime? @db.Timestamp(6)
   created_at  DateTime  @default(now()) @db.Timestamp(6)
 
@@ -259,13 +269,15 @@ model notifications {
 model task_history {
   id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   task_id         String    @db.Uuid
-  previous_status String?   // Null means task was just created
+  organization_id String    @db.Uuid
+  previous_status String? // Null means task was just created
   new_status      String
   changed_by      String?   @db.Uuid
   changed_at      DateTime? @default(now()) @db.Timestamp(6)
 
-  tasks           tasks     @relation(fields: [task_id], references: [id], onDelete: Cascade)
-  users           users?    @relation(fields: [changed_by], references: [id], onDelete: SetNull)
+  tasks         tasks         @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  users         users?        @relation(fields: [changed_by], references: [id], onDelete: SetNull)
+  organizations organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@index([task_id])
   @@index([changed_at])

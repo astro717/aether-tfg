@@ -43,6 +43,7 @@ interface TaskWithTimestamps {
   id: string;
   status: string | null;
   assignee_id: string | null;
+  organization_id: string | null;
   created_at: Date | null;
   updated_at: Date;
 }
@@ -57,6 +58,7 @@ async function main() {
       id: true,
       status: true,
       assignee_id: true,
+      organization_id: true,
       created_at: true,
       updated_at: true,
     },
@@ -79,6 +81,12 @@ async function main() {
       continue;
     }
 
+    // Skip tasks without organization_id (B2B requirement)
+    if (!task.organization_id) {
+      skipped++;
+      continue;
+    }
+
     const createdAt = task.created_at ?? new Date();
     const currentStatus = task.status ?? 'todo';
 
@@ -86,6 +94,7 @@ async function main() {
     await prisma.task_history.create({
       data: {
         task_id: task.id,
+        organization_id: task.organization_id,
         previous_status: null,
         new_status: 'todo',
         changed_by: task.assignee_id,
@@ -99,6 +108,7 @@ async function main() {
       await prisma.task_history.create({
         data: {
           task_id: task.id,
+          organization_id: task.organization_id,
           previous_status: 'todo',
           new_status: currentStatus,
           changed_by: task.assignee_id,

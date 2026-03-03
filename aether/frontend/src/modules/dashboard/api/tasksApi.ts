@@ -221,13 +221,13 @@ class TasksApi {
     return response.json();
   }
 
-  async addComment(taskId: string, content: string): Promise<TaskComment> {
+  async addComment(taskId: string, content: string, organizationId: string): Promise<TaskComment> {
     const response = await fetch(
       `${API_BASE_URL}/tasks/${taskId}/comments`,
       {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, organizationId }),
       }
     );
     if (!response.ok) throw new Error('Failed to add comment');

@@ -301,6 +301,7 @@ export class TasksService {
     await this.prisma.task_history.create({
       data: {
         task_id: task.id,
+        organization_id: dto.organization_id,
         previous_status: null,
         new_status: initialStatus,
         changed_by: creator.id,
@@ -439,10 +440,11 @@ export class TasksService {
     });
 
     // Record status change in task_history if status changed (Event Sourcing)
-    if (dto.status && dto.status !== oldTask.status) {
+    if (dto.status && dto.status !== oldTask.status && oldTask.organization_id) {
       await this.prisma.task_history.create({
         data: {
           task_id: id,
+          organization_id: oldTask.organization_id,
           previous_status: oldTask.status,
           new_status: dto.status,
           changed_by: userId,
@@ -495,10 +497,11 @@ export class TasksService {
     });
 
     // Record status change in task_history if status changed (Event Sourcing)
-    if (newStatus && newStatus !== task.status) {
+    if (newStatus && newStatus !== task.status && task.organization_id) {
       await this.prisma.task_history.create({
         data: {
           task_id: id,
+          organization_id: task.organization_id,
           previous_status: task.status,
           new_status: newStatus,
           changed_by: managerId,
@@ -948,10 +951,11 @@ export class TasksService {
     });
 
     // Record status change in task_history if status changed (Event Sourcing)
-    if (dto.status && dto.status !== task.status) {
+    if (dto.status && dto.status !== task.status && task.organization_id) {
       await this.prisma.task_history.create({
         data: {
           task_id: id,
+          organization_id: task.organization_id,
           previous_status: task.status,
           new_status: dto.status,
           changed_by: user.id,
@@ -974,6 +978,7 @@ export class TasksService {
     // Verify task exists and get assignee info
     const task = await this.prisma.tasks.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundException('Task not found');
+    if (!task.organization_id) throw new BadRequestException('Task has no organization');
 
     // Get commenter info
     const commenter = await this.prisma.users.findUnique({
@@ -986,6 +991,7 @@ export class TasksService {
       data: {
         task_id: taskId,
         user_id: userId,
+        organization_id: task.organization_id,
         content,
       },
       include: {
@@ -1092,6 +1098,7 @@ export class TasksService {
         content,
         taskId,
         task.title,
+        task.organization_id,
       );
     }
 

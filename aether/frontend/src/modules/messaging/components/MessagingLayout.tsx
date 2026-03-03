@@ -5,6 +5,7 @@ import { UserSearchModal } from "./UserSearchModal";
 import { useConversations } from "../hooks/useConversations";
 import { useMessages } from "../hooks/useMessages";
 import { useAuth } from "@/modules/auth/context/AuthContext";
+import { useOrganization } from "@/modules/organization/context/OrganizationContext";
 import { messagingApi, type MessageUser } from "../api/messagingApi";
 import type { OrganizationMember } from "@/modules/organization/api/organizationApi";
 import { type UploadedFile } from "../../../hooks/useFileUpload";
@@ -18,6 +19,7 @@ interface DraftRecipient {
 
 export function MessagingLayout() {
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isNewMessageModalOpen, setIsNewMessageModalOpen] = useState(false);
   const [draftRecipient, setDraftRecipient] = useState<DraftRecipient | null>(null);
@@ -38,7 +40,7 @@ export function MessagingLayout() {
     loading: messagesLoading,
     error: messagesError,
     sendMessage,
-  } = useMessages(activeUserId);
+  } = useMessages(activeUserId, currentOrganization?.id || null);
 
   // Get list of user IDs that already have conversations
   const existingConversationUserIds = useMemo(
@@ -79,12 +81,13 @@ export function MessagingLayout() {
 
   // Handle sending a message (both for existing and draft conversations)
   const handleSendMessage = useCallback(async (content: string, attachments?: UploadedFile[]) => {
-    if (!user?.id) return;
+    if (!user?.id || !currentOrganization) return;
 
     if (draftRecipient) {
       // Sending first message to a new recipient
       await messagingApi.sendMessage({
         receiverId: draftRecipient.id,
+        organizationId: currentOrganization.id,
         content: content.trim() || undefined,
         attachments: attachments?.map(att => ({
           filePath: att.filePath,
@@ -107,7 +110,7 @@ export function MessagingLayout() {
       await sendMessage(content, user.id, attachments);
       refetchConversations();
     }
-  }, [user?.id, draftRecipient, sendMessage, refetchConversations]);
+  }, [user?.id, currentOrganization, draftRecipient, sendMessage, refetchConversations]);
 
   // Determine the displayed user and messages based on draft state
   const displayedUser: MessageUser | null = draftRecipient || otherUser;
