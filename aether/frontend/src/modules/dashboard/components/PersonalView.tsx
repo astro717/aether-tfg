@@ -508,6 +508,7 @@ export function PersonalView() {
             isOpen={isCalendarOpen}
             onClose={() => setIsCalendarOpen(false)}
             tasks={tasks}
+            viewMode="personal"
         />
     </>
     );

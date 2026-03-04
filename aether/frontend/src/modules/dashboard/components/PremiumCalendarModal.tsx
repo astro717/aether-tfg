@@ -1,14 +1,46 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronLeft, ChevronRight, AlertCircle, Clock } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, AlertCircle, Clock, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Task } from '../api/tasksApi';
 import { getAvatarColorClasses } from '../../../lib/avatarColors';
+import { generateICS, downloadICSFile, filterTasksForMonth, generateICSFilename } from '../../../utils/icsExport';
+import { useToast } from '../../../components/ui/Toast';
+
+// Micro Avatar for calendar cells - FAANG-level compact design
+function MicroAvatar({
+    username,
+    avatarColor,
+    isOverdue = false
+}: {
+    username?: string | null;
+    avatarColor?: string | null;
+    isOverdue?: boolean;
+}) {
+    const colors = getAvatarColorClasses(avatarColor, username || undefined);
+    const initial = username?.charAt(0).toUpperCase() || '?';
+
+    return (
+        <div
+            className={`
+                w-5 h-5 rounded-full flex items-center justify-center
+                text-[8px] font-bold
+                ${colors.bg} ${colors.text}
+                ring-[1.5px] ring-white dark:ring-zinc-900
+                ${isOverdue ? 'ring-2 ring-red-500/70 ring-offset-1 ring-offset-white dark:ring-offset-zinc-900' : ''}
+                shadow-sm
+            `}
+        >
+            {initial}
+        </div>
+    );
+}
 
 interface PremiumCalendarModalProps {
     isOpen: boolean;
     onClose: () => void;
     tasks: Task[];
+    viewMode: 'org' | 'personal';
 }
 
 // --- Calendar Helpers ---
@@ -45,23 +77,6 @@ function getTasksForDay(tasks: Task[], day: Date): Task[] {
     });
 }
 
-function isOverdue(dueDate: string): boolean {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(dueDate);
-    due.setHours(0, 0, 0, 0);
-    return due < today;
-}
-
-function isDueSoon(dueDate: string): boolean {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(dueDate);
-    due.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return diffDays >= 0 && diffDays <= 2;
-}
-
 function formatTime(dateStr: string): string | null {
     const date = new Date(dateStr);
     const hours = date.getHours();
@@ -73,13 +88,71 @@ function formatTime(dateStr: string): string | null {
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendarModalProps) {
+// Aether color palette for assignees (stable, derived from ID)
+const AETHER_ASSIGNEE_PALETTE = [
+    { bg: 'bg-blue-500', shadow: 'shadow-blue-500/60' },
+    { bg: 'bg-violet-500', shadow: 'shadow-violet-500/60' },
+    { bg: 'bg-pink-500', shadow: 'shadow-pink-500/60' },
+    { bg: 'bg-amber-500', shadow: 'shadow-amber-500/60' },
+    { bg: 'bg-emerald-500', shadow: 'shadow-emerald-500/60' },
+    { bg: 'bg-cyan-500', shadow: 'shadow-cyan-500/60' },
+    { bg: 'bg-rose-500', shadow: 'shadow-rose-500/60' },
+    { bg: 'bg-indigo-500', shadow: 'shadow-indigo-500/60' },
+];
+
+// Status-based colors for Personal View
+const STATUS_COLORS: Record<string, { bg: string; shadow: string }> = {
+    todo: { bg: 'bg-gray-400 dark:bg-gray-500', shadow: 'shadow-gray-400/40' },
+    pending: { bg: 'bg-gray-400 dark:bg-gray-500', shadow: 'shadow-gray-400/40' },
+    in_progress: { bg: 'bg-blue-500', shadow: 'shadow-blue-500/60' },
+    done: { bg: 'bg-green-500 dark:bg-green-600/70', shadow: 'shadow-green-500/40' },
+};
+
+// Hash a string to get a consistent index
+function hashStringToIndex(str: string, max: number): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash) % max;
+}
+
+// Check if a task is overdue (past due date and not done)
+function isOverdue(task: Task): boolean {
+    if (!task.due_date || task.status === 'done') return false;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const dueDate = new Date(task.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate < now;
+}
+
+// Get color for a task based on viewMode
+function getTaskDotColor(task: Task, viewMode: 'org' | 'personal'): { bg: string; shadow: string } {
+    if (viewMode === 'org') {
+        // Organization view: color by assignee
+        const assigneeId = task.assignee_id || task.id; // fallback to task id if no assignee
+        const colorIndex = hashStringToIndex(assigneeId, AETHER_ASSIGNEE_PALETTE.length);
+        return AETHER_ASSIGNEE_PALETTE[colorIndex];
+    } else {
+        // Personal view: color by status (exclude pending_validation from special treatment)
+        if (task.status === 'pending_validation') {
+            return STATUS_COLORS.todo; // treat as gray/silent
+        }
+        return STATUS_COLORS[task.status] || STATUS_COLORS.todo;
+    }
+}
+
+export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: PremiumCalendarModalProps) {
     const [isVisible, setIsVisible] = useState(false);
     const [selectedDay, setSelectedDay] = useState<Date | null>(null);
     const [currentMonth, setCurrentMonth] = useState(() => {
         const now = new Date();
         return { year: now.getFullYear(), month: now.getMonth() };
     });
+    const [showExportDialog, setShowExportDialog] = useState(false);
+    const { showToast } = useToast();
 
     // Handle visibility animation
     useEffect(() => {
@@ -131,6 +204,30 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
         setSelectedDay(null);
     }, []);
 
+    // Tasks for export (current month, with due dates, excluding done)
+    const exportableTasks = useMemo(() => {
+        return filterTasksForMonth(tasks, currentMonth.year, currentMonth.month)
+            .filter(t => t.status !== 'done');
+    }, [tasks, currentMonth]);
+
+    // Handle export confirmation
+    const handleExportConfirm = useCallback(() => {
+        const icsContent = generateICS(exportableTasks);
+        if (!icsContent) {
+            showToast('No tasks with deadlines to export', 'warning');
+            setShowExportDialog(false);
+            return;
+        }
+        const filename = generateICSFilename(currentMonth.year, currentMonth.month);
+        downloadICSFile(icsContent, filename);
+        setShowExportDialog(false);
+        showToast({
+            type: 'success',
+            title: 'Calendar exported',
+            message: `${exportableTasks.length} deadline${exportableTasks.length !== 1 ? 's' : ''} exported successfully`,
+        });
+    }, [exportableTasks, currentMonth, showToast]);
+
     // Calendar data
     const monthData = useMemo(() => {
         return getMonthData(currentMonth.year, currentMonth.month);
@@ -142,15 +239,17 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
     }, [currentMonth]);
 
     // Tasks for selected day, sorted by time
+    // Personal view excludes pending_validation (only confirmed milestones)
     const selectedDayTasks = useMemo(() => {
         if (!selectedDay) return [];
         return getTasksForDay(tasks, selectedDay)
             .filter(t => t.status !== 'done')
+            .filter(t => viewMode === 'org' || t.status !== 'pending_validation')
             .sort((a, b) => {
                 if (!a.due_date || !b.due_date) return 0;
                 return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
             });
-    }, [selectedDay, tasks]);
+    }, [selectedDay, tasks, viewMode]);
 
     const today = useMemo(() => {
         const d = new Date();
@@ -218,9 +317,25 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                                     >
                                         <ChevronRight size={20} className="text-gray-600 dark:text-gray-400" />
                                     </button>
+
+                                    {/* Export Button */}
+                                    <div className="relative group ml-2">
+                                        <button
+                                            onClick={() => setShowExportDialog(true)}
+                                            disabled={exportableTasks.length === 0}
+                                            className="p-2 rounded-full hover:bg-violet-100 dark:hover:bg-violet-500/20 text-gray-500 hover:text-violet-600 dark:text-gray-400 dark:hover:text-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                            aria-label="Export to Calendar"
+                                        >
+                                            <Download size={20} />
+                                        </button>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-gray-900 dark:bg-zinc-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                            Export to Calendar
+                                        </div>
+                                    </div>
+
                                     <button
                                         onClick={onClose}
-                                        className="ml-4 p-2 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        className="ml-2 p-2 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
                                         aria-label="Close"
                                     >
                                         <X size={20} />
@@ -249,11 +364,12 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
 
                                 {/* Day cells */}
                                 {monthData.days.map(day => {
-                                    const dayTasks = getTasksForDay(tasks, day).filter(t => t.status !== 'done');
+                                    // Personal view excludes pending_validation (only confirmed milestones)
+                                    const dayTasks = getTasksForDay(tasks, day)
+                                        .filter(t => t.status !== 'done')
+                                        .filter(t => viewMode === 'org' || t.status !== 'pending_validation');
                                     const isToday = isSameDay(day, today);
                                     const isSelected = selectedDay && isSameDay(day, selectedDay);
-                                    const hasOverdue = dayTasks.some(t => t.due_date && isOverdue(t.due_date));
-                                    const hasDueSoon = dayTasks.some(t => t.due_date && isDueSoon(t.due_date) && !isOverdue(t.due_date));
                                     const isWeekend = day.getDay() === 0 || day.getDay() === 6;
 
                                     return (
@@ -289,24 +405,86 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                                                 {day.getDate()}
                                             </span>
 
-                                            {/* Task indicators */}
-                                            {dayTasks.length > 0 && (
+                                            {/* Task indicators - Avatars (org) or Status Dots (personal) */}
+                                            {dayTasks.length > 0 && viewMode === 'org' && (
+                                                // ORG VIEW: Smart Avatar Grid (FAANG-level layout)
+                                                // 1-2 tasks: horizontal stack | 3-4: 2x2 grid | 5+: grid with +N overlay
+                                                <div className="relative mt-1.5 group/avatars">
+                                                    {dayTasks.length <= 2 ? (
+                                                        // Horizontal stack for 1-2 avatars
+                                                        <div className="flex items-center -space-x-1">
+                                                            {dayTasks.map((task, i) => (
+                                                                <motion.div
+                                                                    key={task.id}
+                                                                    initial={{ scale: 0 }}
+                                                                    animate={{ scale: 1 }}
+                                                                    transition={{ delay: i * 0.04 }}
+                                                                    style={{ zIndex: 2 - i }}
+                                                                >
+                                                                    <MicroAvatar
+                                                                        username={task.users_tasks_assignee_idTousers?.username}
+                                                                        avatarColor={task.users_tasks_assignee_idTousers?.avatar_color}
+                                                                        isOverdue={isOverdue(task)}
+                                                                    />
+                                                                </motion.div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        // 2x2 Grid for 3+ avatars (Linear/Notion style)
+                                                        <div className="grid grid-cols-2 gap-0.5 w-fit">
+                                                            {dayTasks.slice(0, dayTasks.length > 4 ? 3 : 4).map((task, i) => (
+                                                                <motion.div
+                                                                    key={task.id}
+                                                                    initial={{ scale: 0 }}
+                                                                    animate={{ scale: 1 }}
+                                                                    transition={{ delay: i * 0.03 }}
+                                                                >
+                                                                    <MicroAvatar
+                                                                        username={task.users_tasks_assignee_idTousers?.username}
+                                                                        avatarColor={task.users_tasks_assignee_idTousers?.avatar_color}
+                                                                        isOverdue={isOverdue(task)}
+                                                                    />
+                                                                </motion.div>
+                                                            ))}
+                                                            {dayTasks.length > 4 && (
+                                                                <motion.div
+                                                                    initial={{ scale: 0 }}
+                                                                    animate={{ scale: 1 }}
+                                                                    transition={{ delay: 0.12 }}
+                                                                    className="w-5 h-5 rounded-full bg-gray-200 dark:bg-zinc-600 flex items-center justify-center text-[7px] font-bold text-gray-600 dark:text-gray-300 ring-[1.5px] ring-white dark:ring-zinc-900"
+                                                                >
+                                                                    +{dayTasks.length - 3}
+                                                                </motion.div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {/* Hover tooltip showing all task titles */}
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-gray-900/95 dark:bg-zinc-800 backdrop-blur-sm text-white text-[10px] rounded-xl whitespace-nowrap opacity-0 group-hover/avatars:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl max-w-[180px]">
+                                                        {dayTasks.slice(0, 5).map((t, i) => (
+                                                            <div key={t.id} className={`truncate ${i > 0 ? 'mt-0.5' : ''} ${isOverdue(t) ? 'text-red-300' : ''}`}>
+                                                                {t.users_tasks_assignee_idTousers?.username?.split(' ')[0] || '?'}: {t.title}
+                                                            </div>
+                                                        ))}
+                                                        {dayTasks.length > 5 && (
+                                                            <div className="mt-0.5 text-gray-400">+{dayTasks.length - 5} more...</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {dayTasks.length > 0 && viewMode === 'personal' && (
+                                                // PERSONAL VIEW: Status-colored dots
                                                 <div className="flex items-center gap-1 mt-2">
                                                     {dayTasks.slice(0, 3).map((task, i) => {
-                                                        const isTaskOverdue = task.due_date && isOverdue(task.due_date);
-                                                        const isTaskSoon = task.due_date && isDueSoon(task.due_date) && !isTaskOverdue;
+                                                        const dotColor = getTaskDotColor(task, viewMode);
+                                                        const taskIsOverdue = isOverdue(task);
 
                                                         return (
                                                             <motion.div
                                                                 key={task.id}
                                                                 className={`
-                                                                    w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-zinc-900
-                                                                    ${isTaskOverdue
-                                                                        ? 'bg-red-500 shadow-md shadow-red-500/60'
-                                                                        : isTaskSoon
-                                                                            ? 'bg-amber-500 shadow-md shadow-amber-500/60'
-                                                                            : 'bg-violet-500 shadow-md shadow-violet-500/40'
-                                                                    }
+                                                                    w-2.5 h-2.5 rounded-full
+                                                                    ${dotColor.bg} shadow-md ${dotColor.shadow}
+                                                                    ${taskIsOverdue ? 'ring-2 ring-red-500/60' : ''}
                                                                 `}
                                                                 initial={{ scale: 0 }}
                                                                 animate={{ scale: 1 }}
@@ -322,12 +500,9 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                                                 </div>
                                             )}
 
-                                            {/* Glow effect for urgent days */}
-                                            {hasOverdue && (
-                                                <div className="absolute inset-0 rounded-xl bg-red-500/10 dark:bg-red-500/20 pointer-events-none" />
-                                            )}
-                                            {!hasOverdue && hasDueSoon && (
-                                                <div className="absolute inset-0 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 pointer-events-none" />
+                                            {/* Ring of Fire - Glow effect for days with overdue tasks */}
+                                            {dayTasks.some(t => isOverdue(t)) && (
+                                                <div className="absolute inset-0 rounded-xl bg-red-500/10 dark:bg-red-500/20 ring-2 ring-red-500/60 pointer-events-none" />
                                             )}
                                         </motion.button>
                                     );
@@ -369,9 +544,9 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                                         ) : (
                                             <div className="space-y-3">
                                                 {selectedDayTasks.map((task, index) => {
-                                                    const isTaskOverdue = task.due_date && isOverdue(task.due_date);
-                                                    const isTaskSoon = task.due_date && isDueSoon(task.due_date) && !isTaskOverdue;
                                                     const taskTime = task.due_date ? formatTime(task.due_date) : null;
+                                                    const dotColor = getTaskDotColor(task, viewMode);
+                                                    const taskIsOverdue = isOverdue(task);
 
                                                     return (
                                                         <motion.div
@@ -385,25 +560,20 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                                                                 onClick={onClose}
                                                                 className={`
                                                                     block p-4 rounded-2xl transition-all duration-200
-                                                                    ${isTaskOverdue
-                                                                        ? 'bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 hover:bg-red-100 dark:hover:bg-red-500/20'
-                                                                        : isTaskSoon
-                                                                            ? 'bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/20'
-                                                                            : 'bg-white dark:bg-zinc-700/50 border border-gray-200 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700'
+                                                                    bg-gray-50 dark:bg-zinc-800/50 border hover:bg-gray-100 dark:hover:bg-zinc-800
+                                                                    ${taskIsOverdue
+                                                                        ? 'border-red-300 dark:border-red-500/40'
+                                                                        : 'border-gray-200 dark:border-zinc-700'
                                                                     }
                                                                 `}
                                                             >
                                                                 <div className="flex items-start gap-3">
-                                                                    {/* Status indicator */}
+                                                                    {/* Color indicator - Assignee (org) or Status (personal) with overdue ring */}
                                                                     <div
                                                                         className={`
-                                                                            mt-1 w-2 h-2 rounded-full flex-shrink-0
-                                                                            ${isTaskOverdue
-                                                                                ? 'bg-red-500'
-                                                                                : isTaskSoon
-                                                                                    ? 'bg-amber-500'
-                                                                                    : 'bg-violet-500'
-                                                                            }
+                                                                            mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0
+                                                                            ${dotColor.bg}
+                                                                            ${taskIsOverdue ? 'ring-2 ring-red-500/50' : ''}
                                                                         `}
                                                                     />
 
@@ -422,18 +592,12 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                                                                             </div>
                                                                         )}
 
-                                                                        {/* Status badge */}
+                                                                        {/* Status and Overdue badges */}
                                                                         <div className="flex items-center gap-2 mt-2">
-                                                                            {isTaskOverdue && (
+                                                                            {taskIsOverdue && (
                                                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
                                                                                     <AlertCircle size={10} />
                                                                                     Overdue
-                                                                                </span>
-                                                                            )}
-                                                                            {isTaskSoon && !isTaskOverdue && (
-                                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400">
-                                                                                    <Clock size={10} />
-                                                                                    Due Soon
                                                                                 </span>
                                                                             )}
                                                                             <span className="text-[10px] text-gray-500 dark:text-gray-400 capitalize">
@@ -441,7 +605,7 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                                                                             </span>
                                                                         </div>
 
-                                                                        {/* Assignee */}
+                                                                        {/* Assignee - prominent in org view */}
                                                                         {task.users_tasks_assignee_idTousers && (
                                                                             <div className="flex items-center gap-2 mt-3">
                                                                                 <div
@@ -454,7 +618,7 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                                                                                     {task.users_tasks_assignee_idTousers.username.charAt(0).toUpperCase()}
                                                                                 </div>
                                                                                 <span className="text-xs text-gray-600 dark:text-gray-400">
-                                                                                    {task.users_tasks_assignee_idTousers.username}
+                                                                                    {viewMode === 'org' ? 'Assigned to: ' : ''}{task.users_tasks_assignee_idTousers.username}
                                                                                 </span>
                                                                             </div>
                                                                         )}
@@ -483,6 +647,72 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks }: PremiumCalendar
                             )}
                         </AnimatePresence>
                     </motion.div>
+
+                    {/* Export Confirmation Dialog */}
+                    <AnimatePresence>
+                        {showExportDialog && (
+                            <motion.div
+                                className="absolute inset-0 z-10 flex items-center justify-center"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                            >
+                                {/* Dialog Backdrop */}
+                                <motion.div
+                                    className="absolute inset-0 bg-black/30 backdrop-blur-sm rounded-3xl"
+                                    onClick={() => setShowExportDialog(false)}
+                                />
+
+                                {/* Dialog Content */}
+                                <motion.div
+                                    className="relative z-10 w-full max-w-md mx-8 p-6 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-zinc-700/50"
+                                    initial={{ scale: 0.9, opacity: 0, y: 10 }}
+                                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                                    exit={{ scale: 0.9, opacity: 0, y: 10 }}
+                                    transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                                >
+                                    {/* Icon */}
+                                    <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center">
+                                        <Download size={24} className="text-violet-600 dark:text-violet-400" />
+                                    </div>
+
+                                    {/* Title */}
+                                    <h3 className="text-lg font-bold text-center text-gray-900 dark:text-white mb-2">
+                                        Export to Calendar
+                                    </h3>
+
+                                    {/* Message */}
+                                    <p className="text-sm text-center text-gray-600 dark:text-gray-400 mb-6">
+                                        You are about to export{' '}
+                                        <span className="font-semibold text-violet-600 dark:text-violet-400">
+                                            {exportableTasks.length} task{exportableTasks.length !== 1 ? 's' : ''}
+                                        </span>{' '}
+                                        from{' '}
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {monthLabel}
+                                        </span>{' '}
+                                        to a standard .ics file. This snapshot can be imported into Apple Calendar, Google Calendar, or Outlook.
+                                    </p>
+
+                                    {/* Buttons */}
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setShowExportDialog(false)}
+                                            className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-zinc-700 rounded-xl hover:bg-gray-200 dark:hover:bg-zinc-600 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleExportConfirm}
+                                            className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors shadow-lg shadow-violet-500/25"
+                                        >
+                                            Export now
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </motion.div>
             )}
         </AnimatePresence>

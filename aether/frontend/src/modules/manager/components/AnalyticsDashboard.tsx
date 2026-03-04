@@ -12,11 +12,11 @@ import {
 import {
   AlertTriangle,
   Briefcase,
-  Loader2,
   RefreshCw,
   Sparkles,
   Activity,
 } from 'lucide-react';
+import { DashboardSkeleton } from './DashboardSkeleton';
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { managerApi, type AnalyticsData } from '../api/managerApi';
 import { StatCard } from './StatCard';
@@ -80,14 +80,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
   }, [currentOrganization?.id]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Loading analytics...</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error) {

@@ -1,12 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { ClipboardCheck, Users, ChevronLeft, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TaskValidationList } from '../components/TaskValidationList';
 import { ManagerUsersList } from '../components/ManagerUsersList';
-import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
+import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import { AIReportModal } from '../components/AIReportModal';
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { managerApi } from '../api/managerApi';
+
+// Lazy load AnalyticsDashboard to isolate recharts from initial bundle
+const AnalyticsDashboard = lazy(() =>
+  import('../components/AnalyticsDashboard').then((module) => ({
+    default: module.AnalyticsDashboard,
+  }))
+);
 
 type TabType = 'validation' | 'users' | 'analytics';
 
@@ -119,7 +126,9 @@ export function ManagerZonePage() {
         {/* Content */}
         <div className="flex-1 px-8 pb-8 overflow-auto">
           {activeTab === 'analytics' && (
-            <AnalyticsDashboard onOpenAIReport={() => setShowAIModal(true)} />
+            <Suspense fallback={<DashboardSkeleton />}>
+              <AnalyticsDashboard onOpenAIReport={() => setShowAIModal(true)} />
+            </Suspense>
           )}
           {activeTab === 'validation' && <TaskValidationList />}
           {activeTab === 'users' && <ManagerUsersList />}
