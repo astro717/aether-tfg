@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
@@ -27,6 +28,10 @@ import configuration, { configurationSchema } from './config/configuration';
       validationOptions: {
         abortEarly: false,
       },
+    }),
+    CacheModule.register({
+      ttl: 300000, // 5 minutes in ms (cache-manager v5 uses ms)
+      isGlobal: true,
     }),
     ScheduleModule.forRoot(),
     PrismaModule,

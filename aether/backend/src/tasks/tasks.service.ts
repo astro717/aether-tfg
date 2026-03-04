@@ -1,5 +1,7 @@
 
-import { Injectable, ForbiddenException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException, Logger, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomBytes } from 'crypto';
@@ -27,6 +29,7 @@ export class TasksService {
     private emailService: EmailService,
     private configService: ConfigService,
     private organizationsService: OrganizationsService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
   }
@@ -341,6 +344,9 @@ export class TasksService {
         ).catch((err) => this.logger.error('Failed to send task assignment email:', err));
       }
     }
+
+    // Invalidate analytics cache for this org (reactive freshness)
+    await this.invalidateAnalyticsCache(dto.organization_id);
 
     return task;
   }
@@ -963,6 +969,11 @@ export class TasksService {
       });
     }
 
+    // Invalidate analytics cache for this org (reactive freshness)
+    if (task.organization_id) {
+      await this.invalidateAnalyticsCache(task.organization_id);
+    }
+
     return updatedTask;
   }
 
@@ -1188,6 +1199,13 @@ export class TasksService {
     const role = userOrg?.role_in_org;
     if (!userOrg || (role !== 'admin' && role !== 'manager')) {
       throw new ForbiddenException('Only managers can view analytics');
+    }
+
+    // Cache key: unique per organization and period (5-min TTL set globally)
+    const cacheKey = `analytics_${organizationId}_${period || 'all'}`;
+    const cachedData = await this.cacheManager.get(cacheKey);
+    if (cachedData) {
+      return cachedData; // Serve from cache, 0ms CPU cost
     }
 
     // Calculate date filter based on period
@@ -1598,7 +1616,7 @@ export class TasksService {
       ? parseFloat((cycleTimesInPeriod.reduce((a, b) => a + b, 0) / cycleTimesInPeriod.length).toFixed(1))
       : 0;
 
-    return {
+    const analyticsResult = {
       kpis: {
         totalTasks,
         completedTasks,
@@ -1631,6 +1649,22 @@ export class TasksService {
         },
       },
     };
+
+    // Persist to cache for subsequent requests (5-min TTL)
+    await this.cacheManager.set(cacheKey, analyticsResult);
+
+    return analyticsResult;
+  }
+
+  /**
+   * Invalidate all analytics cache entries for a given organization.
+   * Called after task mutations (create, update) to ensure dashboard freshness.
+   */
+  private async invalidateAnalyticsCache(organizationId: string): Promise<void> {
+    const periods = ['today', 'week', 'month', 'quarter', 'all'];
+    await Promise.all(
+      periods.map((period) => this.cacheManager.del(`analytics_${organizationId}_${period}`)),
+    );
   }
 
   /**
