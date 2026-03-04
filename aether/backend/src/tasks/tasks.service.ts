@@ -1254,6 +1254,16 @@ export class TasksService {
       orderBy: { updated_at: 'desc' },
     });
 
+    // Fetch TRUE historical backlog for the Burndown Chart (ignoring dateFilter)
+    // This ensures projectBurndownCone receives all tasks, not just period-filtered ones
+    const historicalTasksForBurndown = await this.prisma.tasks.findMany({
+      where: {
+        organization_id: organizationId,
+        is_archived: false,
+      },
+      select: { status: true }, // Optimized query, we only need statuses
+    });
+
     // Get team members
     const teamMembers = await this.prisma.user_organizations.findMany({
       where: { organization_id: organizationId },
@@ -1544,7 +1554,7 @@ export class TasksService {
     const cfdData = this.generateSmoothCFD(allTasks, normalizedPeriod);
     const investmentData = this.calculateInvestmentProfile(allTasks);
     const heatmapData = await this.analyzeWorkloadHeatmap(organizationId, allTasks, normalizedPeriod);
-    const burndownData = this.projectBurndownCone(allTasks, normalizedPeriod);
+    const burndownData = this.projectBurndownCone(historicalTasksForBurndown, normalizedPeriod);
 
     // Generate sparklines for KPI cards (based on completion vs creation)
     const completionRateSparkline: number[] = [];
@@ -2137,11 +2147,17 @@ export class TasksService {
           );
         });
 
-        // Count task movements (approximation: tasks assigned to this user)
+        // Count task movements (updated or created in this bucket)
+        // Using updated_at captures status changes, completions, and reassignments
         const userTasks = tasks.filter(t => {
           if (t.assignee_id !== member.users?.id) return false;
-          if (!t.created_at) return false;
-          const taskDate = new Date(t.created_at);
+
+          // Use updated_at if available (represents task moves, completions)
+          // Fallback to created_at for newly created tasks
+          const relevantDateStr = t.updated_at || t.created_at;
+          if (!relevantDateStr) return false;
+
+          const taskDate = new Date(relevantDateStr);
           return taskDate >= bucketStart && taskDate < bucketEnd;
         });
 

@@ -1703,11 +1703,17 @@ Required JSON structure:
           );
         });
 
-        // Count task movements (approximation: tasks assigned to this user)
+        // Count task movements (updated or created in this bucket)
+        // Using updated_at captures status changes, completions, and reassignments
         const userTasks = tasks.filter(t => {
           if (t.assignee_id !== member.users?.id) return false;
-          if (!t.created_at) return false;
-          const taskDate = new Date(t.created_at);
+
+          // Use updated_at if available (represents task moves, completions)
+          // Fallback to created_at for newly created tasks
+          const relevantDateStr = t.updated_at || t.created_at;
+          if (!relevantDateStr) return false;
+
+          const taskDate = new Date(relevantDateStr);
           return taskDate >= bucketStart && taskDate < bucketEnd;
         });
 
