@@ -1,4 +1,5 @@
 import { Info } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 interface MetricTooltipProps {
   title: string;
@@ -13,10 +14,52 @@ interface MetricTooltipProps {
  * aligns to bottom-right of the card.
  */
 export function MetricTooltip({ title, description, align = 'left' }: MetricTooltipProps) {
-  const isLeft = align === 'left';
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [actualAlign, setActualAlign] = useState<'left' | 'right'>(align);
+
+  const handleMouseEnter = () => {
+    if (!containerRef.current) return;
+
+    // Get the position of the tooltip container icon
+    const rect = containerRef.current.getBoundingClientRect();
+    const tooltipWidth = 256; // 64 * 4px = 256px (w-64)
+
+    // Check if the requested alignment would overflow the window
+    if (align === 'right') {
+      // If we want to align 'right' (tooltip stretches to the right), 
+      // check if there's enough space on the right of the icon
+      const spaceOnRight = window.innerWidth - rect.left;
+      if (spaceOnRight < tooltipWidth && rect.right > tooltipWidth) {
+        setActualAlign('left'); // Flip to left if no space on right but space on left
+      } else {
+        setActualAlign('right');
+      }
+    } else {
+      // If we want to align 'left' (tooltip stretches to the left),
+      // check if there's enough space on the left of the icon
+      const spaceOnLeft = rect.right;
+      if (spaceOnLeft < tooltipWidth && window.innerWidth - rect.left > tooltipWidth) {
+        setActualAlign('right'); // Flip to right if no space on left but space on right
+      } else {
+        setActualAlign('left');
+      }
+    }
+  };
+
+  const handleMouseLeave = () => {
+    // Optional: reset to default, but usually keeping it as is until next hover is fine
+    // setActualAlign(align); 
+  };
+
+  const isLeft = actualAlign === 'left';
 
   return (
-    <div className="absolute bottom-3 right-3 group/tooltip z-50">
+    <div
+      ref={containerRef}
+      className="absolute bottom-3 right-3 group/tooltip z-50"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <button
         type="button"
         className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700/50 transition-colors"
