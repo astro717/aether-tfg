@@ -10,7 +10,8 @@ import {
     RefreshCw,
     Clock,
     GitCommit,
-    Archive
+    Archive,
+    Pin
 } from "lucide-react";
 import { tasksApi, type Task, type TaskComment, type CommitDiff } from "../../dashboard/api/tasksApi";
 import { UserAvatar } from "../../../components/ui/UserAvatar";
@@ -43,6 +44,7 @@ export function TaskDetailsPage() {
     const [isRefreshingCommits, setIsRefreshingCommits] = useState(false);
     const [isArchiving, setIsArchiving] = useState(false);
     const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+    const [pinningCommentId, setPinningCommentId] = useState<string | null>(null);
 
     // Commit selection state
     const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
@@ -177,6 +179,21 @@ export function TaskDetailsPage() {
         if (!taskId || !currentOrganization) return;
         const newComment = await tasksApi.addComment(taskId, content, currentOrganization.id);
         setComments((prev) => [...prev, newComment]);
+    };
+
+    const handleTogglePin = async (commentId: string) => {
+        if (!taskId) return;
+        setPinningCommentId(commentId);
+        try {
+            const updatedComment = await tasksApi.toggleCommentPin(taskId, commentId);
+            setComments((prev) =>
+                prev.map((c) => (c.id === commentId ? updatedComment : c))
+            );
+        } catch (err) {
+            console.error('Failed to toggle pin:', err);
+        } finally {
+            setPinningCommentId(null);
+        }
     };
 
     const handleLinkSuccess = async () => {
@@ -484,7 +501,7 @@ export function TaskDetailsPage() {
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto space-y-3">
+                        <div className="flex-1 overflow-y-auto space-y-3 px-1 -mx-1">
                             {comments.length > 0 ? (
                                 comments.map((comment) => (
                                     <CommentCard
@@ -494,6 +511,9 @@ export function TaskDetailsPage() {
                                         content={comment.content}
                                         createdAt={comment.created_at}
                                         isMe={user?.id === comment.user_id}
+                                        isPinned={comment.is_pinned}
+                                        onTogglePin={() => handleTogglePin(comment.id)}
+                                        isPinning={pinningCommentId === comment.id}
                                     />
                                 ))
                             ) : (
@@ -628,12 +648,18 @@ function CommentCard({
     content,
     createdAt,
     isMe = false,
+    isPinned = false,
+    onTogglePin,
+    isPinning = false,
 }: {
     author: string;
     avatarColor?: string;
     content: string | null;
     createdAt?: string;
     isMe?: boolean;
+    isPinned?: boolean;
+    onTogglePin?: () => void;
+    isPinning?: boolean;
 }) {
     const formatTime = (dateString?: string) => {
         if (!dateString) return "";
@@ -647,7 +673,9 @@ function CommentCard({
     };
 
     return (
-        <div className="bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm">
+        <div className={`group relative bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm transition-all ${
+            isPinned ? 'ring-2 ring-[#C15F3C]/40 dark:ring-[#C15F3C]/30 bg-[#C15F3C]/5 dark:bg-[#C15F3C]/5' : ''
+        }`}>
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                     <UserAvatar
@@ -659,10 +687,38 @@ function CommentCard({
                     <span className="font-bold text-sm text-gray-900 dark:text-white">
                         {author} {isMe && <span className="text-gray-400 font-normal ml-1">(You)</span>}
                     </span>
+                    {isPinned && (
+                        <Pin size={12} className="fill-current" style={{ color: '#C15F3C' }} />
+                    )}
                 </div>
-                {createdAt && (
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatTime(createdAt)}</span>
-                )}
+                <div className="flex items-center gap-2">
+                    {onTogglePin && (
+                        <button
+                            onClick={onTogglePin}
+                            disabled={isPinning}
+                            className={`p-1.5 rounded-full transition-all ${
+                                isPinned
+                                    ? 'bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20'
+                                    : 'opacity-0 group-hover:opacity-100 hover:bg-[#C15F3C]/10 dark:hover:bg-[#C15F3C]/20'
+                            } disabled:opacity-50`}
+                            style={{ color: isPinned ? '#C15F3C' : undefined }}
+                            title={isPinned ? 'Unpin from AI context' : 'Pin for AI context - AI will consider this comment when generating reports'}
+                        >
+                            {isPinning ? (
+                                <Loader2 size={16} className="animate-spin" style={{ color: '#C15F3C' }} />
+                            ) : (
+                                <Pin
+                                    size={16}
+                                    className={`transition-colors ${isPinned ? 'fill-current' : 'text-gray-400 group-hover:text-[#C15F3C]'}`}
+                                    style={isPinned ? { color: '#C15F3C' } : undefined}
+                                />
+                            )}
+                        </button>
+                    )}
+                    {createdAt && (
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatTime(createdAt)}</span>
+                    )}
+                </div>
             </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-medium">
                 {content}

@@ -208,6 +208,15 @@ export class TasksController {
     return this.tasksService.deleteComment(commentId, user.id, user.role);
   }
 
+  @Patch(':taskId/comments/:commentId/pin')
+  async toggleCommentPin(
+    @Param('taskId', new ParseUUIDPipe()) taskId: string,
+    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasksService.toggleCommentPin(taskId, commentId, user.id, user.role);
+  }
+
   // Link commit to task
   @Post(':id/commits')
   async linkCommit(

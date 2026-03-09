@@ -189,6 +189,7 @@ model task_comments {
   user_id         String    @db.Uuid
   organization_id String    @db.Uuid
   content         String
+  is_pinned       Boolean   @default(false)
   created_at      DateTime? @default(now()) @db.Timestamp(6)
 
   tasks         tasks         @relation(fields: [task_id], references: [id], onDelete: Cascade)

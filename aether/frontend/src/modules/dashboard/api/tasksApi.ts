@@ -65,6 +65,7 @@ export interface TaskComment {
   task_id: string;
   user_id: string;
   content: string;
+  is_pinned: boolean;
   created_at: string;
   users: {
     id: string;
@@ -243,6 +244,22 @@ class TasksApi {
       }
     );
     if (!response.ok) throw new Error('Failed to delete comment');
+  }
+
+  async toggleCommentPin(taskId: string, commentId: string): Promise<TaskComment> {
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/${taskId}/comments/${commentId}/pin`,
+      {
+        method: 'PATCH',
+        headers: this.getAuthHeaders(),
+      }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || 'Failed to toggle comment pin';
+      throw new Error(message);
+    }
+    return response.json();
   }
 
   async createTask(data: {

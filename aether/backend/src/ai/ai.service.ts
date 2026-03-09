@@ -46,18 +46,21 @@ const LANGUAGE_MAP: Record<string, string> = {
 };
 
 // Depth instructions for controlling analysis verbosity
-const DEPTH_INSTRUCTIONS: Record<string, { explanation: string; codeAnalysis: string }> = {
+const DEPTH_INSTRUCTIONS: Record<string, { explanation: string; codeAnalysis: string; taskReport: string }> = {
   concise: {
     explanation: 'Be extremely concise. Use bullet points where possible. Focus only on the most critical changes. Limit summary to 1-2 sentences maximum. Omit minor details.',
     codeAnalysis: 'Be extremely concise. Report only HIGH severity security issues. Skip minor code quality concerns. Limit summary to 1 sentence.',
+    taskReport: 'Be extremely concise. Summarize in 1-2 sentences. Focus only on critical progress indicators.',
   },
   standard: {
     explanation: 'Provide a balanced analysis with moderate detail. Include key changes and their implications.',
     codeAnalysis: 'Provide a balanced security analysis. Report HIGH and MEDIUM severity issues. Include brief recommendations.',
+    taskReport: 'Provide a standard, balanced analysis.',
   },
   detailed: {
     explanation: 'Provide a comprehensive technical analysis. Explain the "why" behind changes in depth. Include implementation details and architectural implications. Discuss potential edge cases or considerations.',
     codeAnalysis: 'Provide a comprehensive security analysis. Report ALL severity levels including LOW. Include detailed recommendations and code snippets to illustrate issues. Suggest refactoring opportunities.',
+    taskReport: 'Provide comprehensive analysis of the task progress. Include detailed timeline insights, code quality observations, and thorough next steps.',
   },
 };
 
@@ -439,7 +442,7 @@ export class AiService {
   }
 
   /**
-   * Build a prompt for task validation
+   * Build a prompt for task validation (The Aether Standard - Anti-Hallucination)
    */
   private buildValidationPrompt(task: any, diffs: CommitDiff[]): string {
     const diffSummaries = diffs.map((diff, i) => {
@@ -447,7 +450,7 @@ export class AiService {
       const patches = diff.files
         .filter(f => f.patch)
         .slice(0, 3) // Limit to 3 files to avoid token limits
-        .map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 500) || 'No patch'}`)
+        .map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 15000) || 'No patch'}`)
         .join('\n');
 
       return `
@@ -461,28 +464,28 @@ ${patches}
 `;
     }).join('\n---\n');
 
-    return `You are a senior code reviewer analyzing if commits fulfill a task's requirements.
+    return `You are an objective QA Automation bot verifying if a Task is ready to be closed.
 
 TASK #${task.readable_id}: "${task.title}"
-Description: ${task.description || 'No description provided'}
+Requirements defined: ${task.description || 'No specific requirements. Accept if commits match the title.'}
 Current Status: ${task.status}
 
-COMMITS LINKED TO THIS TASK:
+WORK SUBMITTED:
 ${diffSummaries}
 
-INSTRUCTIONS:
-Analyze the commits and determine if they fulfill the task requirements. Consider:
-1. Does the code change address what the task title/description requests?
-2. Is the implementation complete or partial?
-3. Are there any obvious issues, bugs, or missing pieces?
+INSTRUCTIONS & RULES (CRITICAL):
+1. STRICT SCOPE EVALUATION: You must evaluate compliance EXCLUSIVELY against the exact words in the Task Description and Title.
+2. NO HALLUCINATION: DO NOT require implicit engineering practices (like unit tests, documentation, CI/CD pipelines, README updates, or perfect error handling) UNLESS they are explicitly requested in the task description.
+3. If the code fundamentally implements what is requested, set "isCompliant": true.
+4. Only set "isCompliant": false if a core stated requirement is entirely missing or obviously broken.
 
-Respond in this exact JSON format (no markdown, just raw JSON):
+Respond in exact raw JSON format starting with { and ending with }:
 {
-  "isCompliant": true/false,
-  "confidence": "high"/"medium"/"low",
-  "summary": "One sentence summary of your analysis",
-  "findings": ["Finding 1", "Finding 2", ...],
-  "recommendations": ["Recommendation 1", "Recommendation 2", ...]
+  "isCompliant": true or false,
+  "confidence": "high" | "medium" | "low",
+  "summary": "Direct conclusion. E.g., 'All stated requirements met.'",
+  "findings": ["Sticking strictly to the task description, I found..."],
+  "recommendations": ["(Optional) Non-blocking suggestions for code quality"]
 }`;
   }
 
@@ -731,9 +734,10 @@ Respond in this exact JSON format (no markdown, just raw JSON):
     // Cache Miss - Generate new contextual explanation
     this.logger.log(`Cache MISS for task commit explanation ${taskId.substring(0, 8)}/${sha.substring(0, 7)}, generating...`);
 
-    // Get task info
+    // Get task info with all linked commits for holistic context
     const task = await this.prisma.tasks.findUnique({
       where: { id: taskId },
+      include: { task_commits: { include: { commits: true } } }
     });
 
     if (!task) {
@@ -774,41 +778,59 @@ Respond in this exact JSON format (no markdown, just raw JSON):
     }
 
     // Build the contextual prompt with dynamic language and depth support
+    // Include other commits for holistic context (The Aether Standard)
+    const otherCommits = task.task_commits
+      ?.filter(tc => tc.commits?.sha !== sha)
+      .map(tc => `- ${tc.commits?.sha?.substring(0, 7)}: ${tc.commits?.message}`)
+      .join('\n') || 'No other commits in this task';
+
+    // Fetch pinned comments for curated team context (Phase 5)
+    const pinnedComments = await this.prisma.task_comments.findMany({
+      where: { task_id: taskId, is_pinned: true },
+      include: { users: { select: { username: true } } },
+      orderBy: { created_at: 'asc' },
+    });
+    const pinnedCommentsString = pinnedComments.length > 0
+      ? pinnedComments.map(c => `[${c.users.username}]: ${c.content}`).join('\n')
+      : 'No pinned context provided.';
+
     const languageName = LANGUAGE_MAP[language] || 'English';
     const depthInstruction = DEPTH_INSTRUCTIONS[depth]?.explanation || DEPTH_INSTRUCTIONS.standard.explanation;
-    const prompt = `You are a code analyst. Explain this change in the context of the task.
-IMPORTANT: Respond entirely in ${languageName} language.
+
+    const prompt = `You are a Staff Software Engineer analyzing a specific commit within a larger task.
+IMPORTANT: Respond entirely in ${languageName}.
 DEPTH LEVEL: ${depthInstruction}
 
-TASK #${task.readable_id}: "${task.title}"
-Task description: ${task.description || 'No description provided'}
-Current status: ${task.status}
+TASK SUMMARY:
+- Task: "${task.title}"
+- Description: ${task.description || 'No description provided'}
+- Current Status: ${task.status}
+- Other commits in this task (for context):
+${otherCommits}
 
-COMMIT: ${sha.substring(0, 7)}
-Message: ${diff.message}
-Stats: +${diff.stats.additions} additions, -${diff.stats.deletions} deletions
+CURRENT COMMIT TO ANALYZE:
+- Hash: ${sha.substring(0, 7)}
+- Message: ${diff.message}
 
-Files changed:
-${diff.files.map(f => `- ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n')}
+CODE CHANGES:
+${diff.files.slice(0, 4).map(f => `File: ${f.filename}\n${f.patch?.substring(0, 15000) || 'No patch available'}`).join('\n---\n')}
 
-Code changes (excerpt):
-${diff.files.slice(0, 4).map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 600) || 'No patch available'}`).join('\n')}
+TEAM DISCUSSIONS (PINNED CONTEXT):
+${pinnedCommentsString}
 
 INSTRUCTIONS:
-Analyze how this commit contributes to completing the task. Consider:
-1. What does this commit specifically do?
-2. How does it help fulfill the task requirements?
-3. What work remains to complete the task?
-4. Relevant technical details of the change.
+1. Start your explanation directly. Do not use introductory phrases like 'This commit...' or 'In this commit...'.
+2. Explain practically what this specific commit achieves. Focus on the 'why' and 'how'.
+3. Explain how it fits into the broader Task. (E.g., "This lays the database foundation for the feature").
+4. Determine remaining work ONLY by comparing the task description against this commit AND the other linked commits.
+   - If the Task Current Status is 'Done', state that no remaining work is expected unless there are obvious fatal flaws.
+5. If TEAM DISCUSSIONS are provided, cross-reference the commit changes against them to see if any discussed technical requests were met or are still pending.
 
-CRITICAL: All text content in your response MUST be written in ${languageName}.
-CRITICAL: Follow the DEPTH LEVEL instruction for verbosity.
-
-Respond in this exact JSON format (no markdown, just raw JSON):
+CRITICAL: Return ONLY raw JSON starting with { and ending with }.
 {
-  "explanation": "Clear explanation of what this commit does (in ${languageName})",
+  "explanation": "Clear explanation of what this commit achieves (in ${languageName})",
   "howItFulfillsTask": "How this commit contributes to completing task #${task.readable_id} (in ${languageName})",
-  "remainingWork": ["Remaining work 1 (in ${languageName})", "Remaining work 2 (in ${languageName})"],
+  "remainingWork": ["Remaining work item 1 (in ${languageName})", "Remaining work item 2 (in ${languageName})"],
   "technicalDetails": "Technical summary of the implemented changes (in ${languageName})"
 }`;
 
@@ -1008,6 +1030,8 @@ Required JSON structure:
     user: any,
     onlyCached: boolean = false,
     forceRegenerate: boolean = false,
+    language: string = 'en',
+    depth: string = 'standard',
   ): Promise<any> {
     if (!commitSha) {
       throw new Error('Commit SHA is required for indexing the report');
@@ -1088,44 +1112,77 @@ Required JSON structure:
       throw new NotFoundException('Failed to fetch commit diff from GitHub');
     }
 
-    // Build a comprehensive prompt that includes the specific commit's changes
-    const filesChangedSummary = diff.files.map(f => `  - ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n');
+    // Build holistic prompt with timeline context (The Aether Standard)
+    const languageName = LANGUAGE_MAP[language] || 'English';
+    const depthInstruction = DEPTH_INSTRUCTIONS[depth]?.taskReport || 'Provide a standard, balanced analysis.';
+
+    // Build context string of all commits as timeline
+    const timeline = task.task_commits
+      ?.sort((a, b) => new Date(a.linked_at).getTime() - new Date(b.linked_at).getTime())
+      .map(tc => `- ${new Date(tc.linked_at).toISOString().split('T')[0]} | ${tc.commits?.sha?.substring(0, 7)}: ${tc.commits?.message}`)
+      .join('\n') || 'No commits timeline available';
+
+    // Fetch pinned comments for curated team context (Phase 5)
+    const pinnedComments = await this.prisma.task_comments.findMany({
+      where: { task_id: taskId, is_pinned: true },
+      include: { users: { select: { username: true } } },
+      orderBy: { created_at: 'asc' },
+    });
+    const pinnedCommentsString = pinnedComments.length > 0
+      ? pinnedComments.map(c => `[${c.users.username}]: ${c.content}`).join('\n')
+      : 'No pinned context provided.';
+
     const codeExcerpts = diff.files
       .slice(0, 4) // Include up to 4 files
-      .map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 800) || 'No patch available'}`)
+      .map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 15000) || 'No patch available'}`)
       .join('\n');
 
-    const prompt = `You are a technical analyst. Generate a progress report for this task at commit ${commitSha.substring(0, 7)}.
+    const prompt = `You are an Engineering Manager generating a Progress Report for a Task.
+IMPORTANT: All generated text MUST be in ${languageName}.
+DEPTH LEVEL: ${depthInstruction}
 
-TASK #${task.readable_id}: ${task.title}
-Status: ${task.status}
-Description: ${task.description || 'No description provided'}
-Total Commits Linked: ${task.task_commits?.length || 0}
+TASK OVERVIEW:
+- Task: "${task.title}"
+- Description: ${task.description || 'No description provided'}
+- Current Status: ${task.status}
 
-SELECTED COMMIT SNAPSHOT: ${commitSha.substring(0, 7)}
-Commit Message: ${diff.message}
-Stats: +${diff.stats.additions} additions, -${diff.stats.deletions} deletions
+ACTIVITY TIMELINE:
+${timeline}
 
-Files Changed:
-${filesChangedSummary}
-
-Code Changes (excerpt):
+LATEST ACTIVITY (Trigger for this report):
+- Target Commit: ${commitSha.substring(0, 7)}
+- Message: ${diff.message}
+- Changes:
 ${codeExcerpts}
 
-ANALYSIS REQUIREMENTS:
-1. What work was completed in this commit
-2. How it relates to the task requirements
-3. Code quality and implementation approach
-4. What might remain to be done
+TEAM DISCUSSIONS (PINNED CONTEXT):
+${pinnedCommentsString}
 
-CRITICAL OUTPUT INSTRUCTIONS:
-- Return ONLY a raw JSON object, nothing else
-- Do NOT wrap the response in markdown code blocks (no \`\`\`json or \`\`\`)
-- Do NOT include any text before or after the JSON
-- The response must start with { and end with }
+INSTRUCTIONS:
+Assess the holistic progress of the task, not just the latest target commit.
+1. Summarize the overall state of the feature.
+2. Outline what concrete value has been delivered so far based on the timeline.
+3. If there are obvious missing requirements based on the description, highlight them as Next Steps.
+4. If TEAM DISCUSSIONS are provided, cross-reference the commit changes against them to see if any discussed technical requests were met or are still pending.
 
-Required JSON structure:
-{"summary":"Executive summary (2-3 sentences)","sections":[{"title":"Changes in This Commit","content":"Detailed explanation"},{"title":"Task Progress Assessment","content":"Completion assessment"},{"title":"Technical Observations","content":"Code quality notes"}]}`;
+CRITICAL: Return ONLY raw JSON starting with { and ending with }.
+{
+  "summary": "Executive summary of the task's general progress (in ${languageName})",
+  "sections": [
+    {
+      "title": "Progreso Global",
+      "content": "Overall feature state and timeline analysis (in ${languageName})"
+    },
+    {
+      "title": "Última Intervención",
+      "content": "What value the target commit adds specifically (in ${languageName})"
+    },
+    {
+      "title": "Siguientes Pasos",
+      "content": "What remains to be done according to task description (in ${languageName})"
+    }
+  ]
+}`;
 
     const aiResponse = await this.callGemini(prompt);
 

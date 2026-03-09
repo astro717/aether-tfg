@@ -33,6 +33,12 @@ export interface AnalyticsData {
     cycleTime: number;
     onTimeRate: number;
     riskScore: number;
+    teamFriction: {
+      sentimentScore: number;
+      baselineScore: number;
+      frictionTrend: 'up' | 'down' | 'neutral';
+      isStable: boolean;
+    };
   };
   velocityData: Array<{ week: string; completed: number; weekStart: string }>;
   statusDistribution: Array<{ name: string; value: number; color: string }>;

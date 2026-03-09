@@ -1169,6 +1169,37 @@ export class TasksService {
     return this.prisma.task_comments.delete({ where: { id: commentId } });
   }
 
+  async toggleCommentPin(taskId: string, commentId: string, userId: string, userRole: string) {
+    // Verify comment exists and belongs to the task
+    const comment = await this.prisma.task_comments.findUnique({
+      where: { id: commentId },
+    });
+
+    if (!comment) throw new NotFoundException('Comment not found');
+    if (comment.task_id !== taskId) throw new BadRequestException('Comment does not belong to this task');
+
+    // Only managers or the comment author can pin/unpin
+    if (comment.user_id !== userId && userRole !== 'manager' && userRole !== 'admin') {
+      throw new ForbiddenException('Not authorized to pin/unpin this comment');
+    }
+
+    // Toggle the is_pinned status
+    return this.prisma.task_comments.update({
+      where: { id: commentId },
+      data: { is_pinned: !comment.is_pinned },
+      include: {
+        users: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            avatar_color: true,
+          },
+        },
+      },
+    });
+  }
+
   /**
    * Helper: Check if task status matches expected value (case-insensitive)
    */
@@ -1620,6 +1651,63 @@ export class TasksService {
       ? parseFloat((cycleTimesInPeriod.reduce((a, b) => a + b, 0) / cycleTimesInPeriod.length).toFixed(1))
       : 0;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TEAM FRICTION KPI: Aggregated sentiment analysis relative to baseline
+    // Privacy-first: ONLY organization-level aggregates, never individual scores
+    // ═══════════════════════════════════════════════════════════════════════════
+    let teamFriction: {
+      sentimentScore: number;
+      baselineScore: number;
+      frictionTrend: 'up' | 'down' | 'neutral';
+      isStable: boolean;
+    };
+
+    // Calculate baseline period range (previous period of same length)
+    let baselineDateFilter: Date | undefined;
+    let baselineEndDate: Date | undefined;
+
+    if (dateFilter && endDate) {
+      const periodLengthMs = endDate.getTime() - dateFilter.getTime();
+      baselineEndDate = new Date(dateFilter.getTime() - 1); // 1ms before current period
+      baselineDateFilter = new Date(baselineEndDate.getTime() - periodLengthMs);
+    }
+
+    // Current period sentiment (aggregated across all messages in org)
+    const currentSentimentAgg = await this.prisma.messages.aggregate({
+      _avg: { sentiment_score: true },
+      where: {
+        organization_id: organizationId,
+        ...(dateFilter && endDate
+          ? { created_at: { gte: dateFilter, lte: endDate } }
+          : {}),
+      },
+    });
+
+    // Baseline sentiment (previous period, same duration)
+    const baselineSentimentAgg = baselineDateFilter && baselineEndDate
+      ? await this.prisma.messages.aggregate({
+          _avg: { sentiment_score: true },
+          where: {
+            organization_id: organizationId,
+            created_at: { gte: baselineDateFilter, lte: baselineEndDate },
+          },
+        })
+      : null;
+
+    const currentSentiment = currentSentimentAgg._avg.sentiment_score ?? 0;
+    const baselineSentiment = baselineSentimentAgg?._avg.sentiment_score ?? currentSentiment;
+    const delta = currentSentiment - baselineSentiment;
+
+    // Determine friction trend (lower sentiment = higher friction)
+    // delta < -0.1 means sentiment dropped → friction increased → 'up'
+    // delta > 0.1 means sentiment improved → friction decreased → 'down'
+    teamFriction = {
+      sentimentScore: parseFloat(currentSentiment.toFixed(2)),
+      baselineScore: parseFloat(baselineSentiment.toFixed(2)),
+      frictionTrend: delta < -0.1 ? 'up' : delta > 0.1 ? 'down' : 'neutral',
+      isStable: Math.abs(delta) <= 0.1,
+    };
+
     const analyticsResult = {
       kpis: {
         totalTasks,
@@ -1633,6 +1721,7 @@ export class TasksService {
         cycleTime: periodCycleTimeAvg,
         onTimeRate,
         riskScore,
+        teamFriction,
       },
       velocityData,
       statusDistribution,

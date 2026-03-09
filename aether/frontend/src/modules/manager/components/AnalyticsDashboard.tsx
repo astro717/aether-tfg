@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Sparkles,
   Activity,
+  Thermometer,
 } from 'lucide-react';
 import { DashboardSkeleton } from './DashboardSkeleton';
 import { useOrganization } from '../../organization/context/OrganizationContext';
@@ -41,6 +42,21 @@ const PERIOD_OPTIONS: { value: PeriodType; label: string; shortLabel: string }[]
   { value: 'quarter', label: 'Last 3 Months', shortLabel: '3M' },
   { value: 'all', label: 'All Time', shortLabel: 'All' },
 ];
+
+/** Helper: Generate dynamic friction message based on trend and stability */
+function getFrictionMessage(friction: {
+  frictionTrend: 'up' | 'down' | 'neutral';
+  isStable: boolean;
+}): string {
+  if (friction.frictionTrend === 'down') {
+    return 'Smooth communication';
+  }
+  if (friction.isStable) {
+    return 'Team dynamics stable';
+  }
+  // frictionTrend === 'up'
+  return 'Tension detected';
+}
 
 export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) {
   const { currentOrganization } = useOrganization();
@@ -146,7 +162,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
             — Current organization state
           </span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard
             title="Risk Score"
             value={kpis.riskScore}
@@ -156,6 +172,36 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
             infoTooltip={{
               title: 'AI Risk Score',
               description: 'A probabilistic model that evaluates delay risk by combining task age, current assignee workload, and historical team deviations.',
+            }}
+          />
+          <StatCard
+            title="Team Friction"
+            value={
+              kpis.teamFriction.frictionTrend === 'up'
+                ? 'Elevated'
+                : kpis.teamFriction.isStable
+                  ? 'Stable'
+                  : 'Optimal'
+            }
+            subtitle={getFrictionMessage(kpis.teamFriction)}
+            icon={<Thermometer className="w-5 h-5" />}
+            color={
+              kpis.teamFriction.frictionTrend === 'up'
+                ? 'red'
+                : kpis.teamFriction.frictionTrend === 'down'
+                  ? 'green'
+                  : 'purple'
+            }
+            trend={
+              kpis.teamFriction.frictionTrend === 'up'
+                ? 'up'
+                : kpis.teamFriction.frictionTrend === 'down'
+                  ? 'down'
+                  : undefined
+            }
+            infoTooltip={{
+              title: 'Team Sentiment & Friction',
+              description: 'Analyzes aggregated, anonymous communication tone compared to your team\'s historical baseline. Adapts to your team\'s natural style and only alerts on unusual friction spikes.',
             }}
           />
           <StatCard

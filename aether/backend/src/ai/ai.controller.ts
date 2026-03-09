@@ -101,6 +101,8 @@ export class AiController {
    *   - onlyCached=true: only retrieve cached results (404 if not cached)
    *   - forceRegenerate=true: bypass cache, delete old reports, and generate fresh
    *                           This fixes the "ghost regeneration" bug
+   *   - language: output language code (en, es, fr, de, pt, zh, ja)
+   *   - depth: analysis depth (concise, standard, detailed)
    */
   @Get('tasks/:taskId/report')
   async generateTaskReport(
@@ -108,6 +110,8 @@ export class AiController {
     @Query('commitSha') commitSha: string,
     @Query('onlyCached') onlyCached: string,
     @Query('forceRegenerate') forceRegenerate: string,
+    @Query('language') language: string,
+    @Query('depth') depth: string,
     @CurrentUser() user: users,
   ) {
     return this.aiService.generateTaskReport(
@@ -116,6 +120,8 @@ export class AiController {
       user,
       onlyCached === 'true',
       forceRegenerate === 'true',
+      language || 'en',
+      depth || 'standard',
     );
   }
 
