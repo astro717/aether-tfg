@@ -96,9 +96,9 @@ class MessagingApi {
    * GET /messages/conversations
    * Get list of conversations (grouped by user) with unread counts.
    */
-  async getConversations(): Promise<Conversation[]> {
+  async getConversations(organizationId?: string): Promise<Conversation[]> {
     const response = await fetch(
-      `${API_BASE_URL}/messages/conversations`,
+      `${API_BASE_URL}/messages/conversations${organizationId ? `?organizationId=${organizationId}` : ''}`,
       { headers: this.getAuthHeaders() }
     );
     if (!response.ok) throw new Error('Failed to fetch conversations');

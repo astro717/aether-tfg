@@ -33,9 +33,12 @@ export class TasksController {
   }
 
   @Get('my-tasks')
-  async getMyTasks(@CurrentUser() user: User) {
+  async getMyTasks(
+    @CurrentUser() user: User,
+    @Query('organizationId') organizationId?: string,
+  ) {
     // Always returns only tasks assigned to this user (for sidebar)
-    return this.tasksService.findMyTasks(user.id);
+    return this.tasksService.findMyTasks(user.id, organizationId);
   }
 
   @Get('my-pulse')

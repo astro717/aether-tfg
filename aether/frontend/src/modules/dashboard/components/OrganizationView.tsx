@@ -26,6 +26,7 @@ import { tasksApi, type Task } from "../api/tasksApi";
 import { taskEvents } from "../../../lib/taskEvents";
 import { UserAvatar } from "../../../components/ui/UserAvatar";
 import { ConfirmationDialog } from "../../../components/ui/ConfirmationDialog";
+import { supabase } from "../../../lib/supabase";
 
 // ... existing code ...
 
@@ -53,11 +54,39 @@ export function OrganizationView() {
 
   // Listen for task creation events to refresh Kanban
   useEffect(() => {
+    // Local events channel
     const unsubscribe = taskEvents.onTaskCreated(() => {
       refetch(); // React Query handles background refetch
     });
-    return unsubscribe;
-  }, [refetch]);
+
+    // Supabase Realtime for external changes (like AI agent updates)
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+    if (currentOrganization?.id) {
+      realtimeChannel = supabase
+        .channel(`tasks_org_${currentOrganization.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'tasks',
+            filter: `organization_id=eq.${currentOrganization.id}`,
+          },
+          (payload) => {
+            console.log('Realtime task update received from Supabase:', payload);
+            refetch(); // Refetch the kanban data
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      unsubscribe();
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+      }
+    };
+  }, [refetch, currentOrganization?.id]);
 
   // Combine todo and pending for the "To Do" column (backward compatibility)
   const todoTasks = [...(data?.todo || []), ...(data?.pending || [])];
@@ -145,7 +174,7 @@ export function OrganizationView() {
       // Dropped over a task - find its index in the target column
       const targetTasks = targetColumn === 'pending' ? todoTasks
         : targetColumn === 'in_progress' ? data.in_progress
-        : data.done;
+          : data.done;
       insertIndex = targetTasks.findIndex(t => t.id === overId);
     }
     // If dropped on column itself (empty area), insertIndex stays undefined → append to end

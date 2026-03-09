@@ -5,6 +5,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -25,8 +26,11 @@ export class MessagesController {
    * Get list of conversations (grouped by user) with unread counts.
    */
   @Get('conversations')
-  async getConversations(@CurrentUser() user: User) {
-    return this.messagesService.getConversations(user.id);
+  async getConversations(
+    @CurrentUser() user: User,
+    @Query('organizationId') organizationId?: string,
+  ) {
+    return this.messagesService.getConversations(user.id, organizationId);
   }
 
   /**

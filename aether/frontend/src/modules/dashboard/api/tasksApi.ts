@@ -185,9 +185,9 @@ class TasksApi {
     return response.json();
   }
 
-  async getMyTasks(): Promise<Task[]> {
+  async getMyTasks(organizationId?: string): Promise<Task[]> {
     const response = await fetch(
-      `${API_BASE_URL}/tasks/my-tasks`,
+      `${API_BASE_URL}/tasks/my-tasks${organizationId ? `?organizationId=${organizationId}` : ''}`,
       { headers: this.getAuthHeaders() }
     );
     if (!response.ok) throw new Error('Failed to fetch my tasks');

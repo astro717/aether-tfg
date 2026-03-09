@@ -93,7 +93,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         try {
             if (!silent) setTasksLoading(true);
-            const tasks = await tasksApi.getMyTasks();
+            const tasks = await tasksApi.getMyTasks(currentOrganization?.id);
             // Filter to show only active tasks (not done, but including pending_validation)
             const activeTasks = tasks.filter(t => t.status !== 'done');
             setMyTasks(activeTasks);
@@ -121,7 +121,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         } finally {
             if (!silent) setTasksLoading(false);
         }
-    }, [user, hasDismissedCritical, playNotificationSound]);
+    }, [user, hasDismissedCritical, playNotificationSound, currentOrganization?.id]);
 
     useEffect(() => {
         fetchMyTasks();
@@ -174,7 +174,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         try {
             if (!silent) setMessagesLoading(true);
-            const data = await messagingApi.getConversations();
+            const data = await messagingApi.getConversations(currentOrganization?.id);
             setConversations(data);
             hasLoadedMessagesRef.current = true;
         } catch (err) {
@@ -182,7 +182,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         } finally {
             if (!silent) setMessagesLoading(false);
         }
-    }, [user]);
+    }, [user, currentOrganization?.id]);
 
     // Initial fetch
     useEffect(() => {

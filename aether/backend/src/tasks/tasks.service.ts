@@ -595,9 +595,13 @@ export class TasksService {
   }
 
   // Returns only tasks assigned to the user (for sidebar) - regardless of role
-  async findMyTasks(userId: string) {
+  async findMyTasks(userId: string, organizationId?: string) {
+    const whereClause: Prisma.tasksWhereInput = { assignee_id: userId, is_archived: false };
+    if (organizationId) {
+      whereClause.organization_id = organizationId;
+    }
     return this.prisma.tasks.findMany({
-      where: { assignee_id: userId, is_archived: false },
+      where: whereClause,
       include: {
         users_tasks_assignee_idTousers: {
           select: {

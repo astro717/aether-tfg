@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { SendMessageDto, AttachmentDto } from './dto/send-message.dto';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -22,15 +23,19 @@ export class MessagesService {
    * Get all conversations for a user, grouped by the other participant.
    * Returns the latest message and unread count for each conversation.
    */
-  async getConversations(userId: string) {
+  async getConversations(userId: string, organizationId?: string) {
     // Get all messages where user is sender or receiver
+    const whereClause: Prisma.messagesWhereInput = {
+      OR: [
+        { sender_id: userId },
+        { receiver_id: userId },
+      ],
+    };
+    if (organizationId) {
+      whereClause.organization_id = organizationId;
+    }
     const messages = await this.prisma.messages.findMany({
-      where: {
-        OR: [
-          { sender_id: userId },
-          { receiver_id: userId },
-        ],
-      },
+      where: whereClause,
       include: {
         sender: {
           select: {

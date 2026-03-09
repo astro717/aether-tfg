@@ -19,6 +19,7 @@ export function useKanbanData(organizationId: string | undefined) {
     queryFn: () => tasksApi.getKanbanData(organizationId!),
     enabled: !!organizationId,
     staleTime: 1000 * 60 * 5, // 5 minutes of freshness
+    refetchInterval: 3000, // Poll every 3 seconds to guarantee live updates from external agents
   });
 
   // 2. Optimistic Mutation (the heart of zero-latency UI)
