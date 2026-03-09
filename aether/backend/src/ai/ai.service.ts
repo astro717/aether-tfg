@@ -243,19 +243,19 @@ export class AiService {
       // Validate and sanitize issues array
       const validatedIssues = Array.isArray(parsed.issues)
         ? parsed.issues
-            .filter(issue =>
-              issue &&
-              typeof issue.title === 'string' &&
-              typeof issue.severity === 'string'
-            )
-            .map(issue => ({
-              severity: ['high', 'medium', 'low'].includes(issue.severity?.toLowerCase())
-                ? issue.severity.toLowerCase()
-                : 'medium',
-              title: issue.title,
-              file: typeof issue.file === 'string' ? issue.file : 'unknown',
-              line: typeof issue.line === 'number' ? issue.line : 0
-            }))
+          .filter(issue =>
+            issue &&
+            typeof issue.title === 'string' &&
+            typeof issue.severity === 'string'
+          )
+          .map(issue => ({
+            severity: ['high', 'medium', 'low'].includes(issue.severity?.toLowerCase())
+              ? issue.severity.toLowerCase()
+              : 'medium',
+            title: issue.title,
+            file: typeof issue.file === 'string' ? issue.file : 'unknown',
+            line: typeof issue.line === 'number' ? issue.line : 0
+          }))
         : [];
 
       return {
@@ -824,7 +824,7 @@ INSTRUCTIONS:
 3. Explain how it fits into the broader Task. (E.g., "This lays the database foundation for the feature").
 4. Determine remaining work ONLY by comparing the task description against this commit AND the other linked commits.
    - If the Task Current Status is 'Done', state that no remaining work is expected unless there are obvious fatal flaws.
-5. If TEAM DISCUSSIONS are provided, cross-reference the commit changes against them to see if any discussed technical requests were met or are still pending.
+5. If TEAM DISCUSSIONS are provided, treat them as critical context curated by the developers. Use them to evaluate technical decisions, architectural constraints, or pending work mentioned in the discussions against the commit changes. Disregard non-technical chatter like 'jaja'.
 
 CRITICAL: Return ONLY raw JSON starting with { and ending with }.
 {
@@ -1162,23 +1162,23 @@ INSTRUCTIONS:
 Assess the holistic progress of the task, not just the latest target commit.
 1. Summarize the overall state of the feature.
 2. Outline what concrete value has been delivered so far based on the timeline.
-3. If there are obvious missing requirements based on the description, highlight them as Next Steps.
-4. If TEAM DISCUSSIONS are provided, cross-reference the commit changes against them to see if any discussed technical requests were met or are still pending.
+3. If there are obvious missing requirements based on the description, highlight them as Next Steps. DO NOT suggest generic SDLC steps (like deployment planning, general QA, or writing generic tests) unless explicitly mentioned in the Task or Discussions.
+4. If TEAM DISCUSSIONS are provided, treat them as critical context curated by the developers. Use them to evaluate technical decisions, architectural constraints, or pending work mentioned in the discussions against the commit changes. Disregard non-technical chatter like 'jaja'.
 
 CRITICAL: Return ONLY raw JSON starting with { and ending with }.
 {
   "summary": "Executive summary of the task's general progress (in ${languageName})",
   "sections": [
     {
-      "title": "Progreso Global",
+      "title": "Global Progress (evaluate in ${languageName})",
       "content": "Overall feature state and timeline analysis (in ${languageName})"
     },
     {
-      "title": "Última Intervención",
+      "title": "Latest Activity (evaluate in ${languageName})",
       "content": "What value the target commit adds specifically (in ${languageName})"
     },
     {
-      "title": "Siguientes Pasos",
+      "title": "Next Steps (evaluate in ${languageName})",
       "content": "What remains to be done according to task description (in ${languageName})"
     }
   ]
