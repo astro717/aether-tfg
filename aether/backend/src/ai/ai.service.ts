@@ -449,7 +449,7 @@ export class AiService {
       const filesChanged = diff.files.map(f => `  - ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n');
       const patches = diff.files
         .filter(f => f.patch)
-        .slice(0, 3) // Limit to 3 files to avoid token limits
+        .slice(0, 15) // Expanded to 15 files to prevent truncation blindness
         .map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 15000) || 'No patch'}`)
         .join('\n');
 
@@ -612,7 +612,7 @@ Files changed:
 ${diff.files.map(f => `- ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n')}
 
 Code changes:
-${diff.files.slice(0, 3).map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 800) || 'No patch'}`).join('\n')}
+${diff.files.slice(0, 15).map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 15000) || 'No patch'}`).join('\n')}
 
 Respond in this exact JSON format (no markdown, just raw JSON):
 {
@@ -813,7 +813,7 @@ CURRENT COMMIT TO ANALYZE:
 - Message: ${diff.message}
 
 CODE CHANGES:
-${diff.files.slice(0, 4).map(f => `File: ${f.filename}\n${f.patch?.substring(0, 15000) || 'No patch available'}`).join('\n---\n')}
+${diff.files.slice(0, 15).map(f => `File: ${f.filename}\n${f.patch?.substring(0, 15000) || 'No patch available'}`).join('\n---\n')}
 
 TEAM DISCUSSIONS (PINNED CONTEXT):
 ${pinnedCommentsString}
@@ -973,7 +973,7 @@ DEPTH LEVEL: ${depthInstruction}
 COMMIT: ${sha.substring(0, 7)}
 Message: ${diff.message}
 Changes:
-${diff.files.slice(0, 5).map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 1000) || 'No patch'}`).join('\n')}
+${diff.files.slice(0, 15).map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 15000) || 'No patch'}`).join('\n')}
 
 ANALYSIS REQUIREMENTS:
 1. Identify security vulnerabilities (injection, XSS, auth issues, etc.)
@@ -1133,7 +1133,7 @@ Required JSON structure:
       : 'No pinned context provided.';
 
     const codeExcerpts = diff.files
-      .slice(0, 4) // Include up to 4 files
+      .slice(0, 15) // Expanded to 15 files to prevent truncation
       .map(f => `\n--- ${f.filename} ---\n${f.patch?.substring(0, 15000) || 'No patch available'}`)
       .join('\n');
 
@@ -1316,6 +1316,62 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
   }
 
   /**
+   * HELPER: Calculate lookback window for task filtering
+   * Charts like CFD/Burndown need historical context to draw trends correctly.
+   * E.g., if user selects "this week", we need "last week" data to show the starting point.
+   * @param periodType - The period type: 'today' | 'week' | 'month' | 'quarter' | 'all'
+   * @param referenceDate - The reference date (usually now)
+   * @returns { lookbackDate, periodStartDate } - Date boundaries for filtering
+   */
+  private calculateLookbackWindow(
+    periodType: 'today' | 'week' | 'month' | 'quarter' | 'all',
+    referenceDate: Date,
+  ): { lookbackDate: Date; periodStartDate: Date } {
+    const now = new Date(referenceDate);
+    let periodStartDate: Date;
+    let lookbackDate: Date;
+
+    switch (periodType) {
+      case 'today':
+        // Period start: midnight today | Lookback: 1 week ago (for trend context)
+        periodStartDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        lookbackDate = new Date(now);
+        lookbackDate.setDate(lookbackDate.getDate() - 7);
+        break;
+      case 'week':
+        // Period start: 7 days ago | Lookback: 14 days ago (1 extra week)
+        periodStartDate = new Date(now);
+        periodStartDate.setDate(periodStartDate.getDate() - 7);
+        lookbackDate = new Date(now);
+        lookbackDate.setDate(lookbackDate.getDate() - 14);
+        break;
+      case 'month':
+        // Period start: 30 days ago | Lookback: 60 days ago (1 extra month)
+        periodStartDate = new Date(now);
+        periodStartDate.setDate(periodStartDate.getDate() - 30);
+        lookbackDate = new Date(now);
+        lookbackDate.setDate(lookbackDate.getDate() - 60);
+        break;
+      case 'quarter':
+        // Period start: 90 days ago | Lookback: 180 days ago (1 extra quarter)
+        periodStartDate = new Date(now);
+        periodStartDate.setDate(periodStartDate.getDate() - 90);
+        lookbackDate = new Date(now);
+        lookbackDate.setDate(lookbackDate.getDate() - 180);
+        break;
+      case 'all':
+      default:
+        // No filtering for 'all' - go back 2 years as reasonable limit
+        periodStartDate = new Date(now);
+        periodStartDate.setFullYear(periodStartDate.getFullYear() - 2);
+        lookbackDate = new Date(periodStartDate);
+        break;
+    }
+
+    return { lookbackDate, periodStartDate };
+  }
+
+  /**
    * HELPER: Fetch real CFD data from daily_metrics table
    * Falls back to empty array if no data available
    * @param organizationId - The organization ID
@@ -1355,6 +1411,136 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       in_progress: m.in_progress_count,
       todo: m.todo_count,
     }));
+  }
+
+  /**
+   * HELPER: Build CFD from task_history table for accurate daily progression
+   * Used ONLY for bottleneck reports to show real status changes over time.
+   * This reconstructs the actual state of tasks on each day from historical records.
+   * @param organizationId - Organization to analyze
+   * @param periodStartDate - Start of the period
+   * @param periodEndDate - End of the period (typically now)
+   * @returns Array of CFD data points with actual daily status counts
+   */
+  private async buildCFDFromTaskHistory(
+    organizationId: string,
+    periodStartDate: Date,
+    periodEndDate: Date,
+  ): Promise<Array<{ date: string; done: number; in_progress: number; todo: number }>> {
+    // Get all non-archived tasks for this organization
+    const allTasks = await this.prisma.tasks.findMany({
+      where: {
+        organization_id: organizationId,
+        is_archived: false,
+      },
+      select: {
+        id: true,
+        status: true,
+        created_at: true,
+      },
+    });
+
+    if (allTasks.length === 0) return [];
+
+    const taskIds = allTasks.map(t => t.id);
+
+    // Get all history records for these tasks within a broader window
+    // (we need records from before periodStart to know initial states)
+    const historyRecords = await this.prisma.task_history.findMany({
+      where: {
+        task_id: { in: taskIds },
+        organization_id: organizationId,
+      },
+      orderBy: { changed_at: 'asc' },
+      select: {
+        task_id: true,
+        new_status: true,
+        changed_at: true,
+      },
+    });
+
+    // Build a map of task_id -> array of status changes (sorted by time)
+    const taskHistoryMap = new Map<string, Array<{ status: string; changedAt: Date }>>();
+    for (const record of historyRecords) {
+      if (!taskHistoryMap.has(record.task_id)) {
+        taskHistoryMap.set(record.task_id, []);
+      }
+      taskHistoryMap.get(record.task_id)!.push({
+        status: record.new_status,
+        changedAt: record.changed_at ? new Date(record.changed_at) : new Date(),
+      });
+    }
+
+    // Generate array of dates from periodStart to periodEnd
+    const dates: Date[] = [];
+    const currentDate = new Date(periodStartDate);
+    currentDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(periodEndDate);
+    endDate.setHours(23, 59, 59, 999);
+
+    while (currentDate <= endDate) {
+      dates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // For each day, determine the status of each task and count
+    const cfdData: Array<{ date: string; done: number; in_progress: number; todo: number }> = [];
+
+    for (const day of dates) {
+      const dayEnd = new Date(day);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      let doneCount = 0;
+      let inProgressCount = 0;
+      let todoCount = 0;
+
+      for (const task of allTasks) {
+        // Skip tasks created after this day
+        if (task.created_at && new Date(task.created_at) > dayEnd) {
+          continue;
+        }
+
+        // Find the task's status on this day
+        const history = taskHistoryMap.get(task.id) || [];
+        let statusOnDay: string | null = null;
+
+        // Find the most recent status change on or before this day
+        for (const change of history) {
+          if (change.changedAt <= dayEnd) {
+            statusOnDay = change.status;
+          } else {
+            break; // History is sorted, so we can stop
+          }
+        }
+
+        // If no history found for this day, use 'todo' as default (newly created tasks start as todo)
+        if (statusOnDay === null) {
+          statusOnDay = 'todo';
+        }
+
+        // Count by status
+        if (statusOnDay === 'done') {
+          doneCount++;
+        } else if (statusOnDay === 'in_progress') {
+          inProgressCount++;
+        } else if (statusOnDay === 'todo') {
+          todoCount++;
+        }
+        // Note: pending_validation is grouped with in_progress for simplicity
+        else if (statusOnDay === 'pending_validation') {
+          inProgressCount++;
+        }
+      }
+
+      cfdData.push({
+        date: day.toISOString().split('T')[0],
+        done: doneCount,
+        in_progress: inProgressCount,
+        todo: todoCount,
+      });
+    }
+
+    return cfdData;
   }
 
   /**
@@ -1614,7 +1800,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
    * @param period - 'today' | 'week' | 'month' | 'quarter' | 'all'
    * NOTE: This is an approximation based on current data. Ideally needs a task_history table.
    */
-  private generateSmoothCFD(tasks: any[], period: string = 'week'): Array<{
+  private generateSmoothCFD(tasks: any[], period: string = 'week', periodStartDate?: Date): Array<{
     date: string;
     done: number;
     review: number;
@@ -1626,14 +1812,34 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
 
     const totalBuckets = timestamps.length;
 
-    // Base counts for each status
-    const baseDone = tasks.filter(t => t.status === 'done').length;
-    const baseReview = tasks.filter(t => t.status === 'pending_validation').length;
-    const baseInProgress = tasks.filter(t => t.status === 'in_progress').length;
-    const baseTodo = tasks.filter(t => t.status === 'todo').length;
+    // Calculate BASELINE counts (state at period START) vs CURRENT counts (state NOW)
+    // This ensures CFD starts from the historical point, not from zero
+    const hasTimestamp = (t: any) => t.updated_at;
+
+    // Tasks completed BEFORE period started (the baseline "done" at period start)
+    const doneBeforePeriod = periodStartDate
+      ? tasks.filter(t => t.status === 'done' && hasTimestamp(t) && new Date(t.updated_at) < periodStartDate).length
+      : 0;
+
+    // Tasks completed DURING the period (progress made this period)
+    const doneThisPeriod = periodStartDate
+      ? tasks.filter(t => t.status === 'done' && hasTimestamp(t) && new Date(t.updated_at) >= periodStartDate).length
+      : tasks.filter(t => t.status === 'done').length;
+
+    // Current state counts
+    const currentDone = doneBeforePeriod + doneThisPeriod;
+    const currentReview = tasks.filter(t => t.status === 'pending_validation').length;
+    const currentInProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const currentTodo = tasks.filter(t => t.status === 'todo').length;
+
+    // Starting state (estimate at period start) - assumes linear inverse progression
+    const startDone = doneBeforePeriod;
+    const startReview = Math.max(0, currentReview + Math.floor(doneThisPeriod * 0.2)); // Some review tasks became done
+    const startInProgress = Math.max(0, currentInProgress + Math.floor(doneThisPeriod * 0.5)); // Some in_progress became done
+    const startTodo = Math.max(0, currentTodo + Math.floor(doneThisPeriod * 0.3)); // Some todo became in_progress
 
     // Noise amplitude scales with task count (more tasks = more variation)
-    const noiseScale = Math.max(1, Math.floor(Math.sqrt(tasks.length) * 0.3));
+    const noiseScale = Math.max(1, Math.floor(Math.sqrt(tasks.length) * 0.2));
 
     for (let i = 0; i < timestamps.length; i++) {
       const timestamp = timestamps[i];
@@ -1646,17 +1852,16 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       // Simulate progress over time (progressFactor increases as we approach current time)
       const progressFactor = i / Math.max(totalBuckets - 1, 1);
 
-      // Add realistic noise: weekends might have less activity, sprints have bursts
-      // Use index as seed for deterministic but varying noise
+      // Add realistic noise (smaller amplitude for smoother curves)
       const doneNoise = this.seededNoise(i * 7 + 1, noiseScale);
       const inProgressNoise = this.seededNoise(i * 7 + 2, noiseScale);
       const todoNoise = this.seededNoise(i * 7 + 3, noiseScale);
 
-      // Calculate cumulative values with noise (ensure non-negative)
-      const doneCount = Math.max(0, Math.round(baseDone * progressFactor) + doneNoise);
-      const reviewCount = Math.max(0, Math.round(baseReview * progressFactor));
-      const inProgressCount = Math.max(0, Math.round(baseInProgress * progressFactor) + inProgressNoise);
-      const todoCount = Math.max(0, Math.round(baseTodo * (1 - progressFactor * 0.5)) + todoNoise);
+      // Interpolate from START state to CURRENT state (realistic CFD progression)
+      const doneCount = Math.max(0, Math.round(startDone + (currentDone - startDone) * progressFactor) + doneNoise);
+      const reviewCount = Math.max(0, Math.round(startReview + (currentReview - startReview) * progressFactor));
+      const inProgressCount = Math.max(0, Math.round(startInProgress + (currentInProgress - startInProgress) * progressFactor) + inProgressNoise);
+      const todoCount = Math.max(0, Math.round(startTodo + (currentTodo - startTodo) * progressFactor) + todoNoise);
 
       data.push({
         date: dateStr,
@@ -2085,9 +2290,22 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
     // Cache MISS or force regenerate - Generate new report
     this.logger.log(`Generating manager report ${type} for org ${organizationId.substring(0, 8)}, period: ${period}`);
 
-    // Gather analytics data for the report
+    // Extract period type from period identifier (e.g., "2026-W08" -> "week")
+    const periodType = this.extractPeriodType(period);
+
+    // ============ PHASE 1: LOOKBACK WINDOW CALCULATION ============
+    // Calculate lookback date to filter historical tasks for charts (CFD, Burndown need context)
+    // Without this, we'd pull the entire task history, crushing graph readability
+    const now = new Date();
+    const { lookbackDate, periodStartDate } = this.calculateLookbackWindow(periodType, now);
+    this.logger.log(`Lookback window: ${lookbackDate.toISOString()} -> now (period start: ${periodStartDate.toISOString()})`);
+
+    // Gather analytics data for the report (with lookback filter for performance)
     const tasks = await this.prisma.tasks.findMany({
-      where: { organization_id: organizationId },
+      where: {
+        organization_id: organizationId,
+        updated_at: { gte: lookbackDate }, // Only tasks active within the lookback window
+      },
       include: {
         users_tasks_assignee_idTousers: {
           select: { id: true, username: true },
@@ -2096,8 +2314,23 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       orderBy: { created_at: 'desc' },
     });
 
-    // Extract period type from period identifier (e.g., "2026-W08" -> "week")
-    const periodType = this.extractPeriodType(period);
+    // Separate query for Cycle Time chart: needs ALL completed tasks (not lookback-filtered)
+    // to show the full 50-task historical view of cycle times
+    const allTasksForCycleTime = await this.prisma.tasks.findMany({
+      where: {
+        organization_id: organizationId,
+        status: 'done', // Only need completed tasks for cycle time
+      },
+      include: {
+        users_tasks_assignee_idTousers: {
+          select: { id: true, username: true },
+        },
+      },
+      orderBy: { updated_at: 'desc' },
+      take: 100, // Fetch more than 50 to allow for filtering
+    });
+    this.logger.log(`Fetched ${allTasksForCycleTime.length} completed tasks for cycle time chart`);
+
     this.logger.log(`Extracted period type: ${periodType} from identifier: ${period}`);
 
     // ============ PHASE A: CALCULATE CHART DATA (CONDITIONAL BY REPORT TYPE) ============
@@ -2137,7 +2370,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         // Weekly reports focus on team metrics and workflow
         // Use real CFD data from daily_metrics, fall back to synthetic if insufficient
         const realCFD = await this.getRealCFDData(organizationId, periodType);
-        chartData.cfd = realCFD.length >= 2 ? realCFD : this.generateSmoothCFD(tasks, periodType);
+        chartData.cfd = realCFD.length >= 2 ? realCFD : this.generateSmoothCFD(tasks, periodType, periodStartDate);
         chartData.investment = this.calculateInvestmentProfile(tasks);
         chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, periodType);
         chartData.burndown = this.projectBurndownCone(tasks, periodType);
@@ -2148,7 +2381,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       case 'user_performance':
         // Performance reports focus on individual metrics
         chartData.radar = await this.calculateRadarMetrics(organizationId, userId);
-        chartData.cycleTime = this.calculateCycleTime(tasks, userId);
+        chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime, userId);
         chartData.throughput = this.calculateThroughput(tasks, userId);
         chartData.investment = this.calculateInvestmentProfile(tasks, userId);
         this.logger.log('User performance charts: Radar, CycleTime, Throughput, Investment');
@@ -2156,14 +2389,14 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
 
       case 'bottleneck_prediction': {
         // Bottleneck reports focus on risk indicators
-        // Use real CFD data from daily_metrics, fall back to synthetic if insufficient
-        const realCFDBottleneck = await this.getRealCFDData(organizationId, periodType);
-        chartData.cfd = realCFDBottleneck.length >= 2 ? realCFDBottleneck : this.generateSmoothCFD(tasks, periodType);
-        chartData.cycleTime = this.calculateCycleTime(tasks);
+        // Build CFD from task_history for accurate daily progression (not cumulative totals)
+        const historicalCFD = await this.buildCFDFromTaskHistory(organizationId, periodStartDate, now);
+        chartData.cfd = historicalCFD.length >= 2 ? historicalCFD : this.generateSmoothCFD(tasks, periodType, periodStartDate);
+        chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime);
         chartData.investment = this.calculateInvestmentProfile(tasks);
         chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, periodType);
         chartData.burndown = this.projectBurndownCone(tasks, periodType);
-        this.logger.log(`Bottleneck prediction charts: CFD (${realCFDBottleneck.length >= 2 ? 'real' : 'synthetic'}), CycleTime, Investment, Heatmap, Burndown`);
+        this.logger.log(`Bottleneck prediction charts: CFD (${historicalCFD.length >= 2 ? 'from task_history' : 'synthetic'}), CycleTime, Investment, Heatmap, Burndown`);
         break;
       }
 
@@ -2171,9 +2404,9 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         this.logger.warn(`Unknown report type: ${type}, calculating all charts as fallback`);
         chartData.investment = this.calculateInvestmentProfile(tasks);
         const realCFDDefault = await this.getRealCFDData(organizationId, periodType);
-        chartData.cfd = realCFDDefault.length >= 2 ? realCFDDefault : this.generateSmoothCFD(tasks, periodType);
+        chartData.cfd = realCFDDefault.length >= 2 ? realCFDDefault : this.generateSmoothCFD(tasks, periodType, periodStartDate);
         chartData.radar = await this.calculateRadarMetrics(organizationId);
-        chartData.cycleTime = this.calculateCycleTime(tasks);
+        chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime);
         chartData.throughput = this.calculateThroughput(tasks);
         chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, periodType);
         chartData.burndown = this.projectBurndownCone(tasks, periodType);
@@ -2191,20 +2424,25 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       },
     });
 
-    // Calculate statistics
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    // Calculate statistics (using lookback-filtered tasks)
     const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
     const pendingValidation = tasks.filter(t => t.status === 'pending_validation').length;
     const todoTasks = tasks.filter(t => t.status === 'todo').length;
-    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    const now = new Date();
+    // Note: 'now' is already defined earlier for lookback window calculation
     const overdueTasks = tasks.filter(t =>
       t.due_date && new Date(t.due_date) < now && t.status !== 'done'
     );
 
-    // Calculate per-user stats
+    // ============ PHASE 2: PRAGMATIC AI CONTEXT ============
+    // Filter tasks for AI analysis: only active tasks OR tasks completed within the selected period
+    // This prevents the AI from flagging ancient completed tasks as current risks
+    const activeTasksForAI = tasks.filter(t =>
+      t.status !== 'done' || (t.updated_at && t.updated_at >= periodStartDate)
+    );
+    this.logger.log(`Filtered ${tasks.length} tasks -> ${activeTasksForAI.length} active tasks for AI context`);
+
+    // Calculate per-user stats (using filtered tasks to avoid historical noise)
     const userStats = new Map<string, { username: string; completed: number; inProgress: number; total: number }>();
     for (const member of teamMembers) {
       if (member.users) {
@@ -2216,7 +2454,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         });
       }
     }
-    for (const task of tasks) {
+    for (const task of activeTasksForAI) {
       if (task.assignee_id && userStats.has(task.assignee_id)) {
         const stats = userStats.get(task.assignee_id)!;
         stats.total++;
@@ -2225,27 +2463,66 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       }
     }
 
+    // Helper: Calculate days a task has been stagnant in current status
+    const calculateDaysStagnant = (task: { updated_at: Date; status: string | null }): number => {
+      if (task.status === 'done') return 0; // Completed tasks aren't stagnant
+      const lastUpdate = new Date(task.updated_at);
+      const diffMs = now.getTime() - lastUpdate.getTime();
+      return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    };
+
+    // Fetch pinned comments for active tasks (team-critical context)
+    const activeTaskIds = activeTasksForAI.filter(t => t.status !== 'done').map(t => t.id);
+    const pinnedComments = activeTaskIds.length > 0
+      ? await this.prisma.task_comments.findMany({
+          where: {
+            task_id: { in: activeTaskIds },
+            is_pinned: true,
+          },
+          include: {
+            users: { select: { username: true } },
+            tasks: { select: { title: true, readable_id: true } },
+          },
+          orderBy: { created_at: 'desc' },
+          take: 10, // Limit to avoid context bloat
+        })
+      : [];
+
+    // Build pinned context string for AI
+    const pinnedContextStr = pinnedComments.length > 0
+      ? `\nTEAM DISCUSSIONS (PINNED CONTEXT):\n${pinnedComments.map(c =>
+          `- [${c.tasks.readable_id}] "${c.tasks.title}": "${c.content.slice(0, 150)}${c.content.length > 150 ? '...' : ''}" - ${c.users.username}`
+        ).join('\n')}`
+      : '';
+
     // Build the prompt based on report type
     let prompt: string;
     const baseContext = `
-ORGANIZATION ANALYTICS:
-- Total Tasks: ${totalTasks}
-- Completed: ${completedTasks} (${completionRate}% completion rate)
+ORGANIZATION ANALYTICS (Period: ${periodType}):
+- Total Active Tasks: ${activeTasksForAI.length}
+- Completed (this period): ${activeTasksForAI.filter(t => t.status === 'done').length}
 - In Progress: ${inProgressTasks}
 - To Do: ${todoTasks}
 - Pending Validation: ${pendingValidation}
 - Overdue Tasks: ${overdueTasks.length}
 - Team Size: ${teamMembers.length}
 
-TEAM MEMBERS PERFORMANCE:
+TEAM MEMBERS PERFORMANCE (this period):
 ${Array.from(userStats.values()).map(u => `- ${u.username}: ${u.completed} completed, ${u.inProgress} in progress, ${u.total} total`).join('\n')}
 
 OVERDUE TASKS:
-${overdueTasks.slice(0, 5).map(t => `- "${t.title}" (assigned to: ${t.users_tasks_assignee_idTousers?.username || 'Unassigned'})`).join('\n') || 'None'}
+${overdueTasks.slice(0, 5).map(t => {
+  const days = calculateDaysStagnant(t);
+  return `- "${t.title}" [overdue ${days} days] (assigned to: ${t.users_tasks_assignee_idTousers?.username || 'Unassigned'})`;
+}).join('\n') || 'None'}
 
-RECENT TASKS (Last 10):
-${tasks.slice(0, 10).map(t => `- [${t.status}] "${t.title}" - ${t.users_tasks_assignee_idTousers?.username || 'Unassigned'}`).join('\n')}
-`;
+ACTIVE TASKS (with time-in-status):
+${activeTasksForAI.filter(t => t.status !== 'done').slice(0, 15).map(t => {
+  const days = calculateDaysStagnant(t);
+  const stagnantFlag = days > 7 ? ` ⚠️ STAGNANT` : '';
+  return `- [${t.status} for ${days} days${stagnantFlag}] "${t.title}" - ${t.users_tasks_assignee_idTousers?.username || 'Unassigned'}`;
+}).join('\n')}
+${pinnedContextStr}`;
 
     switch (type) {
       case 'weekly_organization':
@@ -2321,15 +2598,35 @@ Required JSON structure:
 }`;
         break;
 
-      case 'bottleneck_prediction':
+      case 'bottleneck_prediction': {
+        // ============ PHASE 3: ANTI-HALLUCINATION & TIMING CONTEXT ============
+        // Detect "The Monday Problem": early in the week with no completed tasks is NORMAL
+        const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, 2 = Tuesday
+        const isEarlyWeek = (dayOfWeek === 1 || dayOfWeek === 2) && (periodType === 'week' || periodType === 'today');
+
+        const mondayProblemContext = isEarlyWeek
+          ? `\n⚠️ CRITICAL TIMING CONTEXT: Today is the very beginning of the work week (${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek]}). It is completely normal mathematically that zero or very few tasks are marked as 'Done' right now. DO NOT alert on low completion velocity. INSTEAD, shift your analysis to 'Start of Week Planning': Focus on how the initial workload is distributed among team members and point out immediate risks (like overloaded individuals with too many in-progress tasks) to ensure a healthy upcoming week.\n`
+          : '';
+
+        // Anti-SDLC rule: prevent flagging todo tasks as bottlenecks
+        const antiSDLCRule = `
+⚠️ ANTI-HALLUCINATION RULES (CRITICAL - follow strictly):
+- DO NOT label tasks in 'todo' status as bottlenecks, critical debt, or risks simply because they are pending. 'Todo' means they are waiting their turn in the backlog - this is normal SDLC behavior.
+- ONLY flag tasks as bottlenecks if they have been stuck 'in_progress' for an EXCESSIVE number of days (>7 days typically indicates a problem).
+- ONLY flag resource constraints if you clearly identify an overloaded assignee handling too many CONCURRENT active (in_progress) tasks.
+- The "time-in-status" indicator (e.g., "in_progress for 12 days") is your primary signal for real bottlenecks.
+- Tasks marked with "⚠️ STAGNANT" in the data are genuine concerns worth highlighting.`;
+
         prompt = `You are a senior project risk analyst identifying potential bottlenecks and risks for an executive audience.
 
 ${baseContext}
+${mondayProblemContext}
+${antiSDLCRule}
 
 Analyze the data and predict potential bottlenecks. Structure your analysis into these sections:
 1. Executive Summary (key risks and concerns - 2-3 impactful sentences)
-2. Current Bottlenecks (tasks or areas blocking progress)
-3. Resource Constraints (overloaded team members, capacity issues)
+2. Current Bottlenecks (tasks or areas blocking progress - focus on STAGNANT in_progress tasks)
+3. Resource Constraints (overloaded team members with too many concurrent in_progress tasks)
 4. Risk Assessment (potential future problems with severity levels)
 5. Mitigation Strategies (actionable recommendations to address identified risks)
 
@@ -2358,6 +2655,7 @@ Required JSON structure:
   ]
 }`;
         break;
+      }
 
       default:
         throw new NotFoundException('Invalid report type');
