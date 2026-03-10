@@ -1,0 +1,45 @@
+# Fly.io configuration for Aether AI Microservice
+# Change 'aether-ai' to your desired app name
+
+app = 'aether-ai'
+primary_region = 'mad'  # Madrid - closest to Spain
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  PORT = '8080'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+# Health check
+[[services]]
+  protocol = 'tcp'
+  internal_port = 8080
+
+  [[services.ports]]
+    port = 80
+    handlers = ['http']
+
+  [[services.ports]]
+    port = 443
+    handlers = ['tls', 'http']
+
+  [[services.http_checks]]
+    interval = 10000
+    grace_period = '10s'
+    method = 'get'
+    path = '/'
+    protocol = 'http'
+    timeout = 2000
