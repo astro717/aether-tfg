@@ -768,13 +768,13 @@ function CommentCard({
                             <span className="text-[11px] text-gray-400 dark:text-gray-500 mr-0.5">Delete?</span>
                             <button
                                 onClick={() => { onDelete(); setConfirmingDelete(false); }}
-                                className="px-2 py-0.5 text-[11px] font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
+                                className="px-2 py-0.5 text-[11px] font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors"
                             >
                                 Yes
                             </button>
                             <button
                                 onClick={() => setConfirmingDelete(false)}
-                                className="px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-600 rounded-md transition-colors"
+                                className="px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-600 rounded-xl transition-colors"
                             >
                                 No
                             </button>
