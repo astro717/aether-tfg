@@ -1,11 +1,9 @@
 /**
- * InvestmentArcGauge Component
- * Replaces the double-donut with a premium semi-circular arc gauge.
- * Inspired by high-end dashboard UIs where each segment occupies arc
- * space proportional to its value, with a legend table below.
+ * InvestmentArcGauge — Premium semi-circular arc gauge
+ * Layout: arc on the left, legend table on the right (same height)
+ * Rendered with pure SVG for full visual control.
  */
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Info } from 'lucide-react';
 
 interface InvestmentData {
@@ -25,13 +23,47 @@ interface InvestmentSunburstProps {
 }
 
 const SEGMENT_COLORS: Record<string, string> = {
-  'Features':    '#3b82f6',
-  'Bugs':        '#ef4444',
-  'Chores':      '#6b7280',
-  'Maintenance': '#f59e0b',
-  'Tech Debt':   '#8b5cf6',
-  'New Value':   '#10b981',
+  Features:    '#3b82f6',
+  Bugs:        '#ef4444',
+  Chores:      '#6b7280',
+  Maintenance: '#f59e0b',
+  'Tech Debt': '#8b5cf6',
+  'New Value': '#10b981',
 };
+
+// ─── SVG helpers ─────────────────────────────────────────────────────────────
+
+/** Convert polar coords (math angle, y-flipped for SVG) to Cartesian. */
+function polar(cx: number, cy: number, r: number, angleDeg: number): [number, number] {
+  const a = (angleDeg * Math.PI) / 180;
+  return [cx + r * Math.cos(a), cy - r * Math.sin(a)];
+}
+
+/**
+ * Build a donut-arc SVG path from startDeg → endDeg (decreasing = going through top).
+ * Outer arc: CCW in SVG (sweep=0). Inner return arc: CW in SVG (sweep=1).
+ */
+function arcPath(
+  cx: number, cy: number,
+  ir: number, or: number,
+  startDeg: number, endDeg: number,
+): string {
+  const sweep = startDeg - endDeg;
+  const large = sweep > 180 ? 1 : 0;
+  const [ox1, oy1] = polar(cx, cy, or, startDeg);
+  const [ox2, oy2] = polar(cx, cy, or, endDeg);
+  const [ix2, iy2] = polar(cx, cy, ir, endDeg);
+  const [ix1, iy1] = polar(cx, cy, ir, startDeg);
+  return [
+    `M${ox1.toFixed(2)},${oy1.toFixed(2)}`,
+    `A${or},${or} 0 ${large},0 ${ox2.toFixed(2)},${oy2.toFixed(2)}`,
+    `L${ix2.toFixed(2)},${iy2.toFixed(2)}`,
+    `A${ir},${ir} 0 ${large},1 ${ix1.toFixed(2)},${iy1.toFixed(2)}`,
+    'Z',
+  ].join(' ');
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export function InvestmentSunburst({
   data,
@@ -39,31 +71,60 @@ export function InvestmentSunburst({
   subtitle,
   pdfMode = false,
 }: InvestmentSunburstProps) {
-  const segments = data.labels.map((label, idx) => ({
-    name: label,
-    value: data.datasets[0]?.data[idx] || 0,
-    color: SEGMENT_COLORS[label] ?? '#6b7280',
-  })).filter(s => s.value > 0);
+  const segments = data.labels
+    .map((label, idx) => ({
+      name:  label,
+      value: data.datasets[0]?.data[idx] ?? 0,
+      color: SEGMENT_COLORS[label] ?? '#6b7280',
+    }))
+    .filter(s => s.value > 0);
 
   const total = segments.reduce((sum, s) => sum + s.value, 0);
 
-  // Arc: 220° sweep — opens from lower-left to lower-right
-  const START_ANGLE = 200;
-  const END_ANGLE   = -20;
+  // ── Arc geometry ──
+  const W = 200, H = 168;
+  const cx = W / 2, cy = H - 18;
+  const outerR = 108, innerR = 80;
+  const midR   = (outerR + innerR) / 2;
+  const capR   = (outerR - innerR) / 2 - 1; // rounded end-cap radius
 
-  const innerR = pdfMode ? 55 : 70;
-  const outerR = pdfMode ? 80 : 105;
+  const TOTAL_SWEEP = 228; // degrees the arc sweeps
+  const START       = 204; // start angle (lower-left)
+  const GAP         = 2.8; // degrees between segments
+
+  const availableSweep = TOTAL_SWEEP - Math.max(0, segments.length - 1) * GAP;
+
+  // Compute per-segment arcs
+  type ArcSeg = typeof segments[0] & { path: string; capA: number; capB: number };
+  const arcs: ArcSeg[] = [];
+  let angle = START;
+  for (const seg of segments) {
+    const sweep   = (seg.value / total) * availableSweep;
+    const endAngle = angle - sweep;
+    arcs.push({
+      ...seg,
+      path: arcPath(cx, cy, innerR, outerR, angle, endAngle),
+      capA: angle,
+      capB: endAngle,
+    });
+    angle = endAngle - GAP;
+  }
+
+  const pct = (v: number) =>
+    total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
 
   return (
     <div
-      className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm flex flex-col"
+      className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-5 border border-gray-100 dark:border-zinc-700/50 shadow-sm"
       data-chart-id="investment-profile"
     >
-      {/* Header */}
-      <div className="mb-2 flex items-start justify-between">
+      {/* ── Header ── */}
+      <div className="mb-4 flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
-          {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>}
+          {subtitle && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
+          )}
         </div>
         <div className="relative group">
           <button
@@ -79,89 +140,116 @@ export function InvestmentSunburst({
               A visual breakdown of where your team invests effort. Grouped by task type (
               <span className="text-blue-400 font-medium">Feature</span>,{' '}
               <span className="text-red-400 font-medium">Bug</span>,{' '}
-              <span className="text-gray-400 font-medium">Chore</span>) to ensure a healthy balance between value creation and technical debt management.
+              <span className="text-gray-400 font-medium">Chore</span>
+              ) to ensure a healthy balance between value creation and technical debt management.
             </p>
             <div className="absolute -top-1.5 right-4 w-3 h-3 bg-zinc-900/95 rotate-45 border-l border-t border-zinc-700/50" />
           </div>
         </div>
       </div>
 
-      {/* Arc Chart */}
-      <div className="relative" style={{ height: pdfMode ? 140 : 180 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={segments}
-              cx="50%"
-              cy="88%"
-              startAngle={START_ANGLE}
-              endAngle={END_ANGLE}
-              innerRadius={innerR}
-              outerRadius={outerR}
-              paddingAngle={2}
-              dataKey="value"
-              strokeWidth={0}
-              isAnimationActive={!pdfMode}
-            >
-              {segments.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(24,24,27,0.95)',
-                border: 'none',
-                borderRadius: '10px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                padding: '10px 14px',
-              }}
-              labelStyle={{ color: '#fff', fontWeight: 600, marginBottom: 2 }}
-              itemStyle={{ color: '#d1d5db' }}
-              formatter={(value: number) => [`${value}%`, 'Share']}
+      {/* ── Body: arc + legend side-by-side ── */}
+      <div className="flex items-center gap-2">
+
+        {/* LEFT: SVG arc gauge */}
+        <div className="flex-shrink-0 relative" style={{ width: W, height: H }}>
+          <svg
+            width={W}
+            height={H}
+            viewBox={`0 0 ${W} ${H}`}
+            overflow="visible"
+          >
+            <defs>
+              {/* Soft glow filter */}
+              <filter id="arc-glow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              {/* Subtle inner shadow on track */}
+              <filter id="track-shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            {/* ── Background track ── */}
+            <path
+              d={arcPath(cx, cy, innerR, outerR, START, START - TOTAL_SWEEP)}
+              fill="currentColor"
+              className="text-gray-100 dark:text-zinc-700/60"
+              opacity={0.9}
             />
-          </PieChart>
-        </ResponsiveContainer>
 
-        {/* Center value */}
-        <div
-          className="absolute inset-x-0 flex flex-col items-center pointer-events-none"
-          style={{ bottom: pdfMode ? 2 : 6 }}
-        >
-          <span className={`font-bold tabular-nums text-gray-900 dark:text-white ${pdfMode ? 'text-xl' : 'text-2xl'}`}>
-            {total}
-          </span>
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 tracking-wide uppercase">
-            tasks
-          </span>
+            {/* ── Colored segments with glow ── */}
+            <g filter="url(#arc-glow)">
+              {arcs.map((arc) => (
+                <path key={arc.name} d={arc.path} fill={arc.color} opacity={0.92} />
+              ))}
+            </g>
+
+            {/* ── Rounded end-caps on each segment ── */}
+            {arcs.map((arc) => {
+              const [ax, ay] = polar(cx, cy, midR, arc.capA);
+              const [bx, by] = polar(cx, cy, midR, arc.capB);
+              return (
+                <g key={`caps-${arc.name}`}>
+                  <circle cx={ax} cy={ay} r={capR} fill={arc.color} opacity={0.92} />
+                  <circle cx={bx} cy={by} r={capR} fill={arc.color} opacity={0.92} />
+                </g>
+              );
+            })}
+
+            {/* ── Thin highlight ring on outer edge ── */}
+            {arcs.map((arc) => (
+              <path
+                key={`hl-${arc.name}`}
+                d={arcPath(cx, cy, outerR - 3, outerR, arc.capA, arc.capB)}
+                fill={arc.color}
+                opacity={0.35}
+              />
+            ))}
+          </svg>
+
+          {/* Center label */}
+          <div
+            className="absolute inset-x-0 flex flex-col items-center pointer-events-none select-none"
+            style={{ bottom: 10 }}
+          >
+            <span className="text-2xl font-bold tabular-nums text-gray-900 dark:text-white leading-none">
+              {total}
+            </span>
+            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-0.5">
+              tasks
+            </span>
+          </div>
         </div>
-      </div>
 
-      {/* Legend table */}
-      <div className="mt-4 space-y-2">
-        {segments.map((seg) => {
-          const pct = total > 0 ? ((seg.value / total) * 100).toFixed(1) : '0.0';
-          return (
-            <div key={seg.name} className="flex items-center gap-2">
+        {/* RIGHT: Legend */}
+        <div className="flex-1 flex flex-col justify-center gap-1.5 pl-1 min-w-0">
+          {arcs.map((arc) => (
+            <div key={arc.name} className="flex items-center gap-2 min-w-0">
               {/* Dot */}
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: seg.color }}
+                style={{ backgroundColor: arc.color }}
               />
               {/* Name */}
               <span className="text-xs text-gray-600 dark:text-gray-300 flex-1 truncate">
-                {seg.name}
+                {arc.name}
               </span>
-              {/* Value */}
-              <span className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums w-8 text-right">
-                {seg.value}
+              {/* Value + pct */}
+              <span className="text-xs font-semibold text-gray-800 dark:text-white tabular-nums">
+                {arc.value}
               </span>
-              {/* Percentage badge */}
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums w-10 text-right">
-                {pct}%
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums w-9 text-right">
+                {pct(arc.value)}%
               </span>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );
