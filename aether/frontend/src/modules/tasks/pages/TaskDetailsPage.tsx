@@ -690,6 +690,7 @@ function CommentCard({
 }) {
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
 
     const formatTime = (dateString?: string) => {
         if (!dateString) return "";
@@ -713,9 +714,13 @@ function CommentCard({
 
     return (
         <>
-        <div className={`group/card relative bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm transition-all ${
-            isPinned ? 'ring-2 ring-[#C15F3C]/40 dark:ring-[#C15F3C]/30 bg-[#C15F3C]/5 dark:bg-[#C15F3C]/5' : ''
-        }`}>
+        <div
+            className={`relative bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm transition-all ${
+                isPinned ? 'ring-2 ring-[#C15F3C]/40 dark:ring-[#C15F3C]/30 bg-[#C15F3C]/5 dark:bg-[#C15F3C]/5' : ''
+            }`}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                     <UserAvatar
@@ -738,7 +743,9 @@ function CommentCard({
                         <button
                             onClick={onTogglePin}
                             disabled={isPinning}
-                            className={`p-1.5 rounded-full transition-all duration-150 opacity-0 group-hover/card:opacity-100 disabled:opacity-50 ${
+                            className={`p-1.5 rounded-full transition-all duration-150 disabled:opacity-50 ${
+                                isHovered ? 'opacity-100' : 'opacity-0'
+                            } ${
                                 isPinned
                                     ? 'bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20 hover:bg-[#C15F3C]/20'
                                     : 'hover:bg-[#C15F3C]/10 dark:hover:bg-[#C15F3C]/20'
@@ -758,7 +765,7 @@ function CommentCard({
                     {onDelete && !confirmingDelete && (
                         <button
                             onClick={() => setConfirmingDelete(true)}
-                            className="p-1.5 rounded-full opacity-0 group-hover/card:opacity-100 transition-all duration-150 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className={`p-1.5 rounded-full transition-all duration-150 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
                             title="Delete comment"
                         >
                             <Trash2 size={14} />
