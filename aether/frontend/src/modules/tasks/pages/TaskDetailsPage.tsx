@@ -713,7 +713,7 @@ function CommentCard({
 
     return (
         <>
-        <div className={`group relative bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm transition-all ${
+        <div className={`group/card relative bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm transition-all ${
             isPinned ? 'ring-2 ring-[#C15F3C]/40 dark:ring-[#C15F3C]/30 bg-[#C15F3C]/5 dark:bg-[#C15F3C]/5' : ''
         }`}>
             <div className="flex items-center justify-between mb-2">
@@ -727,21 +727,22 @@ function CommentCard({
                     <span className="font-bold text-sm text-gray-900 dark:text-white">
                         {author} {isMe && <span className="text-gray-400 font-normal ml-1">(You)</span>}
                     </span>
+                    {/* Small decorative pin — always visible when pinned */}
                     {isPinned && (
                         <Pin size={12} className="fill-current" style={{ color: '#C15F3C' }} />
                     )}
                 </div>
                 <div className="flex items-center gap-1.5">
-                    {/* Pin button — always visible when pinned, hover-only otherwise */}
+                    {/* Pin button — hover-only always, regardless of pinned state */}
                     {onTogglePin && (
                         <button
                             onClick={onTogglePin}
                             disabled={isPinning}
-                            className={`p-1.5 rounded-full transition-all duration-150 ${
+                            className={`p-1.5 rounded-full transition-all duration-150 opacity-0 group-hover/card:opacity-100 disabled:opacity-50 ${
                                 isPinned
-                                    ? 'opacity-100 bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20'
-                                    : 'opacity-0 group-hover:opacity-100 hover:bg-[#C15F3C]/10 dark:hover:bg-[#C15F3C]/20'
-                            } disabled:opacity-50`}
+                                    ? 'bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20 hover:bg-[#C15F3C]/20'
+                                    : 'hover:bg-[#C15F3C]/10 dark:hover:bg-[#C15F3C]/20'
+                            }`}
                             style={{ color: isPinned ? '#C15F3C' : undefined }}
                             title={isPinned ? 'Unpin from AI context' : 'Pin for AI context'}
                         >
@@ -757,7 +758,7 @@ function CommentCard({
                     {onDelete && !confirmingDelete && (
                         <button
                             onClick={() => setConfirmingDelete(true)}
-                            className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-150 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="p-1.5 rounded-full opacity-0 group-hover/card:opacity-100 transition-all duration-150 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                             title="Delete comment"
                         >
                             <Trash2 size={14} />
