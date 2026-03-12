@@ -197,7 +197,7 @@ export class TasksController {
     @Body() dto: CreateCommentDto,
     @CurrentUser() user: User,
   ) {
-    return this.tasksService.addComment(id, user.id, dto.content);
+    return this.tasksService.addComment(id, user.id, dto.content, dto.attachments);
   }
 
   @Delete('comments/:commentId')

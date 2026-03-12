@@ -989,7 +989,7 @@ export class TasksService {
   }
 
   // Comment methods
-  async addComment(taskId: string, userId: string, content: string) {
+  async addComment(taskId: string, userId: string, content: string, attachments?: { file_path: string; file_url: string; file_name: string; file_size: number; file_type: string }[]) {
     // Verify task exists and get assignee info
     const task = await this.prisma.tasks.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundException('Task not found');
@@ -1008,6 +1008,17 @@ export class TasksService {
         user_id: userId,
         organization_id: task.organization_id,
         content,
+        ...(attachments?.length && {
+          attachments: {
+            create: attachments.map((a) => ({
+              file_path: a.file_path,
+              file_url: a.file_url,
+              file_name: a.file_name,
+              file_size: a.file_size,
+              file_type: a.file_type,
+            })),
+          },
+        }),
       },
       include: {
         users: {
@@ -1018,6 +1029,7 @@ export class TasksService {
             avatar_color: true,
           },
         },
+        attachments: true,
       },
     });
 
@@ -1149,6 +1161,7 @@ export class TasksService {
             avatar_color: true,
           },
         },
+        attachments: true,
       },
       orderBy: { created_at: 'asc' },
     });

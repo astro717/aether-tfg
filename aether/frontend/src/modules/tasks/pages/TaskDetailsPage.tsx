@@ -11,9 +11,13 @@ import {
     Clock,
     GitCommit,
     Archive,
-    Pin
+    Pin,
+    FileText,
+    Download,
+    X as XIcon,
 } from "lucide-react";
-import { tasksApi, type Task, type TaskComment, type CommitDiff } from "../../dashboard/api/tasksApi";
+import { tasksApi, type Task, type TaskComment, type CommitDiff, type TaskCommentAttachment } from "../../dashboard/api/tasksApi";
+import { type UploadedFile } from "../../../hooks/useFileUpload";
 import { UserAvatar } from "../../../components/ui/UserAvatar";
 import { useAuth } from "../../auth/context/AuthContext";
 import { useOrganization } from "../../organization/context/OrganizationContext";
@@ -175,9 +179,16 @@ export function TaskDetailsPage() {
         fetchCommitDiff();
     }, [selectedCommitSha]);
 
-    const handleAddComment = async (content: string) => {
+    const handleAddComment = async (content: string, attachments?: UploadedFile[]) => {
         if (!taskId || !currentOrganization) return;
-        const newComment = await tasksApi.addComment(taskId, content, currentOrganization.id);
+        const mappedAttachments = attachments?.map((a) => ({
+            file_path: a.filePath,
+            file_url: a.fileUrl,
+            file_name: a.fileName,
+            file_size: a.fileSize,
+            file_type: a.fileType,
+        }));
+        const newComment = await tasksApi.addComment(taskId, content, currentOrganization.id, mappedAttachments);
         setComments((prev) => [...prev, newComment]);
     };
 
@@ -514,6 +525,7 @@ export function TaskDetailsPage() {
                                         isPinned={comment.is_pinned}
                                         onTogglePin={() => handleTogglePin(comment.id)}
                                         isPinning={pinningCommentId === comment.id}
+                                        attachments={comment.attachments}
                                     />
                                 ))
                             ) : (
@@ -651,6 +663,7 @@ function CommentCard({
     isPinned = false,
     onTogglePin,
     isPinning = false,
+    attachments = [],
 }: {
     author: string;
     avatarColor?: string;
@@ -660,7 +673,10 @@ function CommentCard({
     isPinned?: boolean;
     onTogglePin?: () => void;
     isPinning?: boolean;
+    attachments?: TaskCommentAttachment[];
 }) {
+    const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
     const formatTime = (dateString?: string) => {
         if (!dateString) return "";
         const date = new Date(dateString);
@@ -672,7 +688,17 @@ function CommentCard({
         });
     };
 
+    const formatFileSize = (bytes: number) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    const imageAttachments = attachments.filter((a) => a.file_type.startsWith("image/"));
+    const documentAttachments = attachments.filter((a) => !a.file_type.startsWith("image/"));
+
     return (
+        <>
         <div className={`group relative bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm transition-all ${
             isPinned ? 'ring-2 ring-[#C15F3C]/40 dark:ring-[#C15F3C]/30 bg-[#C15F3C]/5 dark:bg-[#C15F3C]/5' : ''
         }`}>
@@ -720,10 +746,67 @@ function CommentCard({
                     )}
                 </div>
             </div>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-medium">
-                {content}
-            </p>
+
+            {content && (
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-medium mb-3">
+                    {content}
+                </p>
+            )}
+
+            {/* Image grid */}
+            {imageAttachments.length > 0 && (
+                <div className={`grid gap-2 mb-3 ${
+                    imageAttachments.length === 1 ? "grid-cols-1" :
+                    imageAttachments.length === 2 ? "grid-cols-2" : "grid-cols-3"
+                }`}>
+                    {imageAttachments.slice(0, 6).map((att, index) => (
+                        <button
+                            key={att.id}
+                            onClick={() => setLightboxImage(att.file_url)}
+                            className="relative aspect-square overflow-hidden rounded-xl group/img"
+                        >
+                            <img src={att.file_url} alt={att.file_name} className="w-full h-full object-cover transition-transform group-hover/img:scale-105" loading="lazy" />
+                            {index === 5 && imageAttachments.length > 6 && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                    <span className="text-white font-bold text-lg">+{imageAttachments.length - 6}</span>
+                                </div>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Document attachments */}
+            {documentAttachments.length > 0 && (
+                <div className="space-y-2">
+                    {documentAttachments.map((att) => (
+                        <a key={att.id} href={att.file_url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-3 bg-gray-50 dark:bg-white/5 rounded-xl px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors group/doc"
+                        >
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+                                <FileText size={16} className="text-blue-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">{att.file_name}</p>
+                                <p className="text-[10px] text-gray-400">{formatFileSize(att.file_size)}</p>
+                            </div>
+                            <Download size={14} className="text-gray-400 group-hover/doc:text-gray-600 dark:group-hover/doc:text-gray-300 transition-colors" />
+                        </a>
+                    ))}
+                </div>
+            )}
         </div>
+
+        {/* Lightbox */}
+        {lightboxImage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={() => setLightboxImage(null)}>
+                <button onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                    <XIcon size={24} className="text-white" />
+                </button>
+                <img src={lightboxImage} alt="Full size" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+            </div>
+        )}
+        </>
     );
 }
 

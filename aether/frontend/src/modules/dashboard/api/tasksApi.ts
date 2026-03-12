@@ -60,6 +60,14 @@ export interface KanbanData {
   };
 }
 
+export interface TaskCommentAttachment {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  file_size: number;
+}
+
 export interface TaskComment {
   id: string;
   task_id: string;
@@ -73,6 +81,7 @@ export interface TaskComment {
     email: string;
     avatar_color?: string;
   };
+  attachments?: TaskCommentAttachment[];
 }
 
 export interface CommitFile {
@@ -222,13 +231,13 @@ class TasksApi {
     return response.json();
   }
 
-  async addComment(taskId: string, content: string, organizationId: string): Promise<TaskComment> {
+  async addComment(taskId: string, content: string, organizationId: string, attachments?: { file_path: string; file_url: string; file_name: string; file_size: number; file_type: string }[]): Promise<TaskComment> {
     const response = await fetch(
       `${API_BASE_URL}/tasks/${taskId}/comments`,
       {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify({ content, organizationId }),
+        body: JSON.stringify({ content, organizationId, attachments }),
       }
     );
     if (!response.ok) throw new Error('Failed to add comment');
