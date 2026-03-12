@@ -111,8 +111,8 @@ async function main() {
                 const description = sample(TASK_DESCRIPTIONS);
                 const assignee = sample(memberIds);
 
-                // Randomize due date: Between 1 day ago (overdue) and 14 days in the future
-                const daysOffset = randomInt(-1, 14);
+                // Randomize due date: Between 1 and 4 days in the future
+                const daysOffset = randomInt(1, 4);
                 const dueDate = new Date();
                 dueDate.setDate(dueDate.getDate() + daysOffset);
 

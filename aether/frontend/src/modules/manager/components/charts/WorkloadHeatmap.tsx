@@ -4,8 +4,6 @@
  * Design: Y-axis = Users, X-axis = Days, Color = Intensity
  */
 
-import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
 
 interface HeatmapData {
   users: string[];
@@ -17,7 +15,6 @@ interface WorkloadHeatmapProps {
   data: HeatmapData;
   title?: string;
   subtitle?: string;
-  showPrivacy?: boolean;
 }
 
 // Color intensity scale (GitHub-inspired)
@@ -29,17 +26,11 @@ const getHeatmapColor = (value: number): string => {
   return 'bg-emerald-700 dark:bg-emerald-500';
 };
 
-const anonymizeUsername = (_username: string, index: number): string => {
-  return `User ${String.fromCharCode(65 + index)}`; // A, B, C, etc.
-};
-
 export function WorkloadHeatmap({
   data,
   title = 'Team Workload Heatmap',
   subtitle = 'Activity intensity per user per day',
-  showPrivacy = true,
 }: WorkloadHeatmapProps) {
-  const [isAnonymized, setIsAnonymized] = useState(false);
 
   return (
     <div
@@ -53,25 +44,6 @@ export function WorkloadHeatmap({
           {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
         </div>
 
-        {/* Privacy Toggle */}
-        {showPrivacy && (
-          <button
-            onClick={() => setIsAnonymized(!isAnonymized)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-600 transition-colors text-xs font-medium text-gray-700 dark:text-gray-300"
-          >
-            {isAnonymized ? (
-              <>
-                <EyeOff className="w-3.5 h-3.5" />
-                Anonymized
-              </>
-            ) : (
-              <>
-                <Eye className="w-3.5 h-3.5" />
-                Show Names
-              </>
-            )}
-          </button>
-        )}
       </div>
 
       {/* Heatmap Grid */}
@@ -124,7 +96,7 @@ export function WorkloadHeatmap({
             <div key={userIdx} className="flex items-center mb-1 group">
               {/* User Label */}
               <div className="w-24 flex-shrink-0 pr-2 text-xs text-gray-700 dark:text-gray-300 font-medium truncate">
-                {isAnonymized ? anonymizeUsername(user, userIdx) : user}
+                {user}
               </div>
 
               {/* Activity Cells */}
@@ -133,7 +105,7 @@ export function WorkloadHeatmap({
                   <div
                     key={dayIdx}
                     className={`w-8 h-8 rounded ${getHeatmapColor(value)} transition-all duration-200 hover:ring-2 hover:ring-blue-400 cursor-pointer relative group/cell`}
-                    title={`${isAnonymized ? anonymizeUsername(user, userIdx) : user} - ${data.days[dayIdx]}: ${value} activities`}
+                    title={`${user} - ${data.days[dayIdx]}: ${value} activities`}
                   >
                     {/* Tooltip on hover */}
                     <div className="absolute hidden group-hover/cell:block bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-10">

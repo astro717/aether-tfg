@@ -82,6 +82,7 @@ export function CFDAreaChart({ data, className = '' }: CFDAreaChartProps) {
               stroke="#10b981"
               fill="url(#colorDone)"
               name="Done"
+              
             />
             <Area
               type="monotone"

@@ -24,7 +24,7 @@ import { StatCard } from './StatCard';
 import {
   SparklineCard,
   RealCFDChart,
-  InvestmentSunburst,
+  TaskDistributionChart,
   WorkloadHeatmap,
 } from './charts';
 import { SmartAnalyticsWidget } from './analytics/SmartAnalyticsWidget';
@@ -341,7 +341,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
           />
         )}
         {analytics.premiumCharts?.investment && (
-          <InvestmentSunburst data={analytics.premiumCharts.investment} />
+          <TaskDistributionChart data={analytics.premiumCharts.investment} />
         )}
       </div>
 
@@ -404,7 +404,27 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
                 labelStyle={{ color: '#fff' }}
                 itemStyle={{ color: '#fff' }}
               />
-              <Legend />
+              <Legend
+                content={({ payload }) => {
+                  const colorByKey: Record<string, string> = {
+                    completed: '#10b981',
+                    inProgress: '#f59e0b',
+                  };
+                  return (
+                    <div className="flex items-center justify-center gap-4 pb-2">
+                      {payload?.map((entry) => (
+                        <div key={String(entry.dataKey)} className="flex items-center gap-1.5">
+                          <div
+                            className="w-3 h-3 rounded"
+                            style={{ backgroundColor: colorByKey[String(entry.dataKey)] ?? '#6b7280' }}
+                          />
+                          <span style={{ color: '#6b7280', fontSize: 12 }}>{entry.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }}
+              />
               <Bar
                 dataKey="completed"
                 name="Completed"

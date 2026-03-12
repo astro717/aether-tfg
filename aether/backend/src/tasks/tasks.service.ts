@@ -1618,7 +1618,28 @@ export class TasksService {
     });
     const riskScore = this.calculateRiskScore(globalActiveTasks, organizationId);
     const cfdData = this.generateSmoothCFD(allTasks, normalizedPeriod);
-    const investmentData = this.calculateInvestmentProfile(allTasks);
+
+    // Investment profile: dedicated query to capture tasks active during the period
+    // - Currently in_progress (ongoing work, regardless of when it started)
+    // - Completed (done) during the period
+    // For 'all': all non-archived tasks (todo + in_progress + done)
+    const investmentWhere: any = {
+      organization_id: organizationId,
+      is_archived: false,
+    };
+    if (dateFilter) {
+      investmentWhere.OR = [
+        { status: 'in_progress' },
+        { status: 'done', updated_at: { gte: dateFilter } },
+      ];
+    } else {
+      investmentWhere.status = { in: ['todo', 'in_progress', 'done'] };
+    }
+    const investmentTasksRaw = await this.prisma.tasks.findMany({
+      where: investmentWhere,
+      select: { id: true, title: true, description: true, status: true, assignee_id: true },
+    });
+    const investmentData = this.calculateInvestmentProfile(investmentTasksRaw);
     const heatmapData = await this.analyzeWorkloadHeatmap(organizationId, allTasks, normalizedPeriod);
     const burndownData = this.projectBurndownCone(historicalTasksForBurndown, normalizedPeriod);
 
@@ -1883,17 +1904,12 @@ export class TasksService {
       }
     }
 
-    const total = filteredTasks.length || 1;
     return {
       labels: ['Features', 'Bugs', 'Chores'],
       datasets: [
         {
           label: 'Task Distribution',
-          data: [
-            Math.round((categories.features / total) * 100),
-            Math.round((categories.bugs / total) * 100),
-            Math.round((categories.chores / total) * 100),
-          ],
+          data: [categories.features, categories.bugs, categories.chores],
           color: '#8b5cf6', // Purple
         },
       ],

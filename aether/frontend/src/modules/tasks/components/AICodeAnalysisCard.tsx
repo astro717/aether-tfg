@@ -77,6 +77,7 @@ export function AICodeAnalysisCard({ commitSha, className = "" }: AICodeAnalysis
             const result = await tasksApi.getCommitCodeAnalysis(commitSha, { forceRegenerate, language: aiLanguage, depth: analysisDepth });
             setAnalysis(result);
             setState("completed");
+            setTimeout(() => setIsModalOpen(true), 150);
         } catch (err) {
             console.error("Failed to analyze code:", err);
             setError(err instanceof Error ? err.message : "Unknown error");

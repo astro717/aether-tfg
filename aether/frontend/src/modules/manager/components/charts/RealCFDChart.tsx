@@ -189,7 +189,7 @@ export function RealCFDChart({
         {CFD_LAYERS.map((layer) => (
           <div key={layer.dataKey} className="flex items-center gap-2">
             <div
-              className="w-3 h-3 rounded-sm"
+              className="w-3 h-3 rounded"
               style={{ backgroundColor: layer.color, opacity: layer.opacity }}
             />
             <span className="text-xs text-gray-600 dark:text-gray-400">{layer.name}</span>

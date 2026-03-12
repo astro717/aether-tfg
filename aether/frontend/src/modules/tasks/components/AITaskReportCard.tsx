@@ -76,6 +76,7 @@ export function AITaskReportCard({ taskId, commitSha, className = "" }: AITaskRe
             const result = await tasksApi.getTaskReport(taskId, commitSha, { forceRegenerate });
             setReport(result);
             setState("completed");
+            setTimeout(() => setIsModalOpen(true), 150);
         } catch (err) {
             console.error("Failed to generate report:", err);
             setError(err instanceof Error ? err.message : "Unknown error");

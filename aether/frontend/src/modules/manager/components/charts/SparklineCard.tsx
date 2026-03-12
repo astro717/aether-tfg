@@ -126,7 +126,7 @@ export function SparklineCard({
             {/* Info Tooltip (Portal-based) */}
             {infoTooltip && <InfoTooltip content={infoTooltip} />}
           </div>
-          <div className={`p-1.5 rounded-lg ${effectiveColors.bg}`}>
+          <div className={`p-1.5 rounded-xl ${effectiveColors.bg}`}>
             <TrendIcon className={`w-4 h-4 ${effectiveColors.text}`} />
           </div>
         </div>

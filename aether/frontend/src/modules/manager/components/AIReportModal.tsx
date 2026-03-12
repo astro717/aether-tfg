@@ -29,7 +29,7 @@ import {
 import {
   SparklineCard,
   SmoothCFDChart,
-  InvestmentSunburst,
+  TaskDistributionChart,
   WorkloadHeatmap,
   PredictiveBurndownChart,
 } from './charts';
@@ -654,9 +654,9 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
 
                       {/* Full-width Investment Distribution */}
                       {report.chartData.investment && (
-                        <InvestmentSunburst
+                        <TaskDistributionChart
                           data={report.chartData.investment}
-                          title="Investment Distribution"
+                          title="Task Distribution"
                           subtitle="Task allocation by category"
                           pdfMode={isExportingPDF}
                         />
@@ -702,7 +702,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
 
                       {/* Investment Profile */}
                       {report.chartData.investment && (
-                        <InvestmentSunburst
+                        <TaskDistributionChart
                           data={report.chartData.investment}
                           title="Task Distribution"
                           subtitle="Individual work allocation"
@@ -773,7 +773,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
 
                       {/* Work Distribution - Full Width */}
                       {report.chartData.investment && (
-                        <InvestmentSunburst
+                        <TaskDistributionChart
                           data={report.chartData.investment}
                           title="Work Distribution"
                           subtitle="Identify imbalances"

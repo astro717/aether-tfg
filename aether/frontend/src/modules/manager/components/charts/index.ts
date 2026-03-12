@@ -5,7 +5,7 @@
 
 export { SparklineCard } from './SparklineCard';
 export { SmoothCFDChart } from './SmoothCFDChart';
-export { InvestmentSunburst } from './InvestmentSunburst';
+export { TaskDistributionChart } from './TaskDistributionChart';
 export { WorkloadHeatmap } from './WorkloadHeatmap';
 export { PredictiveBurndownChart } from './PredictiveBurndownChart';
 export { RealCFDChart } from './RealCFDChart';

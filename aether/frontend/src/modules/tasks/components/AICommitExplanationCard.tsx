@@ -85,6 +85,7 @@ export function AICommitExplanationCard({ taskId, commitSha, className = "" }: A
       const result = await tasksApi.getCommitExplanationInContext(taskId, commitSha, { forceRegenerate, language: aiLanguage, depth: analysisDepth });
       setExplanation(result);
       setState("completed");
+      setTimeout(() => setIsModalOpen(true), 150);
     } catch (err) {
       console.error("Failed to generate contextual explanation:", err);
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
