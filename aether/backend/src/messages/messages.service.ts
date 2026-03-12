@@ -7,6 +7,7 @@ import { UploadUrlDto, UploadUrlResponse } from './dto/upload-url.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const BUCKET_NAME = 'chat-uploads';
+const SENTIMENT_SERVICE_URL = process.env.SENTIMENT_SERVICE_URL || 'http://localhost:8000';
 
 @Injectable()
 export class MessagesService {
@@ -211,7 +212,7 @@ export class MessagesService {
     // Fire-and-forget: dispatch to Python NLP microservice for sentiment analysis
     // No await - runs asynchronously without blocking the response (event-driven simulation)
     if (message.content) {
-      fetch('http://localhost:8000/analyze_sentiment', {
+      fetch(`${SENTIMENT_SERVICE_URL}/analyze_sentiment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message_id: message.id, text: message.content }),
@@ -334,7 +335,7 @@ export class MessagesService {
 
     // Fire-and-forget: sentiment analysis for comment notifications
     if (message.content) {
-      fetch('http://localhost:8000/analyze_sentiment', {
+      fetch(`${SENTIMENT_SERVICE_URL}/analyze_sentiment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message_id: message.id, text: message.content }),
