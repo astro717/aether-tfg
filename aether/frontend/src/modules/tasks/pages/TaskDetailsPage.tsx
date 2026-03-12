@@ -15,6 +15,7 @@ import {
     FileText,
     Download,
     X as XIcon,
+    Trash2,
 } from "lucide-react";
 import { tasksApi, type Task, type TaskComment, type CommitDiff, type TaskCommentAttachment } from "../../dashboard/api/tasksApi";
 import { type UploadedFile } from "../../../hooks/useFileUpload";
@@ -190,6 +191,15 @@ export function TaskDetailsPage() {
         }));
         const newComment = await tasksApi.addComment(taskId, content, currentOrganization.id, mappedAttachments);
         setComments((prev) => [...prev, newComment]);
+    };
+
+    const handleDeleteComment = async (commentId: string) => {
+        try {
+            await tasksApi.deleteComment(commentId);
+            setComments((prev) => prev.filter((c) => c.id !== commentId));
+        } catch (error) {
+            console.error("Failed to delete comment:", error);
+        }
     };
 
     const handleTogglePin = async (commentId: string) => {
@@ -526,6 +536,7 @@ export function TaskDetailsPage() {
                                         onTogglePin={() => handleTogglePin(comment.id)}
                                         isPinning={pinningCommentId === comment.id}
                                         attachments={comment.attachments}
+                                        onDelete={user?.id === comment.user_id ? () => handleDeleteComment(comment.id) : undefined}
                                     />
                                 ))
                             ) : (
@@ -664,6 +675,7 @@ function CommentCard({
     onTogglePin,
     isPinning = false,
     attachments = [],
+    onDelete,
 }: {
     author: string;
     avatarColor?: string;
@@ -674,8 +686,10 @@ function CommentCard({
     onTogglePin?: () => void;
     isPinning?: boolean;
     attachments?: TaskCommentAttachment[];
+    onDelete?: () => void;
 }) {
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
 
     const formatTime = (dateString?: string) => {
         if (!dateString) return "";
@@ -717,32 +731,58 @@ function CommentCard({
                         <Pin size={12} className="fill-current" style={{ color: '#C15F3C' }} />
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                    {/* Pin button — always visible when pinned, hover-only otherwise */}
                     {onTogglePin && (
                         <button
                             onClick={onTogglePin}
                             disabled={isPinning}
-                            className={`p-1.5 rounded-full transition-all ${
+                            className={`p-1.5 rounded-full transition-all duration-150 ${
                                 isPinned
-                                    ? 'bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20'
+                                    ? 'opacity-100 bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20'
                                     : 'opacity-0 group-hover:opacity-100 hover:bg-[#C15F3C]/10 dark:hover:bg-[#C15F3C]/20'
                             } disabled:opacity-50`}
                             style={{ color: isPinned ? '#C15F3C' : undefined }}
-                            title={isPinned ? 'Unpin from AI context' : 'Pin for AI context - AI will consider this comment when generating reports'}
+                            title={isPinned ? 'Unpin from AI context' : 'Pin for AI context'}
                         >
                             {isPinning ? (
-                                <Loader2 size={16} className="animate-spin" style={{ color: '#C15F3C' }} />
+                                <Loader2 size={14} className="animate-spin" style={{ color: '#C15F3C' }} />
                             ) : (
-                                <Pin
-                                    size={16}
-                                    className={`transition-colors ${isPinned ? 'fill-current' : 'text-gray-400 group-hover:text-[#C15F3C]'}`}
-                                    style={isPinned ? { color: '#C15F3C' } : undefined}
-                                />
+                                <Pin size={14} className={isPinned ? 'fill-current' : 'text-gray-400'} style={isPinned ? { color: '#C15F3C' } : undefined} />
                             )}
                         </button>
                     )}
-                    {createdAt && (
-                        <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatTime(createdAt)}</span>
+
+                    {/* Delete — hover-only, inline confirmation */}
+                    {onDelete && !confirmingDelete && (
+                        <button
+                            onClick={() => setConfirmingDelete(true)}
+                            className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-150 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Delete comment"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
+                    {onDelete && confirmingDelete && (
+                        <div className="flex items-center gap-1 animate-in fade-in duration-150">
+                            <span className="text-[11px] text-gray-400 dark:text-gray-500 mr-0.5">Delete?</span>
+                            <button
+                                onClick={() => { onDelete(); setConfirmingDelete(false); }}
+                                className="px-2 py-0.5 text-[11px] font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
+                            >
+                                Yes
+                            </button>
+                            <button
+                                onClick={() => setConfirmingDelete(false)}
+                                className="px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-600 rounded-md transition-colors"
+                            >
+                                No
+                            </button>
+                        </div>
+                    )}
+
+                    {createdAt && !confirmingDelete && (
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">{formatTime(createdAt)}</span>
                     )}
                 </div>
             </div>
