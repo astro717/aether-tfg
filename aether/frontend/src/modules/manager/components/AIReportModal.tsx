@@ -607,7 +607,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                     <>
                       {/* The Pulse - KPI Cards with Sparklines */}
                       {report.chartData.pulse && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-chart-id="pulse-metrics">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" data-chart-id="pulse-metrics">
                           <SparklineCard
                             title="Velocity"
                             value={report.chartData.pulse.velocityRate?.value ?? 0}
@@ -618,9 +618,9 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                           />
                           <SparklineCard
                             title="Cycle Time"
-                            value={report.chartData.pulse.cycleTime.value}
+                            value={report.chartData.pulse.cycleTime?.value ?? 0}
                             unit="days"
-                            sparklineData={report.chartData.pulse.cycleTime.sparkline}
+                            sparklineData={report.chartData.pulse.cycleTime?.sparkline ?? []}
                             color="green"
                             subtitle="Avg In Progress → Done"
                           />
@@ -629,15 +629,23 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             value={report.chartData.pulse.onTimeDelivery?.value ?? 100}
                             unit="%"
                             sparklineData={report.chartData.pulse.onTimeDelivery?.sparkline ?? []}
-                            color="amber"
+                            color="blue"
                             subtitle="Met deadlines"
                           />
                           <SparklineCard
+                            title="Change Failure Rate"
+                            value={report.chartData.pulse.changeFailureRate?.value ?? 0}
+                            unit="%"
+                            sparklineData={report.chartData.pulse.changeFailureRate?.sparkline ?? []}
+                            color={report.chartData.pulse.changeFailureRate?.value && report.chartData.pulse.changeFailureRate.value > 15 ? (report.chartData.pulse.changeFailureRate.value > 30 ? 'red' : 'amber') : 'green'}
+                            subtitle="Tasks requiring fixes"
+                          />
+                          <SparklineCard
                             title="AI Risk Score"
-                            value={report.chartData.pulse.riskScore.value}
+                            value={report.chartData.pulse.riskScore?.value ?? 0}
                             unit="/100"
                             sparklineData={[]}
-                            color={report.chartData.pulse.riskScore.value > 60 ? 'red' : report.chartData.pulse.riskScore.value > 30 ? 'amber' : 'green'}
+                            color={report.chartData.pulse.riskScore?.value && report.chartData.pulse.riskScore.value > 60 ? 'red' : report.chartData.pulse.riskScore?.value && report.chartData.pulse.riskScore.value > 30 ? 'amber' : 'green'}
                             subtitle="Probability of delay"
                           />
                         </div>
@@ -717,20 +725,28 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                     <>
                       {/* The Pulse - Risk Indicators */}
                       {report.chartData.pulse && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                           <SparklineCard
                             title="AI Risk Score"
-                            value={report.chartData.pulse.riskScore.value}
+                            value={report.chartData.pulse.riskScore?.value ?? 0}
                             unit="/100"
                             sparklineData={[]}
-                            color={report.chartData.pulse.riskScore.value > 60 ? 'red' : report.chartData.pulse.riskScore.value > 30 ? 'amber' : 'green'}
+                            color={report.chartData.pulse.riskScore?.value && report.chartData.pulse.riskScore.value > 60 ? 'red' : report.chartData.pulse.riskScore?.value && report.chartData.pulse.riskScore.value > 30 ? 'amber' : 'green'}
                             subtitle="Delay probability"
                           />
                           <SparklineCard
+                            title="Change Failure Rate"
+                            value={report.chartData.pulse.changeFailureRate?.value ?? 0}
+                            unit="%"
+                            sparklineData={report.chartData.pulse.changeFailureRate?.sparkline ?? []}
+                            color={report.chartData.pulse.changeFailureRate?.value && report.chartData.pulse.changeFailureRate.value > 15 ? (report.chartData.pulse.changeFailureRate.value > 30 ? 'red' : 'amber') : 'green'}
+                            subtitle="Regressed tasks"
+                          />
+                          <SparklineCard
                             title="Cycle Time"
-                            value={report.chartData.pulse.cycleTime.value}
+                            value={report.chartData.pulse.cycleTime?.value ?? 0}
                             unit="days"
-                            sparklineData={report.chartData.pulse.cycleTime.sparkline}
+                            sparklineData={report.chartData.pulse.cycleTime?.sparkline ?? []}
                             color="amber"
                             subtitle="Current throughput"
                           />
@@ -739,7 +755,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             value={report.chartData.pulse.onTimeDelivery?.value ?? 100}
                             unit="%"
                             sparklineData={report.chartData.pulse.onTimeDelivery?.sparkline ?? []}
-                            color="purple"
+                            color="blue"
                             subtitle="Met deadlines"
                           />
                           <SparklineCard

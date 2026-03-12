@@ -1642,6 +1642,7 @@ export class TasksService {
     const investmentData = this.calculateInvestmentProfile(investmentTasksRaw);
     const heatmapData = await this.analyzeWorkloadHeatmap(organizationId, allTasks, normalizedPeriod);
     const burndownData = this.projectBurndownCone(historicalTasksForBurndown, normalizedPeriod);
+    const cfrData = await this.calculateChangeFailureRate(organizationId, dateFilter, now, period || 'all');
 
     // Generate sparklines for KPI cards (based on completion vs creation)
     const completionRateSparkline: number[] = [];
@@ -1773,6 +1774,7 @@ export class TasksService {
           velocity: doraMetrics.sparklineData,
           cycleTime: doraMetrics.cycleTimeSparkline,
           riskScore: [riskScore], // Single value for now, could add historical tracking
+          changeFailureRate: cfrData,
         },
       },
     };
@@ -2680,6 +2682,109 @@ export class TasksService {
         latestCommentDate: t.task_comments[0]?.created_at ?? null,
       })),
     };
+  }
+
+  /**
+   * PREMIUM ANALYTICS: Change Failure Rate (CFR)
+   * Percentage of tasks that regressed from a completed/validation state back to
+   * an active state (in_progress, todo) due to quality issues.
+   * Also generates an 8-week weekly sparkline for the KPI card trend.
+   * Copied from ai.service.ts — same logic, period-aware.
+   */
+  private async calculateChangeFailureRate(
+    organizationId: string,
+    periodStartDate: Date | undefined,
+    now: Date,
+    periodType: string,
+  ): Promise<{ value: number; sparkline: number[] }> {
+    const sparklinePoints = 8;
+    const historyWindowStart = new Date(now);
+    historyWindowStart.setDate(historyWindowStart.getDate() - sparklinePoints * 7);
+
+    const histories = await this.prisma.task_history.findMany({
+      where: {
+        organization_id: organizationId,
+        changed_at: { gte: historyWindowStart, lte: now },
+      },
+      select: {
+        task_id: true,
+        previous_status: true,
+        new_status: true,
+        changed_at: true,
+      },
+      orderBy: { changed_at: 'asc' },
+    });
+
+    const advancedStates = ['done', 'pending_validation', 'review'];
+    const activeStates = ['in_progress', 'todo'];
+
+    // Pre-compute valid (non-accidental) failures across the full 8-week window
+    const historiesByTask = new Map<string, any[]>();
+    for (const h of histories) {
+      if (!historiesByTask.has(h.task_id)) historiesByTask.set(h.task_id, []);
+      historiesByTask.get(h.task_id)!.push(h);
+    }
+
+    const validFailures = new Set<string>();
+    for (const [, taskHistories] of historiesByTask.entries()) {
+      let lastAdvancedEntryAt: Date | null = null;
+      for (const h of taskHistories) {
+        if (advancedStates.includes(h.new_status)) lastAdvancedEntryAt = h.changed_at;
+        if (
+          h.previous_status &&
+          advancedStates.includes(h.previous_status) &&
+          activeStates.includes(h.new_status)
+        ) {
+          const isAccident =
+            lastAdvancedEntryAt && h.changed_at
+              ? h.changed_at.getTime() - lastAdvancedEntryAt.getTime() <= 2 * 60 * 1000
+              : false;
+          if (!isAccident && h.changed_at) {
+            validFailures.add(`${h.task_id}_${h.changed_at.getTime()}`);
+          }
+        }
+      }
+    }
+
+    const getCFRForHistories = (filtered: any[]): number => {
+      const attempted = new Set<string>();
+      const failed = new Set<string>();
+      for (const h of filtered) {
+        if (advancedStates.includes(h.new_status)) attempted.add(h.task_id);
+        if (
+          h.previous_status &&
+          advancedStates.includes(h.previous_status) &&
+          activeStates.includes(h.new_status) &&
+          h.changed_at &&
+          validFailures.has(`${h.task_id}_${h.changed_at.getTime()}`)
+        ) {
+          failed.add(h.task_id);
+        }
+      }
+      if (attempted.size === 0) return 0;
+      return Math.round((failed.size / attempted.size) * 100);
+    };
+
+    // Main CFR value for the selected period
+    const periodHistories = periodStartDate
+      ? histories.filter(h => h.changed_at && h.changed_at >= periodStartDate)
+      : histories;
+    const currentValue = getCFRForHistories(periodHistories);
+
+    // 8-week weekly sparkline
+    const sparkline: number[] = [];
+    for (let i = sparklinePoints - 1; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - (i * 7) - 7);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      sparkline.push(
+        getCFRForHistories(histories.filter(h => h.changed_at && h.changed_at >= weekStart && h.changed_at < weekEnd)),
+      );
+    }
+
+    return { value: currentValue, sparkline };
   }
 }
 

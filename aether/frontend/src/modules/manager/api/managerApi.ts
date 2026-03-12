@@ -95,6 +95,7 @@ export interface AnalyticsData {
       velocity: number[];
       cycleTime: number[];
       riskScore: number[];
+      changeFailureRate?: { value: number; sparkline: number[] };
     };
   };
 }
@@ -132,6 +133,10 @@ export interface AIReport {
         sparkline: number[];
       };
       riskScore: {
+        value: number;
+        sparkline: number[];
+      };
+      changeFailureRate?: {
         value: number;
         sparkline: number[];
       };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Paperclip, FileText, Image, Film, Loader2 } from "lucide-react";
+import { X, Paperclip, FileText, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFileUpload, type UploadedFile } from "../../../hooks/useFileUpload";
 

@@ -1571,17 +1571,12 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       }
     }
 
-    const total = filteredTasks.length || 1;
     return {
       labels: ['Features', 'Bugs', 'Chores'],
       datasets: [
         {
           label: 'Task Distribution',
-          data: [
-            Math.round((categories.features / total) * 100),
-            Math.round((categories.bugs / total) * 100),
-            Math.round((categories.chores / total) * 100),
-          ],
+          data: [categories.features, categories.bugs, categories.chores],
           color: '#8b5cf6', // Purple
         },
       ],
@@ -1624,6 +1619,139 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
     const riskScore = Math.min(100, overdueWeight + approachingWeight + wipWeight + completionWeight);
 
     return Math.round(riskScore);
+  }
+
+  /**
+   * Calculate Change Failure Rate (CFR)
+   * The percentage of tasks that regressed from a completed/validation state
+   * back to an active state (in_progress, todo) due to issues.
+   * Also generates a weekly sparkline over the last 8 weeks to visualize trend.
+   */
+  private async calculateChangeFailureRate(
+    organizationId: string,
+    periodStartDate: Date,
+    now: Date,
+    periodType: string
+  ): Promise<{ value: number; sparkline: number[] }> {
+    // Determine the historical calculation window based on the period type
+    // We want the sparkline to show 8 data points leading up to 'now'
+    // Sparkline points are always weekly to maintain consistent visualization
+    const sparklinePoints = 8;
+    const historyWindowStart = new Date(now);
+    historyWindowStart.setDate(historyWindowStart.getDate() - (sparklinePoints * 7));
+
+    // Fetch all relevant history in one query to avoid N+1 problems
+    const histories = await this.prisma.task_history.findMany({
+      where: {
+        organization_id: organizationId,
+        changed_at: {
+          gte: historyWindowStart,
+          lte: now,
+        }
+      },
+      select: {
+        task_id: true,
+        previous_status: true,
+        new_status: true,
+        changed_at: true,
+      },
+      orderBy: { changed_at: 'asc' }
+    });
+
+    const advancedStates = ['done', 'pending_validation', 'review'];
+    const activeStates = ['in_progress', 'todo'];
+
+    // Pre-process histories to detect "accidental" regressions (<= 2 minutes)
+    const historiesByTask = new Map<string, any[]>();
+    for (const h of histories) {
+      if (!historiesByTask.has(h.task_id)) {
+        historiesByTask.set(h.task_id, []);
+      }
+      historiesByTask.get(h.task_id)!.push(h);
+    }
+
+    const validFailures = new Set<string>();
+
+    for (const [taskId, taskHistories] of historiesByTask.entries()) {
+      let lastAdvancedEntryAt: Date | null = null;
+      for (const h of taskHistories) {
+        if (advancedStates.includes(h.new_status)) {
+          lastAdvancedEntryAt = h.changed_at;
+        }
+
+        if (
+          h.previous_status &&
+          advancedStates.includes(h.previous_status) &&
+          activeStates.includes(h.new_status)
+        ) {
+          let isAccident = false;
+          if (lastAdvancedEntryAt && h.changed_at) {
+            const diffMs = h.changed_at.getTime() - lastAdvancedEntryAt.getTime();
+            if (diffMs <= 2 * 60 * 1000) { // 2 minutes in milliseconds
+              isAccident = true;
+            }
+          }
+          if (!isAccident && h.changed_at) {
+            validFailures.add(`${taskId}_${h.changed_at.getTime()}`);
+          }
+        }
+      }
+    }
+
+    // Helper to calculate CFR for a specific set of filtered histories
+    const getCFRForHistories = (filteredHistories: any[]): number => {
+      const attemptedTaskIds = new Set<string>();
+      const failedTaskIds = new Set<string>();
+
+      for (const history of filteredHistories) {
+        if (advancedStates.includes(history.new_status)) {
+          attemptedTaskIds.add(history.task_id);
+        }
+
+        if (
+          history.previous_status &&
+          advancedStates.includes(history.previous_status) &&
+          activeStates.includes(history.new_status)
+        ) {
+          if (history.changed_at) {
+            const failureKey = `${history.task_id}_${history.changed_at.getTime()}`;
+            if (validFailures.has(failureKey)) {
+              failedTaskIds.add(history.task_id);
+            }
+          }
+        }
+      }
+
+      if (attemptedTaskIds.size === 0) return 0;
+      return Math.round((failedTaskIds.size / attemptedTaskIds.size) * 100);
+    };
+
+    // 1. Calculate the main CFR value for the current period
+    const currentPeriodHistories = histories.filter(h => h.changed_at && h.changed_at >= periodStartDate);
+    const currentValue = getCFRForHistories(currentPeriodHistories);
+
+    // 2. Calculate the weekly sparkline (last 8 weeks)
+    const sparkline: number[] = [];
+    for (let i = sparklinePoints - 1; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - (i * 7) - 7);
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      const weekHistories = histories.filter(h => {
+        if (!h.changed_at) return false;
+        return h.changed_at >= weekStart && h.changed_at < weekEnd;
+      });
+
+      sparkline.push(getCFRForHistories(weekHistories));
+    }
+
+    return {
+      value: currentValue,
+      sparkline,
+    };
   }
 
   /**
@@ -2331,6 +2459,26 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
     });
     this.logger.log(`Fetched ${allTasksForCycleTime.length} completed tasks for cycle time chart`);
 
+    // Investment profile: dedicated query — same semantics as Manager Zone
+    // in_progress (ongoing) OR done within the period (completed during window)
+    const investmentWhere: any = {
+      organization_id: organizationId,
+      is_archived: false,
+    };
+    if (periodType !== 'all') {
+      investmentWhere.OR = [
+        { status: 'in_progress' },
+        { status: 'done', updated_at: { gte: periodStartDate } },
+      ];
+    } else {
+      investmentWhere.status = { in: ['todo', 'in_progress', 'done'] };
+    }
+    const investmentTasksRaw = await this.prisma.tasks.findMany({
+      where: investmentWhere,
+      select: { id: true, title: true, description: true, status: true, assignee_id: true },
+    });
+    this.logger.log(`Investment profile tasks: ${investmentTasksRaw.length} (period: ${periodType})`);
+
     this.logger.log(`Extracted period type: ${periodType} from identifier: ${period}`);
 
     // ============ PHASE A: CALCULATE CHART DATA (CONDITIONAL BY REPORT TYPE) ============
@@ -2362,6 +2510,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         value: riskScore,
         sparkline: [], // Risk score is a single value, no sparkline
       },
+      changeFailureRate: await this.calculateChangeFailureRate(organizationId, periodStartDate, now, periodType),
     };
 
     // Calculate only the charts needed for each report type
@@ -2371,7 +2520,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         // Use real CFD data from daily_metrics, fall back to synthetic if insufficient
         const realCFD = await this.getRealCFDData(organizationId, periodType);
         chartData.cfd = realCFD.length >= 2 ? realCFD : this.generateSmoothCFD(tasks, periodType, periodStartDate);
-        chartData.investment = this.calculateInvestmentProfile(tasks);
+        chartData.investment = this.calculateInvestmentProfile(investmentTasksRaw);
         chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, periodType);
         chartData.burndown = this.projectBurndownCone(tasks, periodType);
         this.logger.log(`Weekly organization charts: CFD (${realCFD.length >= 2 ? 'real' : 'synthetic'}), Investment, Heatmap, Burndown`);
@@ -2383,7 +2532,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         chartData.radar = await this.calculateRadarMetrics(organizationId, userId);
         chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime, userId);
         chartData.throughput = this.calculateThroughput(tasks, userId);
-        chartData.investment = this.calculateInvestmentProfile(tasks, userId);
+        chartData.investment = this.calculateInvestmentProfile(investmentTasksRaw, userId);
         this.logger.log('User performance charts: Radar, CycleTime, Throughput, Investment');
         break;
 
@@ -2393,7 +2542,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         const historicalCFD = await this.buildCFDFromTaskHistory(organizationId, periodStartDate, now);
         chartData.cfd = historicalCFD.length >= 2 ? historicalCFD : this.generateSmoothCFD(tasks, periodType, periodStartDate);
         chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime);
-        chartData.investment = this.calculateInvestmentProfile(tasks);
+        chartData.investment = this.calculateInvestmentProfile(investmentTasksRaw);
         chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, periodType);
         chartData.burndown = this.projectBurndownCone(tasks, periodType);
         this.logger.log(`Bottleneck prediction charts: CFD (${historicalCFD.length >= 2 ? 'from task_history' : 'synthetic'}), CycleTime, Investment, Heatmap, Burndown`);
@@ -2402,7 +2551,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
 
       default: {
         this.logger.warn(`Unknown report type: ${type}, calculating all charts as fallback`);
-        chartData.investment = this.calculateInvestmentProfile(tasks);
+        chartData.investment = this.calculateInvestmentProfile(investmentTasksRaw);
         const realCFDDefault = await this.getRealCFDData(organizationId, periodType);
         chartData.cfd = realCFDDefault.length >= 2 ? realCFDDefault : this.generateSmoothCFD(tasks, periodType, periodStartDate);
         chartData.radar = await this.calculateRadarMetrics(organizationId);

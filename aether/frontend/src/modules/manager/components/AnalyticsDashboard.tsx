@@ -280,7 +280,7 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
         </div>
 
         {/* Hero KPIs with Sparklines */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <SparklineCard
             title="Completed Tasks"
             value={kpis.completedTasks}
@@ -317,6 +317,25 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
             color="green"
             trend={kpis.onTimeRate >= 80 ? 'up' : kpis.onTimeRate >= 60 ? 'neutral' : 'down'}
             subtitle="Delivered before deadline"
+          />
+          <SparklineCard
+            title="Change Failure Rate"
+            value={analytics.premiumCharts?.sparklines?.changeFailureRate?.value ?? 0}
+            unit="%"
+            sparklineData={analytics.premiumCharts?.sparklines?.changeFailureRate?.sparkline || []}
+            color="red"
+            trend={
+              (analytics.premiumCharts?.sparklines?.changeFailureRate?.value ?? 0) <= 10
+                ? 'up'
+                : (analytics.premiumCharts?.sparklines?.changeFailureRate?.value ?? 0) <= 25
+                ? 'neutral'
+                : 'down'
+            }
+            subtitle="Tasks that regressed"
+            infoTooltip={{
+              title: 'Change Failure Rate',
+              description: "Percentage of tasks that moved back from 'Done' or 'Review' to an active state due to quality issues. Lower is better — industry benchmark is under 15%.",
+            }}
           />
         </div>
       </div>
