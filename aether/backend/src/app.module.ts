@@ -15,6 +15,7 @@ import { AiModule } from './ai/ai.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EmailModule } from './email/email.module';
+import { KanbanHeartbeatModule } from './kanban-heartbeat/kanban-heartbeat.module';
 
 import { HealthController } from './health.controller';
 import configuration, { configurationSchema } from './config/configuration';
@@ -47,6 +48,7 @@ import configuration, { configurationSchema } from './config/configuration';
     AiModule,
     NotificationsModule,
     EmailModule,
+    KanbanHeartbeatModule,
   ],
   controllers: [HealthController],
 })
