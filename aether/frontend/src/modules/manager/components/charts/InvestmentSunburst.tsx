@@ -1,11 +1,11 @@
 /**
- * InvestmentSunburst Component
- * Double Donut Chart for Investment Distribution
- * Design: Two concentric rings showing Macro -> Micro breakdown
- * Safer for PDF export than full Sunburst
+ * InvestmentArcGauge Component
+ * Replaces the double-donut with a premium semi-circular arc gauge.
+ * Inspired by high-end dashboard UIs where each segment occupies arc
+ * space proportional to its value, with a legend table below.
  */
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Info } from 'lucide-react';
 
 interface InvestmentData {
@@ -24,24 +24,13 @@ interface InvestmentSunburstProps {
   pdfMode?: boolean;
 }
 
-// Macro-level colors (outer ring)
-const MACRO_COLORS = {
-  'Features': '#3b82f6', // Blue
-  'Bugs': '#ef4444', // Red
-  'Chores': '#6b7280', // Gray
-  'Maintenance': '#f59e0b', // Amber
-  'Tech Debt': '#8b5cf6', // Purple
-  'New Value': '#10b981', // Green
-};
-
-// Micro-level colors (inner ring - slightly lighter variants)
-const MICRO_COLORS = {
-  'Features': '#60a5fa',
-  'Bugs': '#f87171',
-  'Chores': '#9ca3af',
-  'Maintenance': '#fbbf24',
-  'Tech Debt': '#a78bfa',
-  'New Value': '#34d399',
+const SEGMENT_COLORS: Record<string, string> = {
+  'Features':    '#3b82f6',
+  'Bugs':        '#ef4444',
+  'Chores':      '#6b7280',
+  'Maintenance': '#f59e0b',
+  'Tech Debt':   '#8b5cf6',
+  'New Value':   '#10b981',
 };
 
 export function InvestmentSunburst({
@@ -50,32 +39,32 @@ export function InvestmentSunburst({
   subtitle,
   pdfMode = false,
 }: InvestmentSunburstProps) {
-  // Transform data for double donut
-  const macroData = data.labels.map((label, idx) => ({
+  const segments = data.labels.map((label, idx) => ({
     name: label,
     value: data.datasets[0]?.data[idx] || 0,
-    color: MACRO_COLORS[label as keyof typeof MACRO_COLORS] || '#6b7280',
-  }));
+    color: SEGMENT_COLORS[label] ?? '#6b7280',
+  })).filter(s => s.value > 0);
 
-  // For a true sunburst, we'd need hierarchical data
-  // For V1, we'll show the same data in two rings with different radii
-  const microData = macroData.map(item => ({
-    ...item,
-    color: MICRO_COLORS[item.name as keyof typeof MICRO_COLORS] || '#9ca3af',
-  }));
+  const total = segments.reduce((sum, s) => sum + s.value, 0);
+
+  // Arc: 220° sweep — opens from lower-left to lower-right
+  const START_ANGLE = 200;
+  const END_ANGLE   = -20;
+
+  const innerR = pdfMode ? 55 : 70;
+  const outerR = pdfMode ? 80 : 105;
 
   return (
     <div
-      className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm"
+      className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm flex flex-col"
       data-chart-id="investment-profile"
     >
       {/* Header */}
-      <div className="mb-4 flex items-start justify-between">
+      <div className="mb-2 flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
-          {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>}
         </div>
-        {/* Info Tooltip */}
         <div className="relative group">
           <button
             type="button"
@@ -84,92 +73,96 @@ export function InvestmentSunburst({
           >
             <Info className="w-4 h-4" />
           </button>
-          {/* Glassmorphism Popover */}
-          <div className="absolute right-0 top-full mt-2 w-72 p-4 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 bg-zinc-900/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/20 border border-zinc-700/50">
+          <div className="absolute right-0 top-full mt-2 w-72 p-4 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/20 border border-zinc-700/50">
             <h4 className="text-sm font-semibold text-white mb-2">Understanding Investment</h4>
             <p className="text-xs text-zinc-300 leading-relaxed">
-              A visual breakdown of where your team invests effort. Grouped by task type (<span className="text-blue-400 font-medium">Feature</span>, <span className="text-red-400 font-medium">Bug</span>, <span className="text-gray-400 font-medium">Chore</span>) to ensure a healthy balance between value creation and technical debt management.
+              A visual breakdown of where your team invests effort. Grouped by task type (
+              <span className="text-blue-400 font-medium">Feature</span>,{' '}
+              <span className="text-red-400 font-medium">Bug</span>,{' '}
+              <span className="text-gray-400 font-medium">Chore</span>) to ensure a healthy balance between value creation and technical debt management.
             </p>
-            {/* Arrow */}
-            <div className="absolute -top-1.5 right-4 w-3 h-3 bg-zinc-900/95 dark:bg-zinc-900/95 rotate-45 border-l border-t border-zinc-700/50" />
+            <div className="absolute -top-1.5 right-4 w-3 h-3 bg-zinc-900/95 rotate-45 border-l border-t border-zinc-700/50" />
           </div>
         </div>
       </div>
 
-      {/* Chart */}
-      <div className={pdfMode ? 'h-64' : 'h-96'}>
+      {/* Arc Chart */}
+      <div className="relative" style={{ height: pdfMode ? 140 : 180 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            {/* Outer Ring (Macro Categories) */}
             <Pie
-              data={macroData}
-              cx={pdfMode ? "48%" : "50%"}
-              cy="50%"
-              innerRadius={pdfMode ? 60 : 90}
-              outerRadius={pdfMode ? 85 : 130}
+              data={segments}
+              cx="50%"
+              cy="88%"
+              startAngle={START_ANGLE}
+              endAngle={END_ANGLE}
+              innerRadius={innerR}
+              outerRadius={outerR}
               paddingAngle={2}
               dataKey="value"
-              label={({ name, percent }) =>
-                ((percent ?? 0) > 0) ? `${name} ${((percent ?? 0) * 100).toFixed(0)}%` : ''
-              }
-              labelLine={{ stroke: '#6b7280', strokeWidth: 1 }}
+              strokeWidth={0}
+              isAnimationActive={!pdfMode}
             >
-              {macroData.map((entry, index) => (
-                <Cell key={`macro-cell-${index}`} fill={entry.color} />
+              {segments.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-
-            {/* Inner Ring (Micro - slightly different shading) */}
-            <Pie
-              data={microData}
-              cx={pdfMode ? "48%" : "50%"}
-              cy="50%"
-              innerRadius={pdfMode ? 35 : 50}
-              outerRadius={pdfMode ? 55 : 85}
-              paddingAngle={1}
-              dataKey="value"
-            >
-              {microData.map((entry, index) => (
-                <Cell key={`micro-cell-${index}`} fill={entry.color} opacity={0.7} />
-              ))}
-            </Pie>
-
             <Tooltip
               contentStyle={{
-                backgroundColor: 'rgba(24, 24, 27, 0.95)',
+                backgroundColor: 'rgba(24,24,27,0.95)',
                 border: 'none',
-                borderRadius: '12px',
+                borderRadius: '10px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                padding: '12px',
+                padding: '10px 14px',
               }}
-              labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-              itemStyle={{ color: '#fff' }}
-              formatter={(value: number | undefined) => value ? [`${value}%`, 'Distribution'] : ['N/A', 'Distribution']}
-            />
-
-            <Legend
-              layout={pdfMode ? 'vertical' : 'horizontal'}
-              align={pdfMode ? 'right' : 'center'}
-              verticalAlign={pdfMode ? 'middle' : 'bottom'}
-              height={pdfMode ? undefined : 36}
-              iconType="circle"
-              wrapperStyle={{
-                fontSize: '12px',
-                color: '#6b7280',
-              }}
+              labelStyle={{ color: '#fff', fontWeight: 600, marginBottom: 2 }}
+              itemStyle={{ color: '#d1d5db' }}
+              formatter={(value: number) => [`${value}%`, 'Share']}
             />
           </PieChart>
         </ResponsiveContainer>
+
+        {/* Center value */}
+        <div
+          className="absolute inset-x-0 flex flex-col items-center pointer-events-none"
+          style={{ bottom: pdfMode ? 2 : 6 }}
+        >
+          <span className={`font-bold tabular-nums text-gray-900 dark:text-white ${pdfMode ? 'text-xl' : 'text-2xl'}`}>
+            {total}
+          </span>
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 tracking-wide uppercase">
+            tasks
+          </span>
+        </div>
       </div>
 
-      {/* Info Text - Hidden in PDF mode to save vertical space */}
-      {!pdfMode && (
-        <div className="mt-4 text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Outer ring: Primary categories | Inner ring: Sub-categories
-          </p>
-        </div>
-      )}
+      {/* Legend table */}
+      <div className="mt-4 space-y-2">
+        {segments.map((seg) => {
+          const pct = total > 0 ? ((seg.value / total) * 100).toFixed(1) : '0.0';
+          return (
+            <div key={seg.name} className="flex items-center gap-2">
+              {/* Dot */}
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: seg.color }}
+              />
+              {/* Name */}
+              <span className="text-xs text-gray-600 dark:text-gray-300 flex-1 truncate">
+                {seg.name}
+              </span>
+              {/* Value */}
+              <span className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums w-8 text-right">
+                {seg.value}
+              </span>
+              {/* Percentage badge */}
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums w-10 text-right">
+                {pct}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
