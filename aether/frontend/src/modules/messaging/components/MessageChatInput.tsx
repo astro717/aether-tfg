@@ -171,8 +171,8 @@ export function MessageChatInput({
   return (
     <div
       className={`
-        relative p-4
-        ${isDragOver ? "bg-blue-50/50 dark:bg-blue-900/20" : "bg-gradient-to-t from-white dark:from-zinc-900 via-white dark:via-zinc-900 to-transparent"}
+        relative px-4 pb-6 pt-3
+        ${isDragOver ? "bg-blue-50/50 dark:bg-blue-900/20" : "bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl border-t border-gray-200/50 dark:border-white/5"}
         transition-colors duration-300
       `}
       onDragOver={handleDragOver}

@@ -367,11 +367,11 @@ export function PersonalView() {
                                 {/* Full Calendar Button */}
                                 <button
                                     onClick={() => setIsCalendarOpen(true)}
-                                    className="ml-2 p-1.5 rounded-full bg-gradient-to-br from-violet-500/15 to-indigo-500/15 dark:from-violet-500/25 dark:to-indigo-500/25 border border-violet-500/20 dark:border-violet-400/20 hover:from-violet-500/25 hover:to-indigo-500/25 dark:hover:from-violet-500/35 dark:hover:to-indigo-500/35 hover:scale-105 active:scale-95 transition-all duration-200 shadow-sm"
+                                    className="ml-2 p-1.5 rounded-full bg-[#C15F3C]/15 dark:bg-[#C15F3C]/25 border border-[#C15F3C]/20 hover:bg-[#C15F3C]/25 dark:hover:bg-[#C15F3C]/35 hover:scale-105 active:scale-95 transition-all duration-200 shadow-sm"
                                     aria-label="Open full calendar"
                                     title="Full Month View"
                                 >
-                                    <CalendarDays size={16} className="text-violet-600 dark:text-violet-400" />
+                                    <CalendarDays size={16} className="text-[#C15F3C] dark:text-[#C15F3C]/90" />
                                 </button>
                             </div>
                         </div>
@@ -388,7 +388,7 @@ export function PersonalView() {
                                     return (
                                         <div key={label} className="flex justify-center">
                                             <span
-                                                className={`${isCurrent ? 'bg-red-500 rounded-full px-2 py-1 text-white font-bold shadow-sm' : ''}`}
+                                                className={`${isCurrent ? 'bg-[#C15F3C] rounded-full px-2 py-1 text-white font-bold shadow-sm' : ''}`}
                                             >
                                                 {label}
                                             </span>
@@ -409,7 +409,7 @@ export function PersonalView() {
                                             className="flex justify-center"
                                         >
                                             <div
-                                                className={`h-full ${isCurrent ? 'border-l-2 border-red-500/80' : 'border-l border-dashed border-gray-200 opacity-0'}`}
+                                                className={`h-full ${isCurrent ? 'border-l-2 border-[#C15F3C]/80' : 'border-l border-dashed border-gray-200 opacity-0'}`}
                                             />
                                         </div>
                                     );

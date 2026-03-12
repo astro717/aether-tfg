@@ -136,7 +136,10 @@ export function ChatView({
   const renderItems = getRenderItems(messages, firstUnreadId);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-zinc-50/30 dark:bg-black/10 relative overflow-hidden">
+      {/* Subtle depth gradient */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-transparent via-zinc-900/5 dark:via-zinc-500/5 to-transparent pointer-events-none" />
+
       {/* Header */}
       {otherUser && <ChatHeader user={otherUser} />}
 
@@ -145,41 +148,48 @@ export function ChatView({
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto px-5 py-4 premium-scrollbar cursor-default"
       >
-        {messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
-            <p className="text-gray-400 text-sm">
-              {isDraft
-                ? `Start a new conversation with ${otherUser?.username || 'this user'}`
-                : "No messages yet. Start the conversation!"}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {renderItems.map((item, index) => {
-              if (item.type === 'date') {
-                return <DateSeparator key={`date-${item.date}`} date={item.date} />;
-              }
-              if (item.type === 'unread') {
-                return <UnreadSeparator key="unread-separator" />;
-              }
-              if (item.type === 'group') {
-                return (
-                  <div key={`group-${index}`} className="space-y-0.5">
-                    {item.messages.map((message, msgIndex) => (
-                      <MessageBubble
-                        key={message.id}
-                        message={message}
-                        isSent={message.sender_id === currentUserId}
-                        isFirstInGroup={msgIndex === 0}
-                      />
-                    ))}
-                  </div>
-                );
-              }
-              return null;
-            })}
-          </div>
-        )}
+        <div className="max-w-[720px] mx-auto w-full min-h-full flex flex-col justify-end">
+          {messages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-400 text-sm">
+                {isDraft
+                  ? `Start a new conversation with ${otherUser?.username || 'this user'}`
+                  : "No messages yet. Start the conversation!"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-10">
+              {renderItems.map((item, index) => {
+                if (item.type === 'date') {
+                  return <DateSeparator key={`date-${item.date}`} date={item.date} />;
+                }
+                if (item.type === 'unread') {
+                  return <UnreadSeparator key="unread-separator" />;
+                }
+                if (item.type === 'group') {
+                  return (
+                    <div key={`group-${index}`} className="flex flex-col space-y-1">
+                      {item.messages.map((message, msgIndex) => {
+                         const isSent = message.sender_id === currentUserId;
+                         return (
+                          <MessageBubble
+                            key={message.id}
+                            message={message}
+                            isSent={isSent}
+                            isFirstInGroup={msgIndex === 0}
+                            isLastInGroup={msgIndex === item.messages.length - 1}
+                            otherUser={!isSent ? otherUser : null}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                }
+                return null;
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Input Area - Pinned to bottom */}
@@ -250,11 +260,13 @@ function UnreadSeparator() {
 // Date Separator
 function DateSeparator({ date }: { date: string }) {
   return (
-    <div className="flex items-center justify-center py-4">
-      <div className="bg-gray-200/50 dark:bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full border border-white/20 dark:border-white/10">
-        <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+    <div className="flex items-center justify-center py-6">
+      <div className="flex items-center gap-4 w-full px-12">
+        <div className="flex-1 h-px bg-white/10 dark:bg-white/5" />
+        <span className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 tracking-wider">
           {date}
         </span>
+        <div className="flex-1 h-px bg-white/10 dark:bg-white/5" />
       </div>
     </div>
   );

@@ -296,7 +296,7 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                     </h2>
                                     <button
                                         onClick={goToToday}
-                                        className="px-3 py-1.5 text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-500/20 rounded-full hover:bg-violet-200 dark:hover:bg-violet-500/30 transition-colors"
+                                        className="px-3 py-1.5 text-xs font-semibold text-[#C15F3C] dark:text-[#C15F3C]/90 bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20 rounded-full hover:bg-[#C15F3C]/20 dark:hover:bg-[#C15F3C]/30 transition-colors"
                                     >
                                         Today
                                     </button>
@@ -323,7 +323,7 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                         <button
                                             onClick={() => setShowExportDialog(true)}
                                             disabled={exportableTasks.length === 0}
-                                            className="p-2 rounded-full hover:bg-violet-100 dark:hover:bg-violet-500/20 text-gray-500 hover:text-violet-600 dark:text-gray-400 dark:hover:text-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                            className="p-2 rounded-full hover:bg-[#C15F3C]/10 dark:hover:bg-[#C15F3C]/20 text-gray-500 hover:text-[#C15F3C] dark:text-gray-400 dark:hover:text-[#C15F3C]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                             aria-label="Export to Calendar"
                                         >
                                             <Download size={20} />
@@ -380,9 +380,9 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                                 relative aspect-square rounded-xl p-1.5 flex flex-col items-center justify-start
                                                 transition-all duration-200 group
                                                 ${isSelected
-                                                    ? 'bg-violet-100 dark:bg-violet-500/30 ring-2 ring-violet-500 dark:ring-violet-400'
+                                                    ? 'bg-[#C15F3C]/10 dark:bg-[#C15F3C]/30 ring-2 ring-[#C15F3C] dark:ring-[#C15F3C]/90'
                                                     : isToday
-                                                        ? 'bg-violet-50 dark:bg-violet-500/10'
+                                                        ? 'bg-[#C15F3C]/5 dark:bg-[#C15F3C]/10'
                                                         : 'hover:bg-gray-50 dark:hover:bg-zinc-800'
                                                 }
                                                 ${isWeekend ? 'opacity-60' : ''}
@@ -395,9 +395,9 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                                 className={`
                                                     text-sm font-medium
                                                     ${isToday
-                                                        ? 'w-7 h-7 flex items-center justify-center rounded-full bg-violet-500 text-white'
+                                                        ? 'w-7 h-7 flex items-center justify-center rounded-full bg-[#C15F3C] text-white'
                                                         : isSelected
-                                                            ? 'text-violet-700 dark:text-violet-300'
+                                                            ? 'text-[#C15F3C] dark:text-[#C15F3C]/90'
                                                             : 'text-gray-700 dark:text-gray-300'
                                                     }
                                                 `}
@@ -523,7 +523,7 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                     <div className="p-6 flex-1 overflow-y-auto">
                                         {/* Selected date header */}
                                         <div className="mb-6">
-                                            <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider">
+                                            <p className="text-xs font-semibold text-[#C15F3C] dark:text-[#C15F3C]/90 uppercase tracking-wider">
                                                 {selectedDay.toLocaleDateString('en-US', { weekday: 'long' })}
                                             </p>
                                             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -672,8 +672,8 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                     transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                                 >
                                     {/* Icon */}
-                                    <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center">
-                                        <Download size={24} className="text-violet-600 dark:text-violet-400" />
+                                    <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20 flex items-center justify-center">
+                                        <Download size={24} className="text-[#C15F3C] dark:text-[#C15F3C]/90" />
                                     </div>
 
                                     {/* Title */}
@@ -684,7 +684,7 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                     {/* Message */}
                                     <p className="text-sm text-center text-gray-600 dark:text-gray-400 mb-6">
                                         You are about to export{' '}
-                                        <span className="font-semibold text-violet-600 dark:text-violet-400">
+                                        <span className="font-semibold text-[#C15F3C] dark:text-[#C15F3C]/90">
                                             {exportableTasks.length} task{exportableTasks.length !== 1 ? 's' : ''}
                                         </span>{' '}
                                         from{' '}
@@ -704,7 +704,7 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                         </button>
                                         <button
                                             onClick={handleExportConfirm}
-                                            className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors shadow-lg shadow-violet-500/25"
+                                            className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-[#C15F3C] rounded-xl hover:bg-[#a65031] transition-colors shadow-lg shadow-[#C15F3C]/25"
                                         >
                                             Export now
                                         </button>

@@ -1,19 +1,24 @@
 import { useRef, useEffect, useState } from "react";
 import { Check, CheckCheck, ClipboardList, FileText, Download, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { type Message, type CommentNotificationMetadata, type MessageAttachment } from "../api/messagingApi";
+import { type Message, type CommentNotificationMetadata, type MessageAttachment, type MessageUser } from "../api/messagingApi";
 import { formatMessageTime } from "../data/mockData";
+import { getAvatarColorClasses } from "../../../lib/avatarColors";
 
 interface MessageBubbleProps {
   message: Message;
   isSent: boolean;
   isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
+  otherUser?: MessageUser | null;
 }
 
 export function MessageBubble({
   message,
   isSent,
-  isFirstInGroup = false
+  isFirstInGroup = false,
+  isLastInGroup = false,
+  otherUser = null
 }: MessageBubbleProps) {
   // Track if this is a fresh mount (new message) to apply animation only once
   // Fix for "glitch": Don't animate if it's a confirmed message (sent by us, real ID)
@@ -40,19 +45,20 @@ export function MessageBubble({
   // Me (Sent): Dark Gray / Charcoal (bg-gray-800), rounded-2xl rounded-tr-sm
   // Others (Received): Glass White (bg-white/60), rounded-2xl rounded-tl-sm
   const bubbleClasses = isSent
-    ? "bg-gray-800 text-white"
-    : "bg-white/60 text-gray-800";
+    ? "bg-gradient-to-br from-[#1f2c3f] to-[#24364d] border border-white/5 text-white/95"
+    : "bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/60 dark:border-white/5 text-gray-800 dark:text-gray-100";
 
   const alignmentClasses = isSent ? "justify-end" : "justify-start";
 
-  // Rounded corners - sharper on the side where the tail would be
-  const radiusClasses = isSent
-    ? isFirstInGroup
-      ? "rounded-2xl rounded-tr-sm"
-      : "rounded-2xl"
-    : isFirstInGroup
-      ? "rounded-2xl rounded-tl-sm"
-      : "rounded-2xl";
+  // Rounded corners - adaptive tail logic
+  let radiusClasses = "rounded-[20px] ";
+  if (isSent) {
+    if (!isFirstInGroup) radiusClasses += "rounded-tr-[5px] ";
+    if (!isLastInGroup) radiusClasses += "rounded-br-[5px] ";
+  } else {
+    if (!isFirstInGroup) radiusClasses += "rounded-tl-[5px] ";
+    if (!isLastInGroup) radiusClasses += "rounded-bl-[5px] ";
+  }
 
   // Determine message status from read_at
   const getStatus = (): 'sent' | 'delivered' | 'read' => {
@@ -145,17 +151,38 @@ export function MessageBubble({
     !att.file_type.startsWith("image/")
   ) || [];
 
+  const getUserInitials = (user: MessageUser) => {
+    return user.username.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || user.username.slice(0, 2).toUpperCase();
+  };
+
   // Regular text message (possibly with attachments)
   return (
-    <div className={`flex ${alignmentClasses} ${shouldAnimate ? 'animate-message-in' : ''}`}>
+    <div className={`flex ${alignmentClasses} ${shouldAnimate ? 'animate-message-in' : ''} group/message`}>
+      {/* Avatar for received messages */}
+      {!isSent && (
+        <div className="w-8 flex-shrink-0 mr-2 flex flex-col justify-end pb-0.5">
+          {isLastInGroup && otherUser ? (
+            <div
+              className={`
+                w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm
+                ${getAvatarColorClasses(otherUser.avatar_color).bg}
+                ${getAvatarColorClasses(otherUser.avatar_color).text}
+                ${getAvatarColorClasses(otherUser.avatar_color).border}
+              `}
+            >
+              {getUserInitials(otherUser)}
+            </div>
+          ) : null}
+        </div>
+      )}
+
       <div
         className={`
-          relative max-w-[70%]
-          ${hasAttachments && !hasContent ? '' : 'px-4 py-2.5'}
+          relative max-w-[75%]
+          ${hasAttachments && !hasContent ? '' : 'px-[16px] pt-[10px] pb-[12px]'}
           ${bubbleClasses}
           ${radiusClasses}
           shadow-sm
-          overflow-hidden
         `}
       >
         {/* Image Attachments Grid */}
@@ -176,25 +203,26 @@ export function MessageBubble({
           </div>
         )}
 
-        {/* Message Text */}
+        {/* Message Text with inline spacer for timestamp */}
         {hasContent && (
-          <p className={`text-[15px] leading-relaxed whitespace-pre-wrap break-words ${imageAttachments.length > 0 ? 'px-4 pt-2' : ''}`}>
-            {message.content}
-          </p>
+          <div className={`relative ${imageAttachments.length > 0 ? 'px-4 pt-2' : ''}`}>
+            <p className="text-[15px] leading-[1.5] whitespace-pre-wrap break-words">
+              {message.content}
+              <span className="inline-block w-[72px]" />
+            </p>
+          </div>
         )}
 
-        {/* Timestamp & Status */}
+        {/* Floating Timestamp & Status */}
         <div
           className={`
-            flex items-center gap-1.5 mt-1
-            ${isSent ? "justify-end" : "justify-start"}
-            ${hasAttachments && !hasContent ? 'px-4 pb-2.5' : ''}
+            absolute bottom-[6px] right-[12px] flex items-center gap-1
           `}
         >
           <span
             className={`
-              text-[11px] font-medium
-              ${isSent ? "text-white/70" : "text-gray-400"}
+              text-[10px] font-medium opacity-60
+              ${isSent ? "text-white" : "text-gray-500 dark:text-gray-400"}
             `}
           >
             {formatMessageTime(new Date(message.created_at))}
