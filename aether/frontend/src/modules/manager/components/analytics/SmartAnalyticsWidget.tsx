@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { BarChart2 } from 'lucide-react';
 import { PredictiveBurndownChart } from '../charts/PredictiveBurndownChart';
 import { DailyHealthDashboard } from './DailyHealthDashboard';
 import type { TimeRange } from '../../types/analytics';
@@ -53,7 +54,9 @@ export function SmartAnalyticsWidget({
 function BurndownEmptyState() {
   return (
     <div className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm flex flex-col items-center justify-center h-64 gap-3">
-      <p className="text-2xl">📊</p>
+      <div className="p-3 rounded-full bg-zinc-100 dark:bg-zinc-700/40">
+        <BarChart2 className="w-8 h-8 text-zinc-400 dark:text-zinc-500" />
+      </div>
       <p className="text-sm font-medium text-gray-700 dark:text-gray-300">No burndown data available</p>
       <p className="text-xs text-gray-400 dark:text-gray-500">Select a longer period to see predictive trends.</p>
     </div>

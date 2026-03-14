@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
-import { Sidebar as SidebarIcon, Plus, Loader2, Settings, Shield } from "lucide-react";
+import { Sidebar as SidebarIcon, Plus, Loader2, Settings, Shield, FlaskConical, BarChart3 } from "lucide-react";
 import { Link, useLocation, useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../modules/auth/context/AuthContext";
 import { useOrganization } from "../../modules/organization/context/OrganizationContext";
@@ -60,6 +60,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const location = useLocation();
     const isSettingsActive = location.pathname === '/settings';
     const isManagerActive = location.pathname === '/manager';
+const isAnalyticsV4Active = location.pathname === '/manager/analytics-v4';
     const [searchParams] = useSearchParams();
     const activeUserId = searchParams.get("user");
 
@@ -365,73 +366,145 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className={`
                         border-t border-gray-100 dark:border-zinc-800
                         ${isCollapsed ? 'px-2 py-3' : 'px-4 py-4'}
+                        space-y-2
                     `}>
+                        {/* Analytics V4 — premium button */}
                         <Link
-                            to="/manager"
+                            to="/manager/analytics-v4"
                             className={`
                                 w-full flex items-center group
                                 ${isCollapsed ? 'justify-center p-2.5' : 'px-3 py-2.5 gap-3'}
                                 rounded-xl transition-all duration-200
                                 cursor-pointer outline-none
-                                ${isManagerActive
-                                    ? 'bg-gradient-to-r from-emerald-500/15 to-teal-500/15 dark:from-emerald-500/25 dark:to-teal-500/25 border border-emerald-500/30 dark:border-emerald-500/40 shadow-sm'
-                                    : 'bg-gradient-to-r from-emerald-500/5 to-teal-500/5 dark:from-emerald-500/10 dark:to-teal-500/10 hover:from-emerald-500/10 hover:to-teal-500/10 dark:hover:from-emerald-500/20 dark:hover:to-teal-500/20 border border-transparent hover:border-emerald-500/20 dark:hover:border-emerald-500/30'
+                                ${isAnalyticsV4Active
+                                    ? 'bg-gradient-to-r from-zinc-900 to-zinc-800 border border-zinc-600/50 shadow-sm'
+                                    : 'bg-gradient-to-r from-zinc-900/60 to-zinc-800/60 dark:from-zinc-900/80 dark:to-zinc-800/80 hover:from-zinc-900 hover:to-zinc-800 border border-transparent hover:border-zinc-600/30'
                                 }
                             `}
                         >
-                            <div className="relative">
-                                <div className={`
-                                    p-1.5 rounded-xl
-                                    ${isManagerActive
-                                        ? 'bg-emerald-500/20 dark:bg-emerald-500/30'
-                                        : 'bg-emerald-500/10 dark:bg-emerald-500/20 group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-500/30'
-                                    }
-                                    transition-colors duration-200
-                                `}>
-                                    <Shield
-                                        size={isCollapsed ? 18 : 16}
-                                        className={`
-                                            transition-colors duration-200
-                                            ${isManagerActive
-                                                ? 'text-emerald-600 dark:text-emerald-400'
-                                                : 'text-emerald-600/80 dark:text-emerald-400/80 group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
-                                            }
-                                        `}
-                                    />
+                            <div className={`
+                                p-1.5 rounded-xl
+                                ${isAnalyticsV4Active
+                                    ? 'bg-zinc-700/60'
+                                    : 'bg-zinc-700/30 group-hover:bg-zinc-700/60'
+                                }
+                                transition-colors duration-200
+                            `}>
+                                <BarChart3
+                                    size={isCollapsed ? 18 : 16}
+                                    className={`
+                                        transition-colors duration-200
+                                        ${isAnalyticsV4Active
+                                            ? 'text-white'
+                                            : 'text-zinc-400 group-hover:text-white'
+                                        }
+                                    `}
+                                />
+                            </div>
+                            {!isCollapsed && (
+                                <div className="flex flex-col flex-1">
+                                    <span className={`
+                                        font-semibold text-sm
+                                        transition-colors duration-200
+                                        ${isAnalyticsV4Active
+                                            ? 'text-white'
+                                            : 'text-zinc-400 group-hover:text-white'
+                                        }
+                                    `}>
+                                        Analytics V4
+                                    </span>
+                                    <span className="text-[10px] text-zinc-500 group-hover:text-zinc-400 font-medium transition-colors duration-200">
+                                        Premium Dashboard
+                                    </span>
                                 </div>
+                            )}
+                            {!isCollapsed && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white/10 text-white/50">NEW</span>
+                            )}
+                        </Link>
+
+                        <Link
+                            to="/manager"
+                            className={`
+                                w-full relative flex items-center overflow-hidden group
+                                ${isCollapsed ? 'justify-center p-2.5' : 'pl-4 pr-3.5 py-2.5 gap-3'}
+                                rounded-2xl transition-all duration-200 cursor-pointer
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-1
+                                ${isManagerActive
+                                    ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/70 dark:from-emerald-950/80 dark:to-emerald-950/50 border border-emerald-200/80 dark:border-emerald-700/30 shadow-[0_2px_10px_rgba(0,0,0,0.09),0_0_0_1px_rgba(16,185,129,0.12)] dark:shadow-[0_2px_14px_rgba(0,0,0,0.4),0_0_0_1px_rgba(16,185,129,0.10)]'
+                                    : 'bg-gradient-to-br from-emerald-50/60 to-emerald-50 dark:from-zinc-900/50 dark:to-emerald-950/10 border border-emerald-200/50 dark:border-emerald-900/30 shadow-[0_1px_4px_rgba(0,0,0,0.07),0_0_0_1px_rgba(16,185,129,0.06)] dark:shadow-none hover:from-emerald-50 hover:to-emerald-100/60 dark:hover:to-emerald-950/20 hover:border-emerald-200/70 dark:hover:border-emerald-800/40 hover:shadow-[0_2px_8px_rgba(16,185,129,0.10)] dark:hover:shadow-[0_2px_10px_rgba(0,0,0,0.3)]'
+                                }
+                            `}
+                        >
+                            {/* Left accent strip — flota dentro del border radius */}
+                            <span className={`
+                                absolute left-0 inset-y-2 w-0.5 rounded-r-full
+                                bg-gradient-to-b from-emerald-400 to-teal-600
+                                transition-opacity duration-200
+                                ${isManagerActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'}
+                            `} />
+
+                            {/* Icon con contenedor */}
+                            <div className={`
+                                relative flex-shrink-0 p-1.5 rounded-xl transition-colors duration-200
+                                ${isManagerActive
+                                    ? 'bg-emerald-100 dark:bg-emerald-900/50'
+                                    : 'bg-emerald-50/80 dark:bg-emerald-900/20 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/50'
+                                }
+                            `}>
+                                <Shield
+                                    size={isCollapsed ? 17 : 16}
+                                    className={`
+                                        transition-colors duration-200
+                                        ${isManagerActive
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : 'text-emerald-500/70 dark:text-emerald-500/60 group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
+                                        }
+                                    `}
+                                />
                                 {isCollapsed && pendingValidationCount > 0 && (
-                                    <div className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white text-[9px] font-bold border-2 border-[#FCFCFD] dark:border-[#18181B]">
+                                    <div className="absolute -top-1 -right-1 flex items-center justify-center min-w-3.5 h-3.5 px-0.5 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white text-[9px] font-bold ring-2 ring-white dark:ring-zinc-900">
                                         {pendingValidationCount}
                                     </div>
                                 )}
                             </div>
+
                             {!isCollapsed && (
-                                <div className="flex items-center flex-1 text-left gap-2">
-                                    <div className="flex flex-col flex-1">
+                                <div className="flex items-center flex-1 gap-2 min-w-0">
+                                    <div className="flex flex-col flex-1 min-w-0 gap-0.5">
                                         <span className={`
-                                            font-semibold text-sm
+                                            font-semibold text-sm leading-tight tracking-[-0.01em]
                                             transition-colors duration-200
                                             ${isManagerActive
-                                                ? 'text-emerald-700 dark:text-emerald-300'
-                                                : 'text-emerald-700/90 dark:text-emerald-300/90 group-hover:text-emerald-700 dark:group-hover:text-emerald-300'
+                                                ? 'text-emerald-900 dark:text-emerald-100'
+                                                : 'text-emerald-800/80 dark:text-emerald-200/65 group-hover:text-emerald-900 dark:group-hover:text-emerald-100'
                                             }
                                         `}>
                                             Manager Zone
                                         </span>
-                                        <span className="text-[10px] text-emerald-600/60 dark:text-emerald-400/60 font-medium">
-                                            Team & Validation
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                            {pendingValidationCount > 0 && (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0 animate-pulse" />
+                                            )}
+                                            <span className={`
+                                                text-xs font-medium tracking-wide transition-colors duration-200
+                                                ${isManagerActive
+                                                    ? 'text-emerald-700/55 dark:text-emerald-400/50'
+                                                    : 'text-emerald-700/40 dark:text-emerald-400/35'
+                                                }
+                                            `}>
+                                                Team & Validation
+                                            </span>
+                                        </div>
                                     </div>
                                     {pendingValidationCount > 0 && (
                                         <div className={`
-                                            flex items-center justify-center
-                                            min-w-[20px] h-[20px] px-1.5
-                                            rounded-full
-                                            text-[11px] font-bold
-                                            transition-colors duration-200
+                                            flex items-center justify-center flex-shrink-0
+                                            min-w-5 h-5 px-1.5 rounded-full
+                                            text-xs font-bold transition-all duration-200
                                             ${isManagerActive
                                                 ? 'bg-emerald-600 dark:bg-emerald-500 text-white'
-                                                : 'bg-emerald-500/90 dark:bg-emerald-500/80 text-white group-hover:bg-emerald-600 dark:group-hover:bg-emerald-500'
+                                                : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 dark:group-hover:text-white'
                                             }
                                         `}>
                                             {pendingValidationCount}
@@ -440,6 +513,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                 </div>
                             )}
                         </Link>
+
+                        {/* Analytics V2 Beta — temporary */}
+                        {!isCollapsed && (
+                            <Link
+                                to="/manager/analytics-v2"
+                                className={`mt-1.5 w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200
+                                    ${location.pathname === '/manager/analytics-v2'
+                                        ? 'text-violet-600 dark:text-violet-400 bg-violet-500/10'
+                                        : 'text-gray-400 dark:text-gray-500 hover:text-violet-500 dark:hover:text-violet-400 hover:bg-violet-500/5'
+                                    }`}
+                            >
+                                <FlaskConical size={12} />
+                                Analytics V2
+                                <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500">BETA</span>
+                            </Link>
+                        )}
                     </div>
                 )}
             </aside>

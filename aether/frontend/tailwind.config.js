@@ -8,6 +8,10 @@ export default {
   theme: {
     extend: {
       colors: {
+        brand: {
+          DEFAULT: '#C15F3C',
+          dark: '#a65031',
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

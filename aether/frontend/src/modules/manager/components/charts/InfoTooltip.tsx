@@ -4,13 +4,13 @@
  * Renders at document body level to appear above all sibling components.
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 
 export interface InfoTooltipContent {
   title: string;
-  description: string;
+  description: ReactNode;
 }
 
 interface InfoTooltipProps {

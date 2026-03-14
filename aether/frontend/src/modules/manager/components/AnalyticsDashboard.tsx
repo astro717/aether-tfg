@@ -26,7 +26,10 @@ import {
   RealCFDChart,
   TaskDistributionChart,
   WorkloadHeatmap,
+  WorkItemAgeChart,
+  ThroughputHistogram,
 } from './charts';
+import { ControlChart } from '../../../components/charts';
 import { SmartAnalyticsWidget } from './analytics/SmartAnalyticsWidget';
 
 interface AnalyticsDashboardProps {
@@ -338,6 +341,22 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
             }}
           />
         </div>
+
+        {/* Work Item Age: visible for all non-today periods */}
+        {selectedPeriod !== 'today' && analytics.premiumCharts?.workItemAge && analytics.premiumCharts.workItemAge.length > 0 && (
+          <WorkItemAgeChart
+            data={analytics.premiumCharts.workItemAge}
+            p85CycleTime={(() => {
+              const scatter = analytics.premiumCharts?.cycleTimeScatter;
+              if (!scatter || scatter.length === 0) return undefined;
+              const sorted = [...scatter.map(d => d.days)].sort((a, b) => a - b);
+              const idx = 0.85 * (sorted.length - 1);
+              const lo = Math.floor(idx);
+              const hi = Math.ceil(idx);
+              return Math.round(lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo));
+            })()}
+          />
+        )}
       </div>
 
       {/* DAILY PULSE (Period = Today): Priority Widget */}
@@ -359,36 +378,69 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
             subtitle={cfdSubtitle}
           />
         )}
-        {analytics.premiumCharts?.investment && (
+        {selectedPeriod !== 'week' && analytics.premiumCharts?.investment && (
           <TaskDistributionChart data={analytics.premiumCharts.investment} />
         )}
       </div>
 
       {/* Secondary Charts: Heatmap + Burndown */}
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
-        {selectedPeriod !== 'today' && analytics.premiumCharts?.heatmap && (
-          <WorkloadHeatmap data={analytics.premiumCharts.heatmap} />
-        )}
-        {/* SmartAnalyticsWidget: renders DailyHealthDashboard for 'today',
-            keeps the original PredictiveBurndownChart for all other periods */}
-        {selectedPeriod !== 'today' && (
+      {/* For 7-day view: split heatmap / task distribution side-by-side */}
+      {selectedPeriod === 'week' ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {analytics.premiumCharts?.heatmap && (
+              <WorkloadHeatmap data={analytics.premiumCharts.heatmap} />
+            )}
+            {analytics.premiumCharts?.investment && (
+              <TaskDistributionChart data={analytics.premiumCharts.investment} />
+            )}
+          </div>
           <SmartAnalyticsWidget
             period={selectedPeriod}
             organizationId={currentOrganization!.id}
             burndownData={analytics.premiumCharts?.burndown}
           />
-        )}
-      </div>
+          {analytics.premiumCharts?.cycleTimeScatter && analytics.premiumCharts.cycleTimeScatter.length > 0 && (
+            <ControlChart data={analytics.premiumCharts.cycleTimeScatter} />
+          )}
+          {velocityData.length >= 4 && (
+            <ThroughputHistogram data={velocityData} />
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+          {selectedPeriod !== 'today' && analytics.premiumCharts?.heatmap && (
+            <WorkloadHeatmap data={analytics.premiumCharts.heatmap} />
+          )}
+          {/* SmartAnalyticsWidget: renders DailyHealthDashboard for 'today',
+              keeps the original PredictiveBurndownChart for all other periods */}
+          {selectedPeriod !== 'today' && (
+            <SmartAnalyticsWidget
+              period={selectedPeriod}
+              organizationId={currentOrganization!.id}
+              burndownData={analytics.premiumCharts?.burndown}
+            />
+          )}
+          {selectedPeriod !== 'today' && analytics.premiumCharts?.cycleTimeScatter && analytics.premiumCharts.cycleTimeScatter.length > 0 && (
+            <ControlChart data={analytics.premiumCharts.cycleTimeScatter} />
+          )}
+          {selectedPeriod !== 'today' && velocityData.length >= 4 && (
+            <ThroughputHistogram data={velocityData} />
+          )}
+        </div>
+      )}
 
       {/* Individual Performance - Enhanced with Gradients */}
-      <div className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md transition-all">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-          Individual Performance
-        </h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-          Top contributors by completed tasks
-        </p>
-        <div className="h-72">
+      <div className="bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl border border-gray-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden">
+        <div className="px-6 pt-6 pb-2">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+            Individual Performance
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Top contributors by completed tasks
+          </p>
+        </div>
+        <div className="px-6 py-2 h-72">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={individualPerformance}
@@ -423,41 +475,21 @@ export function AnalyticsDashboard({ onOpenAIReport }: AnalyticsDashboardProps) 
                 labelStyle={{ color: '#fff' }}
                 itemStyle={{ color: '#fff' }}
               />
-              <Legend
-                content={({ payload }) => {
-                  const colorByKey: Record<string, string> = {
-                    completed: '#10b981',
-                    inProgress: '#f59e0b',
-                  };
-                  return (
-                    <div className="flex items-center justify-center gap-4 pb-2">
-                      {payload?.map((entry) => (
-                        <div key={String(entry.dataKey)} className="flex items-center gap-1.5">
-                          <div
-                            className="w-3 h-3 rounded"
-                            style={{ backgroundColor: colorByKey[String(entry.dataKey)] ?? '#6b7280' }}
-                          />
-                          <span style={{ color: '#6b7280', fontSize: 12 }}>{entry.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                }}
-              />
-              <Bar
-                dataKey="completed"
-                name="Completed"
-                fill="url(#colorCompleted)"
-                radius={[0, 4, 4, 0]}
-              />
-              <Bar
-                dataKey="inProgress"
-                name="In Progress"
-                fill="url(#colorInProgress)"
-                radius={[0, 4, 4, 0]}
-              />
+              <Bar dataKey="completed" name="Completed" fill="url(#colorCompleted)" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="inProgress" name="In Progress" fill="url(#colorInProgress)" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </div>
+        {/* Footer legend — pinned to bottom */}
+        <div className="flex items-center gap-4 px-6 py-3 border-t border-gray-100 dark:border-zinc-700/50">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-[11px] text-gray-500 dark:text-gray-400">Completed</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            <span className="text-[11px] text-gray-500 dark:text-gray-400">In Progress</span>
+          </div>
         </div>
       </div>
 

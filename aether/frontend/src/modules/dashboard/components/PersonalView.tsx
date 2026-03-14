@@ -7,10 +7,10 @@ import {
     PointerSensor,
     useDroppable,
     useDraggable,
+    pointerWithin,
     type DragStartEvent,
     type DragEndEvent,
 } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
 import {
     Siren,
     Goal,
@@ -141,19 +141,18 @@ interface DraggableTaskProps {
 }
 
 function DraggableTask({ id, children, disabled = false }: DraggableTaskProps) {
-    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id,
         disabled,
     });
 
-    const style: React.CSSProperties = {
-        transform: CSS.Translate.toString(transform),
-        opacity: isDragging ? 0.5 : 1,
-        cursor: isDragging ? 'grabbing' : 'grab',
-    };
-
     return (
-        <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+        <div
+            ref={setNodeRef}
+            style={{ opacity: isDragging ? 0 : 1 }}
+            {...listeners}
+            {...attributes}
+        >
             {children}
         </div>
     );
@@ -275,6 +274,7 @@ export function PersonalView() {
         <>
         <DndContext
             sensors={sensors}
+            collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
         >
@@ -492,9 +492,9 @@ export function PersonalView() {
             </div>
 
             {/* Drag Overlay - floating preview while dragging */}
-            <DragOverlay>
+            <DragOverlay dropAnimation={null}>
                 {activeTask ? (
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-2xl border-2 border-violet-400 transform rotate-3 scale-105">
+                    <div className="bg-white/70 dark:bg-white/10 backdrop-blur-md rounded-[24px] p-4 shadow-xl border border-white/50 dark:border-white/10 rotate-2 scale-105 cursor-grabbing">
                         <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                             {activeTask.title}
                         </span>

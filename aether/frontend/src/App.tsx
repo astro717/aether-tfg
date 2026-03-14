@@ -16,6 +16,9 @@ import { MainDashboardPage } from "./modules/dashboard/pages/MainDashboardPage";
 import { MessagingPage } from "./modules/messaging/pages/MessagingPage";
 import { SettingsPage } from "./modules/settings/pages/SettingsPage";
 import { ManagerZonePage } from "./modules/manager/pages/ManagerZonePage";
+import { AnalyticsDashboardV2Page } from "./modules/manager/pages/AnalyticsDashboardV2Page";
+import { AnalyticsDashboardV4 } from "./modules/manager/pages/AnalyticsDashboardV4";
+import { AnalyticsDashboardV3Page } from "./modules/manager/pages/AnalyticsDashboardV3Page";
 import { ProtectedManagerRoute } from "./components/auth/ProtectedManagerRoute";
 import { OrganizationProvider } from "./modules/organization/context/OrganizationContext";
 import { AuthProvider } from "./modules/auth/context/AuthContext";
@@ -100,6 +103,42 @@ function App() {
                           <ProtectedManagerRoute>
                             <DashboardLayout>
                               <ManagerZonePage />
+                            </DashboardLayout>
+                          </ProtectedManagerRoute>
+                        }
+                      />
+
+                      {/* Analytics V2 (BETA) */}
+                      <Route
+                        path="/manager/analytics-v2"
+                        element={
+                          <ProtectedManagerRoute>
+                            <DashboardLayout>
+                              <AnalyticsDashboardV2Page />
+                            </DashboardLayout>
+                          </ProtectedManagerRoute>
+                        }
+                      />
+
+                      {/* Analytics V3 (experimental — KPIs & Signals redesign) */}
+                      <Route
+                        path="/manager/analytics-v3"
+                        element={
+                          <ProtectedManagerRoute>
+                            <DashboardLayout>
+                              <AnalyticsDashboardV3Page />
+                            </DashboardLayout>
+                          </ProtectedManagerRoute>
+                        }
+                      />
+
+                      {/* Analytics V4 (premium) */}
+                      <Route
+                        path="/manager/analytics-v4"
+                        element={
+                          <ProtectedManagerRoute>
+                            <DashboardLayout>
+                              <AnalyticsDashboardV4 />
                             </DashboardLayout>
                           </ProtectedManagerRoute>
                         }

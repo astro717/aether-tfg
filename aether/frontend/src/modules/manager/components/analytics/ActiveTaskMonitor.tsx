@@ -1,9 +1,7 @@
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle2 } from 'lucide-react';
 import type { DailyTaskHealth, TaskHealthStatus } from '../../types/analytics';
 import { UserAvatar } from '../../../../components/ui/UserAvatar';
-
-interface ActiveTaskMonitorProps {
-  tasks: DailyTaskHealth[];
-}
 
 // ── Relative time helper ────────────────────────────────────────────────────
 function formatRelativeTime(isoDate: string): string {
@@ -29,9 +27,9 @@ const HEALTH_CONFIG: Record<
     label: 'Healthy',
   },
   at_risk: {
-    border: 'border-l-red-500',
-    badge: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
-    dot: 'bg-red-500',
+    border: 'border-l-orange-500',
+    badge: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+    dot: 'bg-orange-500',
     label: 'At Risk',
   },
   stagnant: {
@@ -50,18 +48,24 @@ const HEALTH_CONFIG: Record<
 
 // ── Task Health Card ────────────────────────────────────────────────────────
 function HealthCard({ task }: { task: DailyTaskHealth }) {
+  const navigate = useNavigate();
   const config = HEALTH_CONFIG[task.healthStatus];
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate(`/tasks/${task.taskId}`)}
+      onKeyDown={(e) => e.key === 'Enter' && navigate(`/tasks/${task.taskId}`)}
       className={`
-        group relative flex items-start gap-3 p-3 rounded-xl
+        group relative flex items-start gap-3 p-3 rounded-xl cursor-pointer
         bg-white/50 dark:bg-zinc-800/50
         border border-l-4 border-gray-100 dark:border-zinc-700/50
         ${config.border}
         hover:bg-white/80 dark:hover:bg-zinc-800/80
-        transition-all duration-200
+        transition-colors transition-shadow duration-200
         hover:shadow-sm
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1
       `}
     >
       {/* Avatar */}
@@ -111,11 +115,13 @@ function HealthCard({ task }: { task: DailyTaskHealth }) {
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────
-export function ActiveTaskMonitor({ tasks }: ActiveTaskMonitorProps) {
+export function ActiveTaskMonitor({ tasks }: { tasks: DailyTaskHealth[] }) {
   if (tasks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-center">
-        <div className="text-4xl mb-3">✅</div>
+        <div className="p-3 rounded-full bg-emerald-100 dark:bg-emerald-500/20 mb-3">
+          <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+        </div>
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">All Clear</p>
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
           No active tasks to monitor right now. Enjoy the calm!
@@ -125,7 +131,7 @@ export function ActiveTaskMonitor({ tasks }: ActiveTaskMonitorProps) {
   }
 
   return (
-    <div className="space-y-2 max-h-80 overflow-y-auto pr-1 premium-scrollbar-hover">
+    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
       {tasks.map((task) => (
         <HealthCard key={task.taskId} task={task} />
       ))}

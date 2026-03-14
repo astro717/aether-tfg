@@ -1,44 +1,78 @@
-import { Loader2, AlertTriangle, Brain } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { useDailyHealth } from '../../hooks/useDailyHealth';
 import { DailyWorkloadDistribution } from './DailyWorkloadDistribution';
 import { ActiveTaskMonitor } from './ActiveTaskMonitor';
-import { InfoTooltip, type InfoTooltipContent } from '../charts';
+import { UserAvatar } from '../../../../components/ui/UserAvatar';
+import type { DailyTaskHealth } from '../../types/analytics';
 
 interface DailyHealthDashboardProps {
   organizationId: string;
 }
 
-// Summary stat for the header row
-function PulseStat({
-  label,
-  value,
-  color,
-  infoTooltip,
-}: {
-  label: string;
-  value: number;
-  color: 'emerald' | 'amber' | 'red' | 'violet';
-  infoTooltip?: InfoTooltipContent;
-}) {
-  const colorMap = {
-    emerald: 'text-emerald-600 dark:text-emerald-400',
-    amber: 'text-amber-600 dark:text-amber-400',
-    red: 'text-red-600 dark:text-red-400',
-    violet: 'text-violet-600 dark:text-violet-400',
-  };
+// ── Relative time helper ─────────────────────────────────────────────────────
+function formatRelativeTime(isoDate: string): string {
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  if (diffSecs < 60) return 'just now';
+  const diffMins = Math.floor(diffSecs / 60);
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.floor(diffHours / 24)}d ago`;
+}
+
+// ── Completed Today section ───────────────────────────────────────────────────
+function CompletedTodaySection({ tasks }: { tasks: DailyTaskHealth[] }) {
+  const navigate = useNavigate();
+
+  if (tasks.length === 0) return null;
+
   return (
-    <div className="text-center">
-      <p className={`text-2xl font-bold tabular-nums ${colorMap[color]}`}>{value}</p>
-      <div className="flex items-center justify-center gap-1 mt-0.5">
-        <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
-        {infoTooltip && <InfoTooltip content={infoTooltip} size="sm" />}
+    <div>
+      <p className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-2">
+        Completed Today — {tasks.length} delivered
+      </p>
+      <div className="space-y-1.5">
+        {tasks.map((task) => (
+          <div
+            key={task.taskId}
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate(`/tasks/${task.taskId}`)}
+            onKeyDown={(e) => e.key === 'Enter' && navigate(`/tasks/${task.taskId}`)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer
+              bg-emerald-50/60 dark:bg-emerald-500/[0.06]
+              border border-emerald-100 dark:border-emerald-500/20
+              hover:bg-emerald-50 dark:hover:bg-emerald-500/10
+              transition-colors duration-150
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <UserAvatar
+              username={task.assignee.username}
+              avatarColor={task.assignee.avatarColor}
+              size="xs"
+              className="shrink-0"
+            />
+            <p className="flex-1 text-sm font-medium text-gray-800 dark:text-white/80 truncate">
+              {task.title}
+            </p>
+            <span className="text-xs text-gray-400 dark:text-zinc-500 shrink-0">
+              {task.assignee.username}
+            </span>
+            <span className="text-gray-200 dark:text-zinc-700 shrink-0">·</span>
+            <span className="text-xs text-gray-400 dark:text-zinc-500 shrink-0">
+              {formatRelativeTime(task.lastActivity)}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
 export function DailyHealthDashboard({ organizationId }: DailyHealthDashboardProps) {
-  const { healthData, distribution, loading, error } = useDailyHealth(organizationId);
+  const { healthData, completedToday, distribution, loading, error } = useDailyHealth(organizationId);
 
   if (loading) {
     return (
@@ -60,90 +94,35 @@ export function DailyHealthDashboard({ organizationId }: DailyHealthDashboardPro
           <AlertTriangle className="w-5 h-5 text-red-500" />
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-xs text-violet-500 dark:text-violet-400 hover:underline"
+        >
+          Reload
+        </button>
       </div>
     );
   }
 
-  const healthy = healthData.filter((t) => t.healthStatus === 'healthy').length;
-  const atRisk = healthData.filter((t) => t.healthStatus === 'at_risk').length;
-  const blocked = healthData.filter((t) => t.healthStatus === 'blocked').length;
-  const stagnant = healthData.filter((t) => t.healthStatus === 'stagnant').length;
-
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            Daily Team Pulse
-          </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Real-time health of active work today
-          </p>
-        </div>
-        {/* AI badge */}
-        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r from-violet-500/10 to-blue-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300">
-          <Brain className="w-3 h-3" />
-          AI Real-time Analysis
-        </span>
-      </div>
-
-      {/* ── Pulse Stats ── */}
-      {healthData.length > 0 && (
-        <div className="grid grid-cols-4 gap-4 p-4 rounded-xl bg-gray-50/50 dark:bg-zinc-800/30 border border-gray-100 dark:border-zinc-700/50">
-          <PulseStat
-            label="Healthy"
-            value={healthy}
-            color="emerald"
-            infoTooltip={{
-              title: 'Healthy Tasks',
-              description: 'Tasks progressing at a good pace with recent activity (commits, comments, or status changes) and sufficient margin before their deadline.',
-            }}
-          />
-          <PulseStat
-            label="Stagnant"
-            value={stagnant}
-            color="amber"
-            infoTooltip={{
-              title: 'Stagnant Tasks',
-              description: 'Tasks that remain assigned or in progress but have not recorded any advancement or interaction in the last 3 business days.',
-            }}
-          />
-          <PulseStat
-            label="At Risk"
-            value={atRisk}
-            color="red"
-            infoTooltip={{
-              title: 'At Risk',
-              description: 'Tasks whose deadline expires in less than 48 hours or that present a high complexity level relative to the team\'s usual cycle time.',
-            }}
-          />
-          <PulseStat
-            label="Blocked"
-            value={blocked}
-            color="red"
-            infoTooltip={{
-              title: 'Blocked Tasks',
-              description: 'Tasks explicitly marked as blocked by the assignee due to external dependencies, lack of definition, or insurmountable technical impediments.',
-            }}
-          />
-        </div>
+      {/* ── Completed Today ── */}
+      {completedToday.length > 0 && (
+        <>
+          <CompletedTodaySection tasks={completedToday} />
+          <div className="border-t border-gray-100 dark:border-zinc-700/50" />
+        </>
       )}
 
-      {/* ── Workload Distribution ── */}
-      <div>
-        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wide">
-          Today's Effort Distribution
+      {/* ── Active Work Monitor ── */}
+      <ActiveTaskMonitor tasks={healthData} />
+
+      {/* ── Effort Distribution — compact, at bottom ── */}
+      <div className="border-t border-gray-100 dark:border-zinc-700/50 pt-5">
+        <p className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-3">
+          Effort distribution
         </p>
         <DailyWorkloadDistribution distribution={distribution} />
-      </div>
-
-      {/* ── Active Task Monitor ── */}
-      <div>
-        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wide">
-          Active Work Monitor
-        </p>
-        <ActiveTaskMonitor tasks={healthData} />
       </div>
     </div>
   );

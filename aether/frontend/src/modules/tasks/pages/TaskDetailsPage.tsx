@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
     Plus,
     Loader2,
@@ -36,6 +36,7 @@ export function TaskDetailsPage() {
     const { user } = useAuth();
     const { currentOrganization } = useOrganization();
     const navigate = useNavigate();
+    const location = useLocation();
     const { taskId } = useParams<{ taskId: string }>();
     const [task, setTask] = useState<Task | null>(null);
     const [comments, setComments] = useState<TaskComment[]>([]);
@@ -331,9 +332,12 @@ export function TaskDetailsPage() {
                 <div className="col-span-8 flex flex-col gap-8 h-full">
                     {/* Header */}
                     <div>
-                        <Link to="/dashboard" className="inline-flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 mb-4 transition-colors">
+                        <button
+                            onClick={() => location.key !== 'default' ? navigate(-1) : navigate('/dashboard')}
+                            className="inline-flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 mb-4 transition-colors"
+                        >
                             <ArrowLeft size={16} className="mr-1" /> Back
-                        </Link>
+                        </button>
                         <div className="flex items-center gap-3 mb-2">
                             <h1 className="text-4xl font-semibold text-gray-900 dark:text-white">
                                 {task.title}

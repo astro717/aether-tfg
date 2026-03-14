@@ -148,7 +148,7 @@ export function ChatView({
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto px-5 py-4 premium-scrollbar cursor-default"
       >
-        <div className="max-w-[720px] mx-auto w-full min-h-full flex flex-col justify-end">
+        <div className="max-w-4xl mx-auto w-full min-h-full flex flex-col justify-end">
           {messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <p className="text-gray-400 text-sm">
@@ -260,14 +260,10 @@ function UnreadSeparator() {
 // Date Separator
 function DateSeparator({ date }: { date: string }) {
   return (
-    <div className="flex items-center justify-center py-6">
-      <div className="flex items-center gap-4 w-full px-12">
-        <div className="flex-1 h-px bg-white/10 dark:bg-white/5" />
-        <span className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 tracking-wider">
-          {date}
-        </span>
-        <div className="flex-1 h-px bg-white/10 dark:bg-white/5" />
-      </div>
+    <div className="flex items-center justify-center py-3 my-1">
+      <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 bg-black/5 dark:bg-white/5 px-3 py-1 rounded-full tracking-wide select-none">
+        {date}
+      </span>
     </div>
   );
 }

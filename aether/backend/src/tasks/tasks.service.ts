@@ -1369,12 +1369,12 @@ export class TasksService {
       },
     });
 
-    // To Do Snapshot: Current count of all incomplete tasks (global backlog)
+    // To Do Snapshot: Tasks queued and waiting to be picked up (excludes pending_validation and in_progress)
     const todoTasks = await this.prisma.tasks.count({
       where: {
         organization_id: organizationId,
         is_archived: false,
-        status: { notIn: ['done', 'completed', 'Done', 'Completed'] },
+        status: { in: ['todo', 'pending'] },
       },
     });
 
@@ -1625,14 +1625,28 @@ export class TasksService {
     // For 'all': all non-archived tasks (todo + in_progress + done)
     const investmentWhere: any = {
       organization_id: organizationId,
-      is_archived: false,
+      // No is_archived filter — include both active and archived tasks
     };
     if (dateFilter) {
       investmentWhere.OR = [
-        { status: 'in_progress' },
-        { status: 'done', updated_at: { gte: dateFilter } },
+        // Active tasks: existing logic unchanged
+        { is_archived: false, status: 'in_progress' },
+        { is_archived: false, status: 'done', updated_at: { gte: dateFilter } },
+        // Archived tasks: updated_at is unreliable (overwritten at archive time by @updatedAt).
+        // Use task_history to check if the task was transitioned to done or in_progress
+        // during the period — this is the reliable signal for "was active then".
+        {
+          is_archived: true,
+          task_history: {
+            some: {
+              new_status: { in: ['done', 'in_progress'] },
+              changed_at: { gte: dateFilter },
+            },
+          },
+        },
       ];
     } else {
+      // 'all' period: include every task regardless of archival status
       investmentWhere.status = { in: ['todo', 'in_progress', 'done'] };
     }
     const investmentTasksRaw = await this.prisma.tasks.findMany({
@@ -1643,6 +1657,45 @@ export class TasksService {
     const heatmapData = await this.analyzeWorkloadHeatmap(organizationId, allTasks, normalizedPeriod);
     const burndownData = this.projectBurndownCone(historicalTasksForBurndown, normalizedPeriod);
     const cfrData = await this.calculateChangeFailureRate(organizationId, dateFilter, now, period || 'all');
+
+    // Cycle Time Scatter: Last 50 completed tasks for Control Chart (percentile lines)
+    const cycleTimeScatterRaw = await this.prisma.tasks.findMany({
+      where: { organization_id: organizationId, status: 'done' }, // include archived — valid historical data for control chart
+      select: { id: true, title: true, created_at: true, updated_at: true },
+      orderBy: { updated_at: 'desc' },
+      take: 100,
+    });
+    const cycleTimeScatterData = cycleTimeScatterRaw
+      .filter(t => t.created_at && t.updated_at)
+      .map(t => {
+        const created = new Date(t.created_at!).getTime();
+        const completed = new Date(t.updated_at!).getTime();
+        const days = Math.max(0, Math.round((completed - created) / (1000 * 60 * 60 * 24)));
+        return { date: new Date(t.updated_at!).toISOString().split('T')[0], days, taskTitle: t.title, taskId: t.id, completedAt: completed };
+      })
+      .sort((a, b) => a.completedAt - b.completedAt)
+      .slice(-50)
+      .map(({ date, days, taskTitle, taskId }) => ({ date, days, taskTitle, taskId }));
+
+    // Work Item Age: All active tasks with assignee, sorted oldest-first
+    const workItemAgeRaw = await this.prisma.tasks.findMany({
+      where: { organization_id: organizationId, status: { in: ['todo', 'in_progress', 'pending_validation'] }, is_archived: false },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        created_at: true,
+        users_tasks_assignee_idTousers: { select: { username: true } },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+    const workItemAgeData = workItemAgeRaw.map(t => ({
+      id: t.id,
+      title: t.title,
+      ageInDays: Math.floor((now.getTime() - new Date(t.created_at!).getTime()) / 86400000),
+      status: t.status ?? 'todo',
+      assignee: t.users_tasks_assignee_idTousers?.username ?? 'Unassigned',
+    }));
 
     // Generate sparklines for KPI cards (based on completion vs creation)
     const completionRateSparkline: number[] = [];
@@ -1776,6 +1829,8 @@ export class TasksService {
           riskScore: [riskScore], // Single value for now, could add historical tracking
           changeFailureRate: cfrData,
         },
+        cycleTimeScatter: cycleTimeScatterData,
+        workItemAge: workItemAgeData,
       },
     };
 

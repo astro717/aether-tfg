@@ -1,5 +1,5 @@
-import { Info } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { InfoTooltip } from './InfoTooltip';
 
 interface InvestmentData {
   labels: string[];
@@ -60,39 +60,33 @@ export function TaskDistributionChart({
       data-chart-id="task-distribution"
     >
       {/* ── Header ── */}
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white leading-none">
+      <div className="mb-4">
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">
             {title}
-          </h3>
-          {subtitle && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
-              {subtitle}
-            </p>
+          </p>
+          {!pdfMode && (
+            <InfoTooltip
+              size="sm"
+              content={{
+                title: 'Task Distribution',
+                description: (
+                  <>
+                    A visual breakdown of where your team invests effort. Grouped by type —{' '}
+                    <span className="text-blue-400 font-medium">Features</span>,{' '}
+                    <span className="text-red-400 font-medium">Bugs</span>,{' '}
+                    <span className="text-amber-400 font-medium">Chores</span>{' '}
+                    — to ensure a healthy balance between value creation and technical debt management.
+                  </>
+                ),
+              }}
+            />
           )}
         </div>
-
-        {!pdfMode && (
-          <div className="relative group ml-2">
-            <button
-              type="button"
-              className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700/50 transition-colors"
-              aria-label="Understanding Task Distribution"
-            >
-              <Info className="w-4 h-4" />
-            </button>
-            <div className="absolute right-0 top-full mt-2 w-72 p-4 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/20 border border-zinc-700/50">
-              <h4 className="text-sm font-semibold text-white mb-2">Task Distribution</h4>
-              <p className="text-xs text-zinc-300 leading-relaxed">
-                A visual breakdown of where your team invests effort. Grouped by task type (
-                <span className="text-blue-400 font-medium">Feature</span>,{' '}
-                <span className="text-red-400 font-medium">Bug</span>,{' '}
-                <span className="text-amber-400 font-medium">Chore</span>
-                ) to ensure a healthy balance between value creation and technical debt management.
-              </p>
-              <div className="absolute -top-1.5 right-4 w-3 h-3 bg-zinc-900/95 rotate-45 border-l border-t border-zinc-700/50" />
-            </div>
-          </div>
+        {subtitle && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+            {subtitle}
+          </p>
         )}
       </div>
 

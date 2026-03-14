@@ -97,6 +97,10 @@ export interface AnalyticsData {
       riskScore: number[];
       changeFailureRate?: { value: number; sparkline: number[] };
     };
+    // Control Chart: Cycle time scatter with percentile lines
+    cycleTimeScatter?: Array<{ date: string; days: number; taskTitle: string; taskId?: string }>;
+    // Work Item Age: Active tasks sorted by age
+    workItemAge?: Array<{ id: string; title: string; ageInDays: number; status: string; assignee: string }>;
   };
 }
 

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from "react";
-import { Check, CheckCheck, ClipboardList, FileText, Download, X } from "lucide-react";
+import { Check, CheckCheck, ClipboardList, FileText, Download, X, ArrowUpRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { type Message, type CommentNotificationMetadata, type MessageAttachment, type MessageUser } from "../api/messagingApi";
 import { formatMessageTime } from "../data/mockData";
@@ -20,6 +21,8 @@ export function MessageBubble({
   isLastInGroup = false,
   otherUser = null
 }: MessageBubbleProps) {
+  const navigate = useNavigate();
+
   // Track if this is a fresh mount (new message) to apply animation only once
   // Fix for "glitch": Don't animate if it's a confirmed message (sent by us, real ID)
   // because it's replacing an optimistic one that already animated.
@@ -70,72 +73,80 @@ export function MessageBubble({
 
   const status = isSent ? getStatus() : null;
 
-  // Comment Notification Card - Premium "Context Card" design
+  // Comment Notification Card — Task Context Card (clickable, navigates to task)
   if (isCommentNotification && metadata) {
-    const cardClasses = isSent
-      ? "bg-gray-800/90 text-white border border-gray-700/50"
-      : "bg-gray-100/80 text-gray-800 border border-gray-200/50";
+    const bubbleBase = isSent
+      ? "bg-gradient-to-br from-[#1f2c3f] to-[#24364d] border border-white/5 text-white/95"
+      : "bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/60 dark:border-white/5 text-gray-800 dark:text-gray-100";
 
-    const headerClasses = isSent
-      ? "text-white/60"
-      : "text-gray-500";
+    const headerBg = isSent
+      ? "bg-white/[0.06]"
+      : "bg-black/[0.04] dark:bg-white/[0.04]";
 
-    const accentClasses = isSent
-      ? "bg-blue-400"
-      : "bg-blue-500";
+    const dividerColor = isSent
+      ? "border-white/[0.08]"
+      : "border-black/[0.06] dark:border-white/[0.08]";
 
     return (
       <div className={`flex ${alignmentClasses} ${shouldAnimate ? 'animate-message-in' : ''}`}>
-        <div
+        <button
+          onClick={() => navigate(`/tasks/${metadata.taskId}`)}
           className={`
-            relative max-w-[70%] min-w-[200px]
-            ${cardClasses}
-            rounded-xl
-            shadow-sm
-            overflow-hidden
+            relative max-w-[70%] min-w-[220px] text-left
+            ${bubbleBase}
+            rounded-2xl shadow-md overflow-hidden
+            group cursor-pointer
+            hover:brightness-[1.08] active:scale-[0.985]
+            transition-all duration-200
           `}
         >
-          {/* Vertical accent pill on the left */}
-          <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentClasses}`} />
-
-          <div className="flex flex-col gap-1 p-3 pl-4">
-            {/* Header - Task context */}
-            <div className={`flex items-center gap-2 text-[10px] uppercase tracking-wider font-bold ${headerClasses}`}>
-              <ClipboardList size={12} />
-              <span className="truncate">{metadata.taskTitle}</span>
+          {/* Task header band */}
+          <div className={`flex items-center justify-between gap-2 px-3 py-2 ${headerBg} border-b ${dividerColor}`}>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <ClipboardList size={11} className={`flex-shrink-0 ${isSent ? "text-blue-400/70" : "text-blue-500/60 dark:text-blue-400/60"}`} />
+              <span className={`text-[10px] font-semibold uppercase tracking-widest flex-shrink-0 ${isSent ? "text-white/40" : "text-gray-400 dark:text-gray-500"}`}>
+                Task
+              </span>
+              <span className={`opacity-25 flex-shrink-0`}>·</span>
+              <span className={`text-[11px] font-medium truncate ${isSent ? "text-white/65" : "text-gray-500 dark:text-gray-400"}`}>
+                {metadata.taskTitle}
+              </span>
             </div>
+            <ArrowUpRight
+              size={13}
+              className={`flex-shrink-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 ${
+                isSent
+                  ? "text-white/25 group-hover:text-white/55"
+                  : "text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-400"
+              }`}
+            />
+          </div>
 
-            {/* Comment content */}
+          {/* Message content */}
+          <div className="flex flex-col gap-1 px-3 py-2.5">
             <p className="text-sm font-normal leading-relaxed whitespace-pre-wrap break-words">
               {message.content}
+              <span className="inline-block w-[72px]" />
             </p>
 
-            {/* Timestamp & Status */}
-            <div
-              className={`
-                flex items-center gap-1.5 mt-1
-                ${isSent ? "justify-end" : "justify-start"}
-              `}
-            >
-              <span
-                className={`
-                  text-[10px] font-medium
-                  ${isSent ? "text-white/50" : "text-gray-400"}
-                `}
-              >
+            {/* Floating Timestamp & Status */}
+            <div className={`absolute bottom-[8px] right-[12px] flex items-center gap-1`}>
+              <span className={`text-[10px] font-medium opacity-60 ${isSent ? "text-white" : "text-gray-500 dark:text-gray-400"}`}>
                 {formatMessageTime(new Date(message.created_at))}
               </span>
-
               {isSent && status && (
-                <span className="text-white/50">
+                <span className={`transition-colors duration-300 ${
+                  status === 'read' ? 'text-blue-400' :
+                  status === 'delivered' ? 'text-white/60' :
+                  'text-white/30'
+                }`}>
                   {status === 'sent' && <Check size={10} />}
-                  {status === 'delivered' && <CheckCheck size={10} />}
-                  {status === 'read' && <CheckCheck size={10} className="text-white/70" />}
+                  {(status === 'delivered' || status === 'read') && <CheckCheck size={10} />}
                 </span>
               )}
             </div>
           </div>
-        </div>
+        </button>
       </div>
     );
   }
@@ -179,9 +190,18 @@ export function MessageBubble({
       <div
         className={`
           relative max-w-[75%]
-          ${hasAttachments && !hasContent ? '' : 'px-[16px] pt-[10px] pb-[12px]'}
+          ${
+            imageAttachments.length > 0 && !hasContent
+              ? 'pb-7'                   // images-only: strip at bottom for timestamp
+              : imageAttachments.length > 0 && hasContent
+                ? 'pb-[12px]'           // images + text: edge-to-edge images, bottom space
+                : hasAttachments && !hasContent
+                  ? ''                  // docs-only: inner div handles padding
+                  : 'px-[16px] pt-[10px] pb-[12px]'  // text only or text+docs
+          }
           ${bubbleClasses}
           ${radiusClasses}
+          overflow-hidden
           shadow-sm
         `}
       >
@@ -196,7 +216,7 @@ export function MessageBubble({
 
         {/* Document Attachments */}
         {documentAttachments.length > 0 && (
-          <div className={`${hasContent || imageAttachments.length > 0 ? 'px-4 pb-2' : 'p-3'} space-y-2`}>
+          <div className={`${hasContent || imageAttachments.length > 0 ? 'px-4 pb-2' : 'px-3 pt-3 pb-7'} space-y-2`}>
             {documentAttachments.map((doc) => (
               <DocumentAttachment key={doc.id} attachment={doc} isSent={isSent} />
             ))}
@@ -205,7 +225,7 @@ export function MessageBubble({
 
         {/* Message Text with inline spacer for timestamp */}
         {hasContent && (
-          <div className={`relative ${imageAttachments.length > 0 ? 'px-4 pt-2' : ''}`}>
+          <div className={`relative ${imageAttachments.length > 0 ? 'px-[16px] pt-2' : ''}`}>
             <p className="text-[15px] leading-[1.5] whitespace-pre-wrap break-words">
               {message.content}
               <span className="inline-block w-[72px]" />
@@ -230,10 +250,13 @@ export function MessageBubble({
 
           {/* Status indicator for sent messages */}
           {isSent && status && (
-            <span className="text-white/70">
+            <span className={`transition-colors duration-300 ${
+              status === 'read' ? 'text-blue-400' :
+              status === 'delivered' ? 'text-white/60' :
+              'text-white/30'
+            }`}>
               {status === 'sent' && <Check size={12} />}
-              {status === 'delivered' && <CheckCheck size={12} />}
-              {status === 'read' && <CheckCheck size={12} className="text-white" />}
+              {(status === 'delivered' || status === 'read') && <CheckCheck size={12} />}
             </span>
           )}
         </div>
@@ -546,12 +569,13 @@ function DocumentAttachment({ attachment, isSent }: DocumentAttachmentProps) {
       target="_blank"
       rel="noopener noreferrer"
       className={`
-        flex items-center gap-3 p-2.5 rounded-lg
+        flex items-center gap-3 p-2.5 rounded-xl
+        group cursor-pointer
         ${isSent
           ? "bg-white/10 hover:bg-white/20"
           : "bg-gray-100/80 hover:bg-gray-200/80"
         }
-        transition-colors
+        transition-colors duration-200
       `}
     >
       <div
@@ -582,7 +606,11 @@ function DocumentAttachment({ attachment, isSent }: DocumentAttachmentProps) {
       </div>
       <Download
         size={16}
-        className={isSent ? "text-white/60" : "text-gray-400"}
+        className={`flex-shrink-0 transition-all duration-200 group-hover:translate-y-0.5 ${
+          isSent
+            ? "text-white/50 group-hover:text-white/90"
+            : "text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300"
+        }`}
       />
     </a>
   );

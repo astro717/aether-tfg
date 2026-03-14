@@ -66,11 +66,11 @@ export function MainDashboardPage() {
                             onClick={() => setIsOrgCalendarModalOpen(true)}
                             className="
                                 flex items-center justify-center w-10 h-10
-                                bg-white/60 dark:bg-white/10 hover:bg-[#C15F3C]/10 dark:hover:bg-[#C15F3C]/20
+                                bg-white/60 dark:bg-white/10 hover:bg-brand/10 dark:hover:bg-brand/20
                                 backdrop-blur-sm
-                                border border-gray-200/60 dark:border-white/20 hover:border-[#C15F3C]/30 dark:hover:border-[#C15F3C]/30
+                                border border-gray-200/60 dark:border-white/20 hover:border-brand/30 dark:hover:border-brand/30
                                 rounded-full
-                                text-gray-600 dark:text-gray-300 hover:text-[#C15F3C] dark:hover:text-[#C15F3C]/90
+                                text-gray-600 dark:text-gray-300 hover:text-brand dark:hover:text-brand/90
                                 transition-all duration-200
                                 shadow-sm hover:shadow
                             "

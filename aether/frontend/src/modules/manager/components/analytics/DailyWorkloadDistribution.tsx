@@ -14,7 +14,7 @@ export function DailyWorkloadDistribution({ distribution }: DailyWorkloadDistrib
     <div className="space-y-3">
       {/* Bar */}
       <div
-        className="relative h-7 w-full rounded-full overflow-hidden bg-gray-100 dark:bg-zinc-700/50"
+        className="relative h-3 w-full rounded-full overflow-hidden bg-gray-100 dark:bg-zinc-700/50"
         role="progressbar"
         aria-label={`Workload: ${plannedPct}% planned, ${unplannedPct}% unplanned`}
         aria-valuenow={plannedPct}

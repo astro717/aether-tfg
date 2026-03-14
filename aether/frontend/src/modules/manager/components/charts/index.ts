@@ -10,3 +10,6 @@ export { WorkloadHeatmap } from './WorkloadHeatmap';
 export { PredictiveBurndownChart } from './PredictiveBurndownChart';
 export { RealCFDChart } from './RealCFDChart';
 export { InfoTooltip, type InfoTooltipContent } from './InfoTooltip';
+export { WorkItemAgeChart } from './WorkItemAgeChart';
+export { ThroughputHistogram } from './ThroughputHistogram';
+export { WipTrendChart } from './WipTrendChart';

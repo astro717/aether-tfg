@@ -100,6 +100,7 @@ const generateAiInsight = (
 
 export interface UseDailyHealthResult {
   healthData: DailyTaskHealth[];
+  completedToday: DailyTaskHealth[];
   distribution: DailyEffortDistribution;
   loading: boolean;
   error: string | null;
@@ -107,6 +108,7 @@ export interface UseDailyHealthResult {
 
 export const useDailyHealth = (organizationId: string): UseDailyHealthResult => {
   const [healthData, setHealthData] = useState<DailyTaskHealth[]>([]);
+  const [completedToday, setCompletedToday] = useState<DailyTaskHealth[]>([]);
   const [distribution, setDistribution] = useState<DailyEffortDistribution>({
     plannedWorkload: 0,
     unplannedWorkload: 0,
@@ -132,9 +134,8 @@ export const useDailyHealth = (organizationId: string): UseDailyHealthResult => 
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
 
-        const processed: DailyTaskHealth[] = data.recentTasks
-          .filter((t) => t.status !== 'done')
-          .map((task) => {
+        // Process ALL tasks (including done) to separate active from completed today
+        const allProcessed: DailyTaskHealth[] = data.recentTasks.map((task) => {
             const normalizedTask = { ...task, status: task.status ?? 'unknown' };
             const healthStatus = computeHealthStatus(normalizedTask);
             const lastActivity = getLastActivity(normalizedTask);
@@ -166,13 +167,21 @@ export const useDailyHealth = (organizationId: string): UseDailyHealthResult => 
           stagnant: 2,
           healthy: 3,
         };
-        processed.sort((a, b) => PRIORITY[a.healthStatus] - PRIORITY[b.healthStatus]);
 
-        const unplannedCount = processed.filter((t) => t.isUnplanned).length;
-        const total = processed.length;
+        const active = allProcessed
+          .filter((t) => t.status !== 'done')
+          .sort((a, b) => PRIORITY[a.healthStatus] - PRIORITY[b.healthStatus]);
+
+        const doneToday = allProcessed
+          .filter((t) => t.status === 'done')
+          .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
+
+        const unplannedCount = active.filter((t) => t.isUnplanned).length;
+        const total = active.length;
         const interruptionRate = total > 0 ? Math.round((unplannedCount / total) * 100) : 0;
 
-        setHealthData(processed);
+        setHealthData(active);
+        setCompletedToday(doneToday);
         setDistribution({
           plannedWorkload: total - unplannedCount,
           unplannedWorkload: unplannedCount,
@@ -191,5 +200,5 @@ export const useDailyHealth = (organizationId: string): UseDailyHealthResult => 
     return () => { cancelled = true; };
   }, [organizationId]);
 
-  return { healthData, distribution, loading, error };
+  return { healthData, completedToday, distribution, loading, error };
 };

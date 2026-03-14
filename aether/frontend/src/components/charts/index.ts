@@ -4,3 +4,4 @@ export { ScatterCycleChart } from './ScatterCycleChart';
 export { InvestmentProfileChart } from './InvestmentProfileChart';
 export { DoraMetricsPanel } from './DoraMetricsPanel';
 export { ThroughputChart } from './ThroughputChart';
+export { ControlChart } from './ControlChart';
