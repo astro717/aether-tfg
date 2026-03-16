@@ -240,15 +240,26 @@ class PDFGenerator {
    * Add a branded cover page (page 1). Adds a new page after it.
    * Page numbering resets so cover doesn't count.
    */
-  public addCoverPage(title: string, orgName: string, period: string, reportType?: string): void {
-    // Full-page gradient background: deep indigo — matches #3730a3 → #1e1b4b
+  /**
+   * heroStats: up to 3 key numbers shown prominently on the cover.
+   * Pass from generateManagerReportPDF when pulse data is available.
+   * Each stat: { value: '+113%', label: 'Velocity', color: [16,185,129] }
+   */
+  public addCoverPage(
+    title: string,
+    orgName: string,
+    period: string,
+    reportType?: string,
+    heroStats?: Array<{ value: string; label: string; color: [number, number, number] }>
+  ): void {
+    // Full-page gradient background: deep indigo
     this.drawVerticalGradient(
       0, 0, this.pageWidth, this.pageHeight,
       [55, 48, 163],   // #3730a3 indigo-800
       [30, 27, 75]     // #1e1b4b indigo-950
     );
 
-    // Subtle noise texture — horizontal lines at low opacity
+    // Subtle horizontal texture lines
     this.doc.setDrawColor(255, 255, 255);
     this.doc.setLineWidth(0.05);
     for (let lineY = 10; lineY < this.pageHeight; lineY += 4) {
@@ -257,72 +268,131 @@ class PDFGenerator {
     }
     this.doc.setGState(new GState({ opacity: 1, 'stroke-opacity': 1 }));
 
+    // ── Vertical layout — centered block ────────────────────────────────────
+    // Content block height: logo(8) + gap(8) + tagline(4) + gap(9) + divider(1) +
+    //   gap(18) + title(8) + gap(8) + pill(24) + gap(heroStats?30:0) = ~88–118mm
+    // Place center of block at ~42% from top (visual center, slightly above midpoint)
+    const cx = this.pageWidth / 2;
+    let y = 52; // starting Y for logo block
+
     // ── Logo ────────────────────────────────────────────────────────────────
     this.doc.setFontSize(28);
     this.doc.setFont(FONT.family, 'normal');
     this.doc.setTextColor(255, 255, 255);
-    this.doc.text('aether.', this.pageWidth / 2, 75, { align: 'center' });
+    this.doc.text('aether.', cx, y, { align: 'center' });
+    y += 8;
 
-    // Tagline under logo
+    // Tagline
     this.doc.setFontSize(9);
     this.doc.setFont(FONT.family, 'normal');
     this.doc.setTextColor(180, 180, 255);
-    this.doc.text('AI-powered project intelligence', this.pageWidth / 2, 83, { align: 'center' });
+    this.doc.text('AI-powered project intelligence', cx, y, { align: 'center' });
+    y += 12;
 
-    // ── Divider ─────────────────────────────────────────────────────────────
+    // Short divider
     this.doc.setDrawColor(255, 255, 255);
     this.doc.setGState(new GState({ opacity: 0.25, 'stroke-opacity': 0.25 }));
     this.doc.setLineWidth(0.4);
-    this.doc.line(this.pageWidth / 2 - 25, 92, this.pageWidth / 2 + 25, 92);
+    this.doc.line(cx - 20, y, cx + 20, y);
     this.doc.setGState(new GState({ opacity: 1, 'stroke-opacity': 1 }));
+    y += 16;
 
-    // ── Report title ────────────────────────────────────────────────────────
-    this.doc.setFontSize(20);
+    // ── Report title ─────────────────────────────────────────────────────────
+    this.doc.setFontSize(22);
     this.doc.setFont(FONT.family, 'bold');
     this.doc.setTextColor(255, 255, 255);
-    this.doc.text(title, this.pageWidth / 2, 115, { align: 'center', maxWidth: 150 });
+    this.doc.text(title, cx, y, { align: 'center', maxWidth: 150 });
+    y += 10;
 
     if (reportType) {
-      this.doc.setFontSize(10);
+      this.doc.setFontSize(9);
       this.doc.setFont(FONT.family, 'normal');
-      this.doc.setTextColor(200, 200, 255);
-      this.doc.text(reportType, this.pageWidth / 2, 124, { align: 'center' });
+      this.doc.setTextColor(180, 180, 255);
+      this.doc.text(reportType, cx, y, { align: 'center' });
+      y += 8;
     }
+    y += 4;
 
-    // ── Metadata pill ───────────────────────────────────────────────────────
-    const pillW = 90;
-    const pillX = this.pageWidth / 2 - pillW / 2;
-    const pillY = 140;
+    // ── Metadata pill ─────────────────────────────────────────────────────────
+    const pillW = 94;
+    const pillX = cx - pillW / 2;
     this.doc.setFillColor(255, 255, 255);
     this.doc.setGState(new GState({ opacity: 0.1, 'stroke-opacity': 0.1 }));
-    this.doc.roundedRect(pillX, pillY, pillW, 24, 4, 4, 'F');
+    this.doc.roundedRect(pillX, y, pillW, 22, 3, 3, 'F');
     this.doc.setGState(new GState({ opacity: 1, 'stroke-opacity': 1 }));
 
     this.doc.setFontSize(11);
     this.doc.setFont(FONT.family, 'bold');
     this.doc.setTextColor(255, 255, 255);
-    this.doc.text(orgName, this.pageWidth / 2, pillY + 9, { align: 'center' });
+    this.doc.text(orgName, cx, y + 8, { align: 'center' });
 
-    this.doc.setFontSize(9);
+    this.doc.setFontSize(8.5);
     this.doc.setFont(FONT.family, 'normal');
-    this.doc.setTextColor(200, 200, 255);
-    this.doc.text(period, this.pageWidth / 2, pillY + 18, { align: 'center' });
+    this.doc.setTextColor(180, 180, 255);
+    this.doc.text(period, cx, y + 17, { align: 'center' });
+    y += 22;
 
-    // ── Generation date (bottom) ─────────────────────────────────────────
+    // ── Hero stats ────────────────────────────────────────────────────────────
+    // 3 KPIs in a row separated by faint vertical rules. Gives the reader
+    // the headline insight without opening page 2.
+    if (heroStats && heroStats.length > 0) {
+      y += 20; // breathing gap below pill
+
+      // Faint container rect
+      const heroW = Math.min(160, this.pageWidth - 40);
+      const heroX = cx - heroW / 2;
+      const heroH = 28;
+      this.doc.setFillColor(255, 255, 255);
+      this.doc.setGState(new GState({ opacity: 0.07, 'stroke-opacity': 0.07 }));
+      this.doc.roundedRect(heroX, y, heroW, heroH, 3, 3, 'F');
+      this.doc.setGState(new GState({ opacity: 1, 'stroke-opacity': 1 }));
+
+      const stats = heroStats.slice(0, 3);
+      const statW  = heroW / stats.length;
+
+      stats.forEach((stat, i) => {
+        const sx = heroX + i * statW + statW / 2;
+
+        // Vertical separator (except before first)
+        if (i > 0) {
+          this.doc.setDrawColor(255, 255, 255);
+          this.doc.setGState(new GState({ opacity: 0.2, 'stroke-opacity': 0.2 }));
+          this.doc.setLineWidth(0.3);
+          this.doc.line(heroX + i * statW, y + 4, heroX + i * statW, y + heroH - 4);
+          this.doc.setGState(new GState({ opacity: 1, 'stroke-opacity': 1 }));
+        }
+
+        // Value — large, colored
+        this.doc.setFontSize(16);
+        this.doc.setFont(FONT.family, 'bold');
+        this.doc.setTextColor(stat.color[0], stat.color[1], stat.color[2]);
+        this.doc.text(stat.value, sx, y + 11, { align: 'center' });
+
+        // Label — small, muted white
+        this.doc.setFontSize(6);
+        this.doc.setFont(FONT.family, 'normal');
+        this.doc.setCharSpace(0.5);
+        this.doc.setTextColor(180, 180, 220);
+        this.doc.text(stat.label.toUpperCase(), sx, y + 20, { align: 'center' });
+        this.doc.setCharSpace(0);
+      });
+    }
+
+    // ── Generation date (bottom) ──────────────────────────────────────────────
     const genDate = new Date().toLocaleDateString('en-US', {
       month: 'long', day: 'numeric', year: 'numeric',
     });
-    this.doc.setFontSize(8);
+    this.doc.setFontSize(7.5);
     this.doc.setFont(FONT.family, 'normal');
-    this.doc.setTextColor(150, 150, 200);
+    this.doc.setTextColor(120, 120, 175);
     this.doc.text(
-      `Generated ${genDate} · Confidential`,
-      this.pageWidth / 2,
-      this.pageHeight - 20,
+      `Generated ${genDate}  ·  Confidential`,
+      cx,
+      this.pageHeight - 16,
       { align: 'center' }
     );
 
-    // ── Start content on next page ──────────────────────────────────────────
+    // ── Start content on next page ────────────────────────────────────────────
     this.doc.addPage();
     this.pageNumber = 1; // Cover doesn't count
     this.currentY = LAYOUT.margin.top;
@@ -425,9 +495,9 @@ class PDFGenerator {
     this.doc.setFont(FONT.family, 'normal');
     this.doc.setTextColor(...COLORS.neutral.medium);
 
-    // Confidentiality notice (left)
+    // Confidentiality notice (left) — concise, date already in header
     this.doc.text(
-      `Generated by Aether AI - ${new Date().toLocaleDateString()} - Confidential`,
+      'Confidential  ·  Aether AI',
       LAYOUT.margin.left,
       footerY
     );
@@ -658,9 +728,9 @@ class PDFGenerator {
         // ONLY draw the bullet/number on the first line of the list block
         if (isFirstLine && listMatch) {
           if (isBullet) {
-             this.doc.setFillColor(...COLORS.primary.indigo);
-             // Draw a premium circular bullet
-             this.doc.circle(startX + 2, this.currentY - 1, 0.8, 'F');
+             // Muted gray bullet — bold text in content carries the visual weight
+             this.doc.setFillColor(156, 163, 175); // gray-400
+             this.doc.circle(startX + 2, this.currentY - 1, 0.7, 'F');
           } else {
              // Draw nice bold colored numbers
              this.doc.setFont(FONT.family, 'bold');
@@ -1057,6 +1127,10 @@ async function addChartBlock(
   } else {
     generator.doc.addImage(chart.toDataURL('image/png'), 'PNG', xOff, generator.currentY, drawW, drawH, undefined, 'NONE');
   }
+  // Hairline border — grounds the chart visually, prevents it floating on white page
+  generator.doc.setDrawColor(229, 231, 235);
+  generator.doc.setLineWidth(0.2);
+  generator.doc.rect(xOff, generator.currentY, drawW, drawH, 'S');
   generator.currentY += drawH + 10;
 }
 
@@ -1094,10 +1168,17 @@ function drawKpiCard(
   doc.text(label.toUpperCase(), padX, y + 8.5);
   doc.setCharSpace(0); // reset
 
-  // ── Value — 18pt, near-black, anchored so it never overflows ─────────────
+  // ── Value — 18pt, accent-colored for semantic signals ────────────────────
+  // Blue accent (neutral metric) stays near-black to avoid "link" appearance.
+  // Red/green/amber accents tint the value — "92" in red = danger is instant.
+  const isNeutralBlue = accent[0] === 59 && accent[1] === 130 && accent[2] === 246;
   doc.setFontSize(18);
   doc.setFont(FONT.family, 'bold');
-  doc.setTextColor(17, 24, 39);
+  doc.setTextColor(
+    isNeutralBlue ? 17 : accent[0],
+    isNeutralBlue ? 24 : accent[1],
+    isNeutralBlue ? 39 : accent[2]
+  );
   doc.text(value, padX, y + 19, { maxWidth: w - 10 });
 
   // ── Subtitle — 6.5pt, single line ────────────────────────────────────────
@@ -1159,6 +1240,10 @@ function drawHeatmapNative(
   const totalX  = x + w - totalColW;
 
   // ── Day headers ─────────────────────────────────────────────────────────────
+  // Subtle background row to visually anchor the day labels
+  doc.setFillColor(247, 248, 250);
+  doc.rect(cellsX, y, nDays * (cellW + cellGap) - cellGap, headerH, 'F');
+
   // Show every Nth label when cells are narrow
   const labelEvery = cellW < 4 ? Math.ceil(7 / cellW) : 1;
   doc.setFontSize(5.5);
@@ -1414,11 +1499,33 @@ export async function generateManagerReportPDF(
   const generator = new PDFGenerator();
 
   // ========== COVER PAGE ==========
+  // Build hero stats from pulse data — top 3 KPIs for cover insight panel
+  const pulse = report.chartData?.pulse;
+  const coverHeroStats: Array<{ value: string; label: string; color: [number, number, number] }> | undefined =
+    pulse ? [
+      {
+        value: `${pulse.velocityRate.value > 0 ? '+' : ''}${pulse.velocityRate.value}%`,
+        label: 'Velocity',
+        color: accentForVelocity(pulse.velocityRate.value),
+      },
+      {
+        value: `${pulse.onTimeDelivery.value}%`,
+        label: 'On-Time',
+        color: accentForOnTime(pulse.onTimeDelivery.value),
+      },
+      {
+        value: String(pulse.riskScore.value),
+        label: 'Risk Score',
+        color: accentForRisk(pulse.riskScore.value),
+      },
+    ] : undefined;
+
   generator.addCoverPage(
     reportTypeName || 'Management Intelligence Report',
     organizationName,
     period,
-    report.type
+    report.type,
+    coverHeroStats
   );
 
   const data: ManagerReportData = {
@@ -1575,24 +1682,28 @@ export async function generateManagerReportPDF(
       await addChartBlock(generator, realCfdChart, 'Cumulative Flow Diagram', 74);
     }
 
-    // ── 3. WipTrend (left) + TaskDistribution native (right) — 2 columns ────────
+    // ── 3. WipTrend + TaskDistribution ────────────────────────────────────────
+    // Layout rules:
+    //   both present  → 2-column side by side (colW each)
+    //   only one      → full content width (better legibility, more visual impact)
     const taskDistData = report.chartData?.investment;
     const hasLeft  = !!wipTrendChart;
     const hasRight = !!taskDistData && taskDistData.labels.length > 0;
+    const useTwoCols = hasLeft && hasRight;
 
     if (hasLeft || hasRight) {
-      const colW   = (generator.contentWidth - 8) / 2;
+      const colW   = useTwoCols ? (generator.contentWidth - 8) / 2 : generator.contentWidth;
       const leftX  = LAYOUT.margin.left;
-      const rightX = LAYOUT.margin.left + colW + 8;
+      const rightX = useTwoCols ? LAYOUT.margin.left + colW + 8 : LAYOUT.margin.left;
 
-      // Estimate right column height (native) for page break decision
+      // Estimate right column height (native)
       const nRightSegments = hasRight
         ? taskDistData!.labels.filter((_, i) => (taskDistData!.datasets[0]?.data[i] ?? 0) > 0).length
         : 0;
-      const estRightH = hasRight ? 18 + 11 + nRightSegments * 7.5 : 0; // hero + bar + rows
+      const estRightH = hasRight ? 18 + 11 + nRightSegments * 7.5 : 0;
 
       // Estimate left column height from SVG dimensions
-      const maxColH = 78;
+      const maxColH = useTwoCols ? 78 : 90; // taller when full-width
       let leftDrawH = 0;
       let leftDrawW = colW;
       if (hasLeft && wipTrendChart) {
@@ -1609,19 +1720,20 @@ export async function generateManagerReportPDF(
 
       generator.checkPageBreak(rowH + 22);
 
-      // Mini-band labels for each column — same system as addChartBlock
+      // Mini-band labels
       const colLabelH = 8;
       generator.doc.setFontSize(9);
       generator.doc.setFont(FONT.family, 'bold');
       generator.doc.setTextColor(17, 24, 39);
       if (hasLeft) {
+        const lw = useTwoCols ? colW : generator.contentWidth;
         generator.doc.setFillColor(245, 247, 255);
-        generator.doc.rect(leftX, generator.currentY, colW, colLabelH, 'F');
+        generator.doc.rect(leftX, generator.currentY, lw, colLabelH, 'F');
         generator.doc.setFillColor(99, 102, 241);
         generator.doc.rect(leftX, generator.currentY, 2, colLabelH, 'F');
         generator.doc.text('Throughput Trend', leftX + 6, generator.currentY + 5.5);
       }
-      if (hasRight) {
+      if (hasRight && useTwoCols) {
         generator.doc.setFillColor(245, 247, 255);
         generator.doc.rect(rightX, generator.currentY, colW, colLabelH, 'F');
         generator.doc.setFillColor(99, 102, 241);
@@ -1640,12 +1752,30 @@ export async function generateManagerReportPDF(
         }
       }
 
-      // Right: TaskDistribution — native vector, no screenshot
-      if (hasRight && taskDistData) {
+      // Right: TaskDistribution — native vector (2-col only; full-width handled below)
+      if (hasRight && useTwoCols && taskDistData) {
         drawTaskDistributionNative(generator.doc, rightX, generator.currentY, colW, taskDistData);
       }
 
       generator.currentY += rowH + 10;
+
+      // Full-width TaskDistribution when WipTrend is absent
+      if (hasRight && !useTwoCols && taskDistData) {
+        // Section label + native draw
+        const tdLabelH = 8;
+        generator.checkPageBreak(tdLabelH + 4 + estRightH + 10);
+        generator.doc.setFillColor(245, 247, 255);
+        generator.doc.rect(LAYOUT.margin.left, generator.currentY, generator.contentWidth, tdLabelH, 'F');
+        generator.doc.setFillColor(99, 102, 241);
+        generator.doc.rect(LAYOUT.margin.left, generator.currentY, 2, tdLabelH, 'F');
+        generator.doc.setFontSize(9);
+        generator.doc.setFont(FONT.family, 'bold');
+        generator.doc.setTextColor(17, 24, 39);
+        generator.doc.text('Task Distribution', LAYOUT.margin.left + 6, generator.currentY + 5.5);
+        generator.currentY += tdLabelH + 4;
+        drawTaskDistributionNative(generator.doc, LAYOUT.margin.left, generator.currentY, generator.contentWidth, taskDistData);
+        generator.currentY += estRightH + 10;
+      }
     }
 
     // ── 4. Heatmap — native vector drawing (no screenshot) ───────────────────
@@ -1699,7 +1829,8 @@ export async function generateManagerReportPDF(
   }
 
   // ========== END OF REPORT MARKER ==========
-  generator.checkPageBreak(18);
+  // No checkPageBreak — the marker always lives on the last content page.
+  // Adding a page break here causes a near-empty final page when last section is short.
   generator.currentY += 10;
   generator.doc.setDrawColor(220, 222, 228);
   generator.doc.setLineWidth(0.3);
