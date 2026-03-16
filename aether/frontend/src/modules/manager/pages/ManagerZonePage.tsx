@@ -8,10 +8,10 @@ import { AIReportModal } from '../components/AIReportModal';
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { managerApi } from '../api/managerApi';
 
-// Lazy load AnalyticsDashboard to isolate recharts from initial bundle
+// Lazy load AnalyticsDashboardV2 to isolate recharts from initial bundle
 const AnalyticsDashboard = lazy(() =>
-  import('../components/AnalyticsDashboard').then((module) => ({
-    default: module.AnalyticsDashboard,
+  import('../components/AnalyticsDashboardV2').then((module) => ({
+    default: module.AnalyticsDashboardV2,
   }))
 );
 

@@ -1419,25 +1419,46 @@ export class TasksService {
       ? Math.round((onTimeCount / completedInPeriod.length) * 100)
       : 100; // No tasks = 100% on-time (avoid false negatives)
 
-    // Team Velocity: Tasks completed per week (last 8 weeks)
-    // Uses updated_at to track when tasks were actually completed
+    // Team Velocity: Tasks completed per week — lookback window scales with period
+    // Uses a dedicated query (independent of allTasks/dateFilter) so that shorter
+    // periods like 'week' still show enough historical bars for a meaningful chart
+    // and the 3-week moving average has real data to work with.
+    const velocityPeriod = period || 'week';
+    const velocityWeekCount =
+      velocityPeriod === 'all'     ? 52 :
+      velocityPeriod === 'quarter' ? 24 :
+      velocityPeriod === 'month'   ? 16 : 12; // today + week → 12 weeks
+
+    const velocityLookbackStart = new Date(now);
+    velocityLookbackStart.setDate(now.getDate() - velocityWeekCount * 7);
+    velocityLookbackStart.setHours(0, 0, 0, 0);
+
+    const velocityTasksRaw = await this.prisma.tasks.findMany({
+      where: {
+        organization_id: organizationId,
+        status: { in: ['done', 'completed'] },
+        updated_at: { gte: velocityLookbackStart },
+      },
+      select: { updated_at: true },
+    });
+
     const velocityData = [];
-    for (let i = 7; i >= 0; i--) {
-      const weekStart = new Date();
+    for (let i = velocityWeekCount - 1; i >= 0; i--) {
+      const weekStart = new Date(now);
       weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
       weekStart.setHours(0, 0, 0, 0);
 
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 7);
 
-      const completedThisWeek = allTasks.filter(t => {
-        if (!this.isTaskStatus(t, 'done') || !t.updated_at) return false;
+      const completedThisWeek = velocityTasksRaw.filter(t => {
+        if (!t.updated_at) return false;
         const updatedAt = new Date(t.updated_at);
         return updatedAt >= weekStart && updatedAt < weekEnd;
       }).length;
 
       velocityData.push({
-        week: `W${8 - i}`,
+        week: `W${velocityWeekCount - i}`,
         completed: completedThisWeek,
         weekStart: weekStart.toISOString().split('T')[0],
       });
@@ -1868,13 +1889,14 @@ export class TasksService {
     const labels: string[] = [];
     let granularity = 'day';
 
+    // All timestamps are generated in UTC midnight to match PostgreSQL's
+    // date_trunc(... AT TIME ZONE 'UTC') output used in analyzeWorkloadHeatmap queries.
     switch (period) {
       case 'today':
         // Hourly buckets (last 24 hours: 00:00, 01:00, ..., 23:00)
         granularity = 'hour';
         for (let hour = 0; hour < 24; hour++) {
-          const bucket = new Date(now);
-          bucket.setHours(hour, 0, 0, 0);
+          const bucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour));
           timestamps.push(bucket);
           labels.push(`${hour.toString().padStart(2, '0')}:00`);
         }
@@ -1884,23 +1906,19 @@ export class TasksService {
         // Daily buckets for rolling last 7 days
         granularity = 'day';
         for (let i = 6; i >= 0; i--) {
-          const bucket = new Date(now);
-          bucket.setDate(bucket.getDate() - i);
-          bucket.setHours(0, 0, 0, 0);
+          const bucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
           timestamps.push(bucket);
-          labels.push(`${bucket.getMonth() + 1}/${bucket.getDate()}`);
+          labels.push(`${bucket.getUTCMonth() + 1}/${bucket.getUTCDate()}`);
         }
         break;
 
       case 'month':
-        // Daily buckets (last 30 days: 1, 5, 10, 15, 20, 25, 30)
+        // Daily buckets (last 30 days)
         granularity = 'day';
         for (let i = 29; i >= 0; i--) {
-          const bucket = new Date(now);
-          bucket.setDate(bucket.getDate() - i);
-          bucket.setHours(0, 0, 0, 0);
+          const bucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
           timestamps.push(bucket);
-          labels.push(`${bucket.getMonth() + 1}/${bucket.getDate()}`);
+          labels.push(`${bucket.getUTCMonth() + 1}/${bucket.getUTCDate()}`);
         }
         break;
 
@@ -1908,9 +1926,7 @@ export class TasksService {
         // Weekly buckets (last ~13 weeks: Week 1, Week 2, ...)
         granularity = 'week';
         for (let i = 12; i >= 0; i--) {
-          const bucket = new Date(now);
-          bucket.setDate(bucket.getDate() - (i * 7));
-          bucket.setHours(0, 0, 0, 0);
+          const bucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i * 7));
           timestamps.push(bucket);
           labels.push(`W${13 - i}`);
         }
@@ -1921,13 +1937,10 @@ export class TasksService {
         // Monthly buckets (last 12 months)
         granularity = 'month';
         for (let i = 11; i >= 0; i--) {
-          const bucket = new Date(now);
-          bucket.setMonth(bucket.getMonth() - i);
-          bucket.setDate(1);
-          bucket.setHours(0, 0, 0, 0);
+          const bucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
           timestamps.push(bucket);
           const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          labels.push(monthNames[bucket.getMonth()]);
+          labels.push(monthNames[bucket.getUTCMonth()]);
         }
         break;
     }
@@ -2295,22 +2308,70 @@ export class TasksService {
       },
     });
 
-    // Get recent commits for activity tracking
-    const commits = await this.prisma.commits.findMany({
-      where: {
-        repos: {
-          organization_id: organizationId,
-        },
-      },
-      take: 500,
-      orderBy: { committed_at: 'desc' },
-    });
-
     // Get period-aware time buckets
     const { timestamps, labels, granularity } = this.getTimeBuckets(period);
-    const days: string[] = [];
+    const startDate = timestamps[0];
+
+    // Validated granularity for PostgreSQL date_trunc
+    const granularityMap: Record<string, string> = { hour: 'hour', day: 'day', week: 'week', month: 'month' };
+    const pgGranularity = granularityMap[granularity] ?? 'day';
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // POSTGRESQL ANALYTICAL QUERIES - Time bucketing delegated to DB engine
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Query 1: Commits grouped by author_login + time bucket
+    const commitCounts = await this.prisma.$queryRawUnsafe<
+      Array<{ author_login: string; bucket: Date; count: bigint }>
+    >(
+      `SELECT
+        c.author_login,
+        date_trunc($1, c.committed_at AT TIME ZONE 'UTC') as bucket,
+        COUNT(*)::bigint as count
+      FROM commits c
+      JOIN repos r ON c.repo_id = r.id
+      WHERE r.organization_id = $2::uuid
+        AND c.committed_at >= $3
+        AND c.author_login IS NOT NULL
+      GROUP BY c.author_login, date_trunc($1, c.committed_at AT TIME ZONE 'UTC')`,
+      pgGranularity,
+      organizationId,
+      startDate,
+    );
+
+    // Query 2: Tasks grouped by assignee_id + time bucket
+    const taskCounts = await this.prisma.$queryRawUnsafe<
+      Array<{ assignee_id: string; bucket: Date; count: bigint }>
+    >(
+      `SELECT
+        t.assignee_id,
+        date_trunc($1, COALESCE(t.updated_at, t.created_at) AT TIME ZONE 'UTC') as bucket,
+        COUNT(*)::bigint as count
+      FROM tasks t
+      WHERE t.organization_id = $2::uuid
+        AND t.assignee_id IS NOT NULL
+        AND COALESCE(t.updated_at, t.created_at) >= $3
+      GROUP BY t.assignee_id, date_trunc($1, COALESCE(t.updated_at, t.created_at) AT TIME ZONE 'UTC')`,
+      pgGranularity,
+      organizationId,
+      startDate,
+    );
+
+    // Build lookup maps: "author_login|bucketTime" -> count
+    const commitMap = new Map<string, number>();
+    for (const row of commitCounts) {
+      const bucketTime = new Date(row.bucket).getTime();
+      commitMap.set(`${row.author_login}|${bucketTime}`, Number(row.count));
+    }
+
+    const taskMap = new Map<string, number>();
+    for (const row of taskCounts) {
+      const bucketTime = new Date(row.bucket).getTime();
+      taskMap.set(`${row.assignee_id}|${bucketTime}`, Number(row.count));
+    }
 
     // Format labels based on granularity
+    const days: string[] = [];
     for (let i = 0; i < timestamps.length; i++) {
       if (granularity === 'hour') {
         // For hourly: use labels like "09:00"
@@ -2324,7 +2385,7 @@ export class TasksService {
       }
     }
 
-    // Build heatmap matrix
+    // Build heatmap matrix from lookup maps
     const users: string[] = [];
     const data: number[][] = [];
 
@@ -2335,47 +2396,18 @@ export class TasksService {
       const userActivity: number[] = [];
 
       for (let i = 0; i < timestamps.length; i++) {
-        const bucketStart = timestamps[i];
-        const bucketEnd = new Date(bucketStart);
+        const bucketTime = timestamps[i].getTime();
 
-        // Determine bucket end based on granularity
-        if (granularity === 'hour') {
-          bucketEnd.setHours(bucketEnd.getHours() + 1);
-        } else if (granularity === 'day') {
-          bucketEnd.setDate(bucketEnd.getDate() + 1);
-        } else if (granularity === 'week') {
-          bucketEnd.setDate(bucketEnd.getDate() + 7);
-        } else if (granularity === 'month') {
-          bucketEnd.setMonth(bucketEnd.getMonth() + 1);
-        }
+        // Look up commit count for this user's github_login in this bucket
+        const commitCount = member.users.github_login
+          ? (commitMap.get(`${member.users.github_login}|${bucketTime}`) ?? 0)
+          : 0;
 
-        // Count commits for this user in this bucket
-        const userCommits = commits.filter(c => {
-          if (!member.users?.github_login || !c.committed_at) return false;
-          const commitDate = new Date(c.committed_at);
-          return (
-            c.author_login === member.users.github_login &&
-            commitDate >= bucketStart &&
-            commitDate < bucketEnd
-          );
-        });
-
-        // Count task movements (updated or created in this bucket)
-        // Using updated_at captures status changes, completions, and reassignments
-        const userTasks = tasks.filter(t => {
-          if (t.assignee_id !== member.users?.id) return false;
-
-          // Use updated_at if available (represents task moves, completions)
-          // Fallback to created_at for newly created tasks
-          const relevantDateStr = t.updated_at || t.created_at;
-          if (!relevantDateStr) return false;
-
-          const taskDate = new Date(relevantDateStr);
-          return taskDate >= bucketStart && taskDate < bucketEnd;
-        });
+        // Look up task count for this user's id in this bucket
+        const taskCount = taskMap.get(`${member.users.id}|${bucketTime}`) ?? 0;
 
         // Activity score: commits + task movements (weighted)
-        const activityScore = userCommits.length * 3 + userTasks.length * 2;
+        const activityScore = commitCount * 3 + taskCount * 2;
         userActivity.push(activityScore);
       }
 

@@ -29,6 +29,7 @@ model users {
   notify_inapp_enabled            Boolean              @default(true)
   deadline_reminder_hours         Int[]                @default([24])
   avatar_color                    String?              @default("zinc") // e.g. "blue", "red", "green", "zinc"
+  last_seen_at                    DateTime?            @db.Timestamp(6)
   tasks_tasks_assignee_idTousers  tasks[]              @relation("tasks_assignee_idTousers")
   tasks_tasks_validated_byTousers tasks[]              @relation("tasks_validated_byTousers")
   task_comments                   task_comments[]

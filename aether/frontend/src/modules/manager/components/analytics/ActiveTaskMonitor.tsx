@@ -2,46 +2,33 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2 } from 'lucide-react';
 import type { DailyTaskHealth, TaskHealthStatus } from '../../types/analytics';
 import { UserAvatar } from '../../../../components/ui/UserAvatar';
-
-// ── Relative time helper ────────────────────────────────────────────────────
-function formatRelativeTime(isoDate: string): string {
-  const diffMs = Date.now() - new Date(isoDate).getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  if (diffSecs < 60) return 'just now';
-  const diffMins = Math.floor(diffSecs / 60);
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${Math.floor(diffHours / 24)}d ago`;
-}
+import { formatRelativeTime } from '../../../../utils/time';
 
 // ── Health status config ────────────────────────────────────────────────────
+// accent: absolutely-positioned 3px left strip (independent of card border)
+// badge: secondary signal — only shown for non-healthy states
 const HEALTH_CONFIG: Record<
   TaskHealthStatus,
-  { border: string; badge: string; dot: string; label: string }
+  { accent: string; badge: string; label: string }
 > = {
   healthy: {
-    border: 'border-l-emerald-500',
-    badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
-    dot: 'bg-emerald-500',
-    label: 'Healthy',
+    accent: 'bg-emerald-400 dark:bg-emerald-500',
+    badge: '',
+    label: '',
   },
   at_risk: {
-    border: 'border-l-orange-500',
-    badge: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
-    dot: 'bg-orange-500',
+    accent: 'bg-orange-400 dark:bg-orange-500',
+    badge: 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400',
     label: 'At Risk',
   },
   stagnant: {
-    border: 'border-l-amber-500',
-    badge: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
-    dot: 'bg-amber-500',
+    accent: 'bg-amber-400 dark:bg-amber-500',
+    badge: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
     label: 'Stagnant',
   },
   blocked: {
-    border: 'border-l-red-500',
-    badge: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
-    dot: 'bg-red-500',
+    accent: 'bg-red-400 dark:bg-red-500',
+    badge: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
     label: 'Blocked',
   },
 };
@@ -50,6 +37,7 @@ const HEALTH_CONFIG: Record<
 function HealthCard({ task }: { task: DailyTaskHealth }) {
   const navigate = useNavigate();
   const config = HEALTH_CONFIG[task.healthStatus];
+  const isHealthy = task.healthStatus === 'healthy';
 
   return (
     <div
@@ -57,57 +45,68 @@ function HealthCard({ task }: { task: DailyTaskHealth }) {
       tabIndex={0}
       onClick={() => navigate(`/tasks/${task.taskId}`)}
       onKeyDown={(e) => e.key === 'Enter' && navigate(`/tasks/${task.taskId}`)}
-      className={`
-        group relative flex items-start gap-3 p-3 rounded-xl cursor-pointer
-        bg-white/50 dark:bg-zinc-800/50
-        border border-l-4 border-gray-100 dark:border-zinc-700/50
-        ${config.border}
-        hover:bg-white/80 dark:hover:bg-zinc-800/80
-        transition-colors transition-shadow duration-200
-        hover:shadow-sm
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1
-      `}
+      className="
+        group relative flex items-center gap-2.5 pl-5 pr-3 py-2 rounded-xl cursor-pointer
+        bg-white/80 dark:bg-zinc-700/30
+        border border-gray-100/60 dark:border-zinc-700/30
+        hover:bg-white dark:hover:bg-zinc-700/50
+        hover:border-gray-200/60 dark:hover:border-zinc-600/40
+        active:scale-[0.995]
+        transition-all duration-150
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-0
+      "
     >
-      {/* Avatar */}
-      <UserAvatar username={task.assignee.username} avatarColor={task.assignee.avatarColor} size="sm" className="flex-shrink-0" />
+      {/* Left health accent — 3px strip, independent of card border */}
+      <div className={`absolute left-0 inset-y-0 w-[3px] rounded-l-xl ${config.accent}`} />
+
+      {/* Avatar — xs so the title leads, avatar supports */}
+      <UserAvatar
+        username={task.assignee.username}
+        avatarColor={task.assignee.avatarColor}
+        size="xs"
+        className="flex-shrink-0"
+      />
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+
+        {/* Row 1: title + badges (inline, no wrap) */}
+        <div className="flex items-center gap-1.5 flex-nowrap">
+          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
             {task.title}
           </p>
-          {/* Health badge */}
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${config.badge}`}>
-            <span className={`inline-block w-1.5 h-1.5 rounded-full ${config.dot} mr-1`} />
-            {config.label}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            {task.assignee.username}
-          </span>
-          <span className="text-gray-300 dark:text-zinc-600">·</span>
-          <span className="text-xs text-gray-400 dark:text-gray-500">
-            {formatRelativeTime(task.lastActivity)}
-          </span>
+          {!isHealthy && config.badge && (
+            <span className={`text-[10px] font-semibold px-1.5 py-px rounded-md flex-shrink-0 ${config.badge}`}>
+              {config.label}
+            </span>
+          )}
           {task.isUnplanned && (
-            <>
-              <span className="text-gray-300 dark:text-zinc-600">·</span>
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400">
-                unplanned
-              </span>
-            </>
+            <span className="text-[10px] font-semibold px-1.5 py-px rounded-md flex-shrink-0 bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+              new
+            </span>
           )}
         </div>
 
-        {/* AI Insight */}
-        {task.aiInsight && (
-          <p className="mt-1.5 text-xs italic text-gray-500 dark:text-gray-400 leading-relaxed">
-            <span className="not-italic font-medium text-violet-500 dark:text-violet-400">AI: </span>
-            {task.aiInsight}
-          </p>
+        {/* Row 2: assignee · timestamp */}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-xs text-gray-400 dark:text-zinc-500">
+            {task.assignee.username}
+          </span>
+          <span className="text-gray-200 dark:text-zinc-700">·</span>
+          <span className="text-xs text-gray-300 dark:text-zinc-600">
+            {formatRelativeTime(task.lastActivity)}
+          </span>
+        </div>
+
+        {/* Status hint — hidden at rest, revealed on hover via CSS grid trick */}
+        {task.statusHint && (
+          <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out">
+            <div className="overflow-hidden">
+              <p className="pt-1 text-[11px] text-gray-400 dark:text-zinc-500 leading-relaxed italic">
+                {task.statusHint}
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>

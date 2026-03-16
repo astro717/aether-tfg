@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ReactNode } from "react";
 import { Sidebar as SidebarIcon, Plus, Loader2, Settings, Shield, FlaskConical, BarChart3 } from "lucide-react";
+import { getPresenceStatus, PRESENCE_COLORS } from "../../lib/presence";
 import { Link, useLocation, useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../modules/auth/context/AuthContext";
 import { useOrganization } from "../../modules/organization/context/OrganizationContext";
@@ -70,7 +71,6 @@ const isAnalyticsV4Active = location.pathname === '/manager/analytics-v4';
     // Messages state
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [messagesLoading, setMessagesLoading] = useState(true);
-    const hasLoadedMessagesRef = useRef(false);
 
     // Create task modal state
     const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
@@ -177,7 +177,6 @@ const isAnalyticsV4Active = location.pathname === '/manager/analytics-v4';
             if (!silent) setMessagesLoading(true);
             const data = await messagingApi.getConversations(currentOrganization?.id);
             setConversations(data);
-            hasLoadedMessagesRef.current = true;
         } catch (err) {
             console.error('Error fetching conversations:', err);
         } finally {
@@ -192,8 +191,6 @@ const isAnalyticsV4Active = location.pathname === '/manager/analytics-v4';
 
     // Polling for real-time updates
     useEffect(() => {
-        if (!hasLoadedMessagesRef.current) return;
-
         const interval = setInterval(() => {
             fetchConversations(true); // Silent fetch
         }, MESSAGES_POLLING_INTERVAL);
@@ -352,6 +349,7 @@ const isAnalyticsV4Active = location.pathname === '/manager/analytics-v4';
                                                 active={location.pathname === '/messages' && activeUserId === conv.user.id}
                                                 isCollapsed={isCollapsed}
                                                 avatarColor={conv.user.avatar_color}
+                                                lastSeenAt={conv.user.last_seen_at}
                                             />
                                         </Link>
                                     );
@@ -673,6 +671,7 @@ function MessageItem({
     unreadCount = 0,
     isCollapsed = false,
     avatarColor,
+    lastSeenAt,
 }: {
     name: string;
     preview: string;
@@ -680,8 +679,11 @@ function MessageItem({
     unreadCount?: number;
     isCollapsed?: boolean;
     avatarColor?: string;
+    lastSeenAt?: string | null;
 }) {
-    // Collapsed: show only centered avatar with optional unread indicator
+    const presenceColor = PRESENCE_COLORS[getPresenceStatus(lastSeenAt)];
+
+    // Collapsed: show only centered avatar with presence dot
     if (isCollapsed) {
         return (
             <div
@@ -691,22 +693,22 @@ function MessageItem({
                 `}
                 title={`${name}: ${preview}`}
             >
-                <div className="relative">
-                    <UserAvatar
-                        username={name}
-                        avatarColor={avatarColor}
-                        size="sm"
-                    />
-                    {/* Unread indicator badge */}
-                    {unreadCount > 0 && (
-                        <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-gray-500 border-2 border-[#FCFCFD] dark:border-[#18181B]" />
-                    )}
-                </div>
+                <UserAvatar
+                    username={name}
+                    avatarColor={avatarColor}
+                    size="sm"
+                    showStatus
+                    statusColor={presenceColor}
+                />
+                {/* Unread indicator badge */}
+                {unreadCount > 0 && (
+                    <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-gray-500 border-2 border-[#FCFCFD] dark:border-[#18181B]" />
+                )}
             </div>
         );
     }
 
-    // Expanded: show full item with aligned dot
+    // Expanded: show full item with presence dot in avatar
     return (
         <div
             className={`
@@ -714,11 +716,12 @@ function MessageItem({
                 ${active ? "bg-gray-100 dark:bg-zinc-800" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}
             `}
         >
-            {/* Avatar with initials */}
             <UserAvatar
                 username={name}
                 avatarColor={avatarColor}
                 size="sm"
+                showStatus
+                statusColor={presenceColor}
             />
             <div className="flex flex-col text-left overflow-hidden flex-1">
                 <span className={`text-sm truncate ${unreadCount > 0 ? "font-bold text-gray-900 dark:text-white" : "font-semibold text-gray-800 dark:text-gray-200"}`}>
@@ -728,7 +731,7 @@ function MessageItem({
                     {preview}
                 </span>
             </div>
-            {/* Unread dot indicator - aligned */}
+            {/* Unread dot indicator */}
             {unreadCount > 0 && (
                 <div className="w-2 h-2 rounded-full flex-shrink-0 mr-0.5" style={{ backgroundColor: '#B4B4B4' }} />
             )}

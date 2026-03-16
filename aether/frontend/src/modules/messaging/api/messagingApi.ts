@@ -6,6 +6,7 @@ export interface MessageUser {
   username: string;
   email: string;
   avatar_color?: string;
+  last_seen_at?: string | null;
 }
 
 export type MessageType = 'text' | 'comment_notification';
@@ -162,6 +163,18 @@ class MessagingApi {
     );
     if (!response.ok) throw new Error('Failed to fetch unread count');
     return response.json();
+  }
+
+  /**
+   * PATCH /users/me/heartbeat
+   * Update the current user's last_seen_at timestamp.
+   */
+  async heartbeat(): Promise<void> {
+    const token = localStorage.getItem('token');
+    await fetch(`${API_BASE_URL}/users/me/heartbeat`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${token}` },
+    }).catch(() => {});
   }
 
   /**

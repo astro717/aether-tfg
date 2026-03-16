@@ -573,7 +573,7 @@ function DocumentAttachment({ attachment, isSent }: DocumentAttachmentProps) {
         group cursor-pointer
         ${isSent
           ? "bg-white/10 hover:bg-white/20"
-          : "bg-gray-100/80 hover:bg-gray-200/80"
+          : "bg-black/[0.06] hover:bg-black/[0.10] dark:bg-white/10 dark:hover:bg-white/[0.15]"
         }
         transition-colors duration-200
       `}
@@ -581,16 +581,19 @@ function DocumentAttachment({ attachment, isSent }: DocumentAttachmentProps) {
       <div
         className={`
           w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
-          ${isSent ? "bg-white/20" : "bg-gray-200"}
+          ${isSent
+            ? "bg-white/20"
+            : "bg-black/[0.08] dark:bg-white/15"
+          }
         `}
       >
-        <FileText size={18} className={isSent ? "text-white/80" : "text-gray-500"} />
+        <FileText size={18} className={isSent ? "text-white/80" : "text-gray-500 dark:text-gray-300"} />
       </div>
       <div className="min-w-0 flex-1">
         <p
           className={`
             text-sm font-medium truncate
-            ${isSent ? "text-white" : "text-gray-700"}
+            ${isSent ? "text-white" : "text-gray-700 dark:text-gray-100"}
           `}
         >
           {attachment.file_name}
@@ -598,7 +601,7 @@ function DocumentAttachment({ attachment, isSent }: DocumentAttachmentProps) {
         <p
           className={`
             text-xs
-            ${isSent ? "text-white/60" : "text-gray-400"}
+            ${isSent ? "text-white/60" : "text-gray-400 dark:text-gray-400"}
           `}
         >
           {formatFileSize(attachment.file_size)}
@@ -609,7 +612,7 @@ function DocumentAttachment({ attachment, isSent }: DocumentAttachmentProps) {
         className={`flex-shrink-0 transition-all duration-200 group-hover:translate-y-0.5 ${
           isSent
             ? "text-white/50 group-hover:text-white/90"
-            : "text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300"
+            : "text-gray-400 group-hover:text-gray-600 dark:text-gray-400 dark:group-hover:text-gray-200"
         }`}
       />
     </a>

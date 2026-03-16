@@ -6,6 +6,7 @@ import { type Message, type MessageUser } from "../api/messagingApi";
 import { type UploadedFile } from "../../../hooks/useFileUpload";
 import { getAvatarColorClasses } from "../../../lib/avatarColors";
 import { useChatScroll } from "../hooks/useChatScroll";
+import { getPresenceStatus, getPresenceLabel, PRESENCE_COLORS } from "../../../lib/presence";
 
 interface ChatViewProps {
   userId: string | null;
@@ -214,29 +215,40 @@ function ChatHeader({ user }: ChatHeaderProps) {
     .slice(0, 2) || user.username.slice(0, 2).toUpperCase();
 
   const colors = getAvatarColorClasses(user.avatar_color);
+  const status = getPresenceStatus(user.last_seen_at);
+  const dotColor = PRESENCE_COLORS[status];
+  const statusLabel = getPresenceLabel(user.last_seen_at);
 
   return (
     <div className="flex items-center justify-between px-5 py-3 border-b border-white/20 dark:border-white/10">
       {/* Left: Avatar & Name */}
       <div className="flex items-center gap-3">
-        <div
-          className={`
-            w-10 h-10
-            rounded-full
-            ${colors.bg}
-            ${colors.border}
-            flex items-center justify-center
-            font-semibold ${colors.text} text-sm
-          `}
-        >
-          {initials}
+        <div className="relative flex-shrink-0">
+          <div
+            className={`
+              w-10 h-10
+              rounded-full
+              ${colors.bg}
+              ${colors.border}
+              flex items-center justify-center
+              font-semibold ${colors.text} text-sm
+            `}
+          >
+            {initials}
+          </div>
+          {/* Presence dot */}
+          <span
+            className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900"
+            style={{ backgroundColor: dotColor }}
+          />
         </div>
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
             {user.username}
           </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {user.email}
+          <p className="text-xs flex items-center gap-1" style={{ color: dotColor }}>
+            <span>●</span>
+            <span>{statusLabel}</span>
           </p>
         </div>
       </div>

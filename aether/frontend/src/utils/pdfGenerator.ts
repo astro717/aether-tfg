@@ -4,36 +4,110 @@
  * NOW with multi-chart capture for enterprise visualizations
  */
 
-import jsPDF from 'jspdf';
+import jsPDF, { GState } from 'jspdf';
 import html2canvas from 'html2canvas';
+import 'svg2pdf.js';
 
-// Aether color palette (matching the brand)
+// ── Font family ─────────────────────────────────────────────────────────────
+// Starts as 'helvetica' (jsPDF built-in). Flips to 'Inter' once the CDN load
+// succeeds. All setFont calls read this so they get Inter automatically.
+const FONT = { family: 'helvetica' as string };
+
+// ── Inter font cache ─────────────────────────────────────────────────────────
+// Base64 strings cached after first fetch so subsequent PDFs skip the network.
+let _interCache: { regular: string; bold: string } | null = null;
+let _interLoading: Promise<void> | null = null;
+
+function _applyInterToDoc(doc: jsPDF, cache: { regular: string; bold: string }): void {
+  doc.addFileToVFS('Inter-Regular.ttf', cache.regular);
+  doc.addFont('Inter-Regular.ttf', 'Inter', 'normal');
+  doc.addFileToVFS('Inter-Bold.ttf', cache.bold);
+  doc.addFont('Inter-Bold.ttf', 'Inter', 'bold');
+}
+
+/**
+ * Fetch Inter Regular + Bold TTF from CDN, register with jsPDF, and cache.
+ * Falls back to Helvetica silently on any network / parsing failure.
+ * Must be awaited before the first page content is rendered.
+ */
+async function loadInterFont(doc: jsPDF): Promise<void> {
+  // Already loaded — just re-register on this doc instance
+  if (_interCache) {
+    _applyInterToDoc(doc, _interCache);
+    return;
+  }
+  // Deduplicate concurrent calls (e.g. parallel report triggers)
+  if (_interLoading) {
+    await _interLoading;
+    if (_interCache) _applyInterToDoc(doc, _interCache);
+    return;
+  }
+
+  _interLoading = (async () => {
+    try {
+      // @expo-google-fonts/inter ships confirmed TTF files — reliable jsDelivr CDN
+      const BASE = 'https://cdn.jsdelivr.net/npm/@expo-google-fonts/inter@0.2.2';
+      const [regRes, boldRes] = await Promise.all([
+        fetch(`${BASE}/Inter_400Regular.ttf`),
+        fetch(`${BASE}/Inter_700Bold.ttf`),
+      ]);
+      if (!regRes.ok || !boldRes.ok) throw new Error(`CDN ${regRes.status}/${boldRes.status}`);
+
+      const bufToB64 = async (res: Response): Promise<string> => {
+        const buf = await res.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        // Process in chunks — avoids call-stack overflow on large buffers
+        const CHUNK = 0x8000;
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+        }
+        return btoa(bin);
+      };
+
+      const [regular, bold] = await Promise.all([bufToB64(regRes), bufToB64(boldRes)]);
+      _interCache = { regular, bold };
+      FONT.family = 'Inter';
+      console.log('✓ Inter font loaded');
+    } catch (e) {
+      console.warn('Inter unavailable — falling back to Helvetica', e);
+    }
+  })();
+
+  await _interLoading;
+  if (_interCache) _applyInterToDoc(doc, _interCache);
+}
+
+// Aether color palette — single brand accent system
+// ONE primary (indigo-500). Semantic trio for status. Neutral scale for text/borders.
 const COLORS = {
   primary: {
-    purple: [99, 102, 241], // #6366f1
-    blue: [59, 130, 246], // #3b82f6
-    indigo: [139, 92, 246], // #8b5cf6
+    purple: [99, 102, 241] as [number,number,number],  // #6366f1 — sole brand accent
+    blue:   [99, 102, 241] as [number,number,number],  // unified → same indigo
+    indigo: [99, 102, 241] as [number,number,number],  // unified → same indigo
   },
   semantic: {
-    success: [34, 197, 94], // #22c55e
-    warning: [251, 191, 36], // #fbbf24
-    danger: [239, 68, 68], // #ef4444
+    success: [16, 185, 129]  as [number,number,number], // emerald-500 #10b981
+    warning: [245, 158, 11]  as [number,number,number], // amber-500  #f59e0b
+    danger:  [239, 68, 68]   as [number,number,number], // red-500    #ef4444
   },
   neutral: {
-    dark: [31, 41, 55], // #1f2937
-    medium: [107, 114, 128], // #6b7280
-    light: [243, 244, 246], // #f3f4f6
+    dark:   [17, 24, 39]     as [number,number,number], // gray-900 #111827
+    medium: [107, 114, 128]  as [number,number,number], // gray-500 #6b7280
+    light:  [243, 244, 246]  as [number,number,number], // gray-100 #f3f4f6
+    border: [229, 231, 235]  as [number,number,number], // gray-200 #e5e7eb
+    muted:  [156, 163, 175]  as [number,number,number], // gray-400 #9ca3af
   },
 } as const;
 
-// Typography hierarchy (industry standard sizes)
+// Typography hierarchy — 3+ pt gap between levels creates real visual hierarchy
 const FONTS = {
-  h1: { size: 16, weight: 'bold' as const },
-  h2: { size: 14, weight: 'bold' as const },
-  h3: { size: 12, weight: 'bold' as const },
-  body: { size: 10, weight: 'normal' as const },
-  small: { size: 9, weight: 'normal' as const },
-  caption: { size: 8, weight: 'normal' as const },
+  h1:      { size: 18,  weight: 'bold'   as const }, // chapter titles
+  h2:      { size: 13,  weight: 'bold'   as const }, // section headings (was 14 — barely different from h1)
+  h3:      { size: 11,  weight: 'bold'   as const }, // chart captions, sub-section
+  body:    { size: 9.5, weight: 'normal' as const }, // body copy
+  small:   { size: 9,   weight: 'normal' as const },
+  caption: { size: 7,   weight: 'normal' as const }, // labels, footers
 } as const;
 
 // Layout constants (in mm)
@@ -41,8 +115,8 @@ const LAYOUT = {
   margin: {
     top: 25,
     bottom: 25,
-    left: 20,
-    right: 20,
+    left: 18,
+    right: 18,
   },
   lineHeight: {
     tight: 1.2,
@@ -50,8 +124,8 @@ const LAYOUT = {
     relaxed: 1.8,
   },
   spacing: {
-    section: 8,
-    paragraph: 5,
+    section: 12,
+    paragraph: 6,
     small: 4,
   },
 } as const;
@@ -121,6 +195,7 @@ class PDFGenerator {
   private pageHeight: number;
   public contentWidth: number; // Made public for external layout calculations
   private pageNumber: number;
+  private runningHeaderContext: { title: string; orgName: string } | null = null;
 
   constructor() {
     this.doc = new jsPDF({
@@ -133,6 +208,124 @@ class PDFGenerator {
     this.contentWidth = this.pageWidth - LAYOUT.margin.left - LAYOUT.margin.right;
     this.currentY = LAYOUT.margin.top;
     this.pageNumber = 1;
+    // Re-register Inter on this doc instance if it was loaded in a prior generation
+    if (_interCache) _applyInterToDoc(this.doc, _interCache);
+  }
+
+  public setRunningHeader(title: string, orgName: string): void {
+    this.runningHeaderContext = { title, orgName };
+  }
+
+  /**
+   * Simulates a vertical gradient by drawing N thin rects with interpolated color
+   */
+  private drawVerticalGradient(
+    x: number, y: number, w: number, h: number,
+    colorTop: [number, number, number],
+    colorBottom: [number, number, number],
+    steps = 30
+  ): void {
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      const r = Math.round(colorTop[0] + (colorBottom[0] - colorTop[0]) * t);
+      const g = Math.round(colorTop[1] + (colorBottom[1] - colorTop[1]) * t);
+      const b = Math.round(colorTop[2] + (colorBottom[2] - colorTop[2]) * t);
+      this.doc.setFillColor(r, g, b);
+      const sliceH = h / steps + 0.5; // +0.5 prevents hairline gaps
+      this.doc.rect(x, y + (h / steps) * i, w, sliceH, 'F');
+    }
+  }
+
+  /**
+   * Add a branded cover page (page 1). Adds a new page after it.
+   * Page numbering resets so cover doesn't count.
+   */
+  public addCoverPage(title: string, orgName: string, period: string, reportType?: string): void {
+    // Full-page gradient background: deep indigo — matches #3730a3 → #1e1b4b
+    this.drawVerticalGradient(
+      0, 0, this.pageWidth, this.pageHeight,
+      [55, 48, 163],   // #3730a3 indigo-800
+      [30, 27, 75]     // #1e1b4b indigo-950
+    );
+
+    // Subtle noise texture — horizontal lines at low opacity
+    this.doc.setDrawColor(255, 255, 255);
+    this.doc.setLineWidth(0.05);
+    for (let lineY = 10; lineY < this.pageHeight; lineY += 4) {
+      this.doc.setGState(new GState({ opacity: 0.04, 'stroke-opacity': 0.04 }));
+      this.doc.line(0, lineY, this.pageWidth, lineY);
+    }
+    this.doc.setGState(new GState({ opacity: 1, 'stroke-opacity': 1 }));
+
+    // ── Logo ────────────────────────────────────────────────────────────────
+    this.doc.setFontSize(28);
+    this.doc.setFont(FONT.family, 'normal');
+    this.doc.setTextColor(255, 255, 255);
+    this.doc.text('aether.', this.pageWidth / 2, 75, { align: 'center' });
+
+    // Tagline under logo
+    this.doc.setFontSize(9);
+    this.doc.setFont(FONT.family, 'normal');
+    this.doc.setTextColor(180, 180, 255);
+    this.doc.text('AI-powered project intelligence', this.pageWidth / 2, 83, { align: 'center' });
+
+    // ── Divider ─────────────────────────────────────────────────────────────
+    this.doc.setDrawColor(255, 255, 255);
+    this.doc.setGState(new GState({ opacity: 0.25, 'stroke-opacity': 0.25 }));
+    this.doc.setLineWidth(0.4);
+    this.doc.line(this.pageWidth / 2 - 25, 92, this.pageWidth / 2 + 25, 92);
+    this.doc.setGState(new GState({ opacity: 1, 'stroke-opacity': 1 }));
+
+    // ── Report title ────────────────────────────────────────────────────────
+    this.doc.setFontSize(20);
+    this.doc.setFont(FONT.family, 'bold');
+    this.doc.setTextColor(255, 255, 255);
+    this.doc.text(title, this.pageWidth / 2, 115, { align: 'center', maxWidth: 150 });
+
+    if (reportType) {
+      this.doc.setFontSize(10);
+      this.doc.setFont(FONT.family, 'normal');
+      this.doc.setTextColor(200, 200, 255);
+      this.doc.text(reportType, this.pageWidth / 2, 124, { align: 'center' });
+    }
+
+    // ── Metadata pill ───────────────────────────────────────────────────────
+    const pillW = 90;
+    const pillX = this.pageWidth / 2 - pillW / 2;
+    const pillY = 140;
+    this.doc.setFillColor(255, 255, 255);
+    this.doc.setGState(new GState({ opacity: 0.1, 'stroke-opacity': 0.1 }));
+    this.doc.roundedRect(pillX, pillY, pillW, 24, 4, 4, 'F');
+    this.doc.setGState(new GState({ opacity: 1, 'stroke-opacity': 1 }));
+
+    this.doc.setFontSize(11);
+    this.doc.setFont(FONT.family, 'bold');
+    this.doc.setTextColor(255, 255, 255);
+    this.doc.text(orgName, this.pageWidth / 2, pillY + 9, { align: 'center' });
+
+    this.doc.setFontSize(9);
+    this.doc.setFont(FONT.family, 'normal');
+    this.doc.setTextColor(200, 200, 255);
+    this.doc.text(period, this.pageWidth / 2, pillY + 18, { align: 'center' });
+
+    // ── Generation date (bottom) ─────────────────────────────────────────
+    const genDate = new Date().toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+    });
+    this.doc.setFontSize(8);
+    this.doc.setFont(FONT.family, 'normal');
+    this.doc.setTextColor(150, 150, 200);
+    this.doc.text(
+      `Generated ${genDate} · Confidential`,
+      this.pageWidth / 2,
+      this.pageHeight - 20,
+      { align: 'center' }
+    );
+
+    // ── Start content on next page ──────────────────────────────────────────
+    this.doc.addPage();
+    this.pageNumber = 1; // Cover doesn't count
+    this.currentY = LAYOUT.margin.top;
   }
 
   /**
@@ -145,12 +338,27 @@ class PDFGenerator {
   }
 
   /**
-   * Add a new page with footer
+   * Add a new page with running header and footer
    */
   private addPage(): void {
     this.doc.addPage();
     this.pageNumber++;
     this.currentY = LAYOUT.margin.top;
+    // Running mini-header on pages 2+
+    if (this.runningHeaderContext) {
+      const hY = LAYOUT.margin.top - 10;
+      this.doc.setFontSize(7);
+      this.doc.setFont(FONT.family, 'normal');
+      this.doc.setTextColor(170, 173, 180);
+      this.doc.text(
+        `${this.runningHeaderContext.orgName}  ·  ${this.runningHeaderContext.title}`,
+        LAYOUT.margin.left,
+        hY
+      );
+      this.doc.setDrawColor(220, 222, 228);
+      this.doc.setLineWidth(0.2);
+      this.doc.line(LAYOUT.margin.left, hY + 2, this.pageWidth - LAYOUT.margin.right, hY + 2);
+    }
     this.addFooter();
   }
 
@@ -166,7 +374,7 @@ class PDFGenerator {
     try {
       // Use Helvetica (closest to SF Pro available in jsPDF)
       this.doc.setFontSize(14);
-      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFont(FONT.family, 'normal');
       this.doc.setTextColor(0, 0, 0); // Black
       this.doc.text('aether.', logoX, logoY + 8);
     } catch (error) {
@@ -177,20 +385,23 @@ class PDFGenerator {
     const metadataX = logoX + logoSize + 10;
 
     this.doc.setFontSize(FONTS.h1.size);
-    this.doc.setFont('helvetica', FONTS.h1.weight);
+    this.doc.setFont(FONT.family, FONTS.h1.weight);
     this.doc.setTextColor(...COLORS.neutral.dark);
     this.doc.text(metadata.title, metadataX, logoY + 8, { maxWidth: this.pageWidth - metadataX - LAYOUT.margin.right });
 
     if (metadata.subtitle) {
       this.doc.setFontSize(FONTS.small.size);
-      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFont(FONT.family, 'normal');
       this.doc.setTextColor(...COLORS.neutral.medium);
       this.doc.text(metadata.subtitle, metadataX, logoY + 14);
     }
 
-    // Generated date
-    const generatedText = metadata.generatedAt || new Date().toLocaleString();
-    const cachedBadge = metadata.cached ? ' [CACHED]' : '';
+    // Generated date — format ISO string to human-readable
+    const rawDate = metadata.generatedAt ? new Date(metadata.generatedAt) : new Date();
+    const generatedText = rawDate.toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+    }) + ' · ' + rawDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const cachedBadge = metadata.cached ? ' · Cached' : '';
     this.doc.setFontSize(FONTS.caption.size);
     this.doc.setTextColor(...COLORS.neutral.medium);
     this.doc.text(`Generated: ${generatedText}${cachedBadge}`, metadataX, logoY + 18);
@@ -211,7 +422,7 @@ class PDFGenerator {
     const footerY = this.pageHeight - LAYOUT.margin.bottom + 10;
 
     this.doc.setFontSize(FONTS.caption.size);
-    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFont(FONT.family, 'normal');
     this.doc.setTextColor(...COLORS.neutral.medium);
 
     // Confidentiality notice (left)
@@ -238,9 +449,10 @@ class PDFGenerator {
 
     // Background box
     const boxY = this.currentY;
-    const boxHeight = this.calculateTextHeight(content, this.contentWidth - 10, FONTS.body.size) + 15;
+    const boxHeight = this.calculateTextHeight(content, this.contentWidth - 14, FONTS.body.size) + 15;
 
-    this.doc.setFillColor(...COLORS.neutral.light);
+    // Indigo-tinted background
+    this.doc.setFillColor(240, 244, 255);
     this.doc.roundedRect(
       LAYOUT.margin.left,
       boxY,
@@ -251,42 +463,53 @@ class PDFGenerator {
       'F'
     );
 
+    // Left accent bar (indigo)
+    this.doc.setFillColor(99, 102, 241);
+    this.doc.rect(LAYOUT.margin.left, boxY, 2.5, boxHeight, 'F');
+
     // Title
     this.doc.setFontSize(FONTS.h3.size);
-    this.doc.setFont('helvetica', FONTS.h3.weight);
-    this.doc.setTextColor(...COLORS.primary.indigo);
-    this.doc.text(title, LAYOUT.margin.left + 5, boxY + 7);
+    this.doc.setFont(FONT.family, FONTS.h3.weight);
+    this.doc.setTextColor(67, 56, 202); // indigo-700
+    this.doc.text(title, LAYOUT.margin.left + 8, boxY + 7);
 
     // Content
-    this.currentY = boxY + 14; // Start inside the box with proper padding
+    this.currentY = boxY + 14;
 
-    this.renderRichText(content, LAYOUT.margin.left + 5, this.contentWidth - 10);
+    this.renderRichText(content, LAYOUT.margin.left + 8, this.contentWidth - 14);
 
     // Box height is fixed visually, jump Y passed the box
     this.currentY = boxY + boxHeight + LAYOUT.spacing.section;
   }
 
   /**
-   * Add a section with title and content
+   * Add a section with title and content.
+   * Sprint 3: chapter-opener style — indigo-50 band + 3mm left indigo bar.
+   * Replaces the old hairline rule + bullet approach (rules were visually
+   * clinging to the following title regardless of spacing tweaks).
    */
   public addSection(title: string, content: string): void {
-    this.checkPageBreak(30);
+    this.checkPageBreak(22);
 
-    // Section title with accent
+    // ── Chapter opener band ──────────────────────────────────────────────────
+    const bandH = 10;
+    // Very soft tint (245,247,255) — lighter than indigo-50, avoids the "Word doc" blockiness
+    this.doc.setFillColor(245, 247, 255);
+    this.doc.rect(LAYOUT.margin.left, this.currentY, this.contentWidth, bandH, 'F');
+    // 3mm left accent bar — indigo-500
+    this.doc.setFillColor(...COLORS.primary.indigo);
+    this.doc.rect(LAYOUT.margin.left, this.currentY, 3, bandH, 'F');
+    // Title — near-black for contrast against the light band
     this.doc.setFontSize(FONTS.h2.size);
-    this.doc.setFont('helvetica', FONTS.h2.weight);
-    this.doc.setTextColor(...COLORS.primary.blue);
+    this.doc.setFont(FONT.family, FONTS.h2.weight);
+    this.doc.setTextColor(...COLORS.neutral.dark);
+    this.doc.text(title, LAYOUT.margin.left + 8, this.currentY + 7);
 
-    // Add decorative bullet
-    this.doc.setFillColor(...COLORS.primary.purple);
-    this.doc.circle(LAYOUT.margin.left + 2, this.currentY - 1.5, 1.5, 'F');
+    this.currentY += bandH + 5; // band + 5mm breathing room before content
 
-    this.doc.text(title, LAYOUT.margin.left + 7, this.currentY);
-    this.currentY += 8; // Increased gap between header and content
-
-    // Section content
-    this.renderRichText(content, LAYOUT.margin.left + 7, this.contentWidth - 7);
-    this.currentY += LAYOUT.spacing.section;
+    // ── Section content ──────────────────────────────────────────────────────
+    this.renderRichText(content, LAYOUT.margin.left + 4, this.contentWidth - 4);
+    this.currentY += 10; // bottom margin before next section
   }
 
   /**
@@ -315,7 +538,7 @@ class PDFGenerator {
 
     // Draw label
     this.doc.setFontSize(FONTS.caption.size);
-    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFont(FONT.family, 'bold');
     this.doc.setTextColor(255, 255, 255);
     this.doc.text(label, x + width / 2, y, { align: 'center' });
 
@@ -329,7 +552,7 @@ class PDFGenerator {
     this.checkPageBreak(20);
 
     this.doc.setFontSize(FONTS.h2.size);
-    this.doc.setFont('helvetica', FONTS.h2.weight);
+    this.doc.setFont(FONT.family, FONTS.h2.weight);
     this.doc.setTextColor(...COLORS.primary.blue);
     this.doc.text('Identified Issues', LAYOUT.margin.left, this.currentY);
     this.currentY += LAYOUT.spacing.paragraph;
@@ -344,13 +567,13 @@ class PDFGenerator {
 
       // Issue title
       this.doc.setFontSize(FONTS.body.size);
-      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFont(FONT.family, 'bold');
       this.doc.setTextColor(...COLORS.neutral.dark);
       this.doc.text(issue.title, LAYOUT.margin.left + pillWidth + 2, issueY);
       this.currentY += 6;
 
       // File and line info
-      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFont(FONT.family, 'normal');
       this.doc.setFontSize(FONTS.small.size);
       this.doc.setTextColor(...COLORS.neutral.medium);
       this.doc.text(`${issue.file}:${issue.line}`, LAYOUT.margin.left + 5, this.currentY);
@@ -440,7 +663,7 @@ class PDFGenerator {
              this.doc.circle(startX + 2, this.currentY - 1, 0.8, 'F');
           } else {
              // Draw nice bold colored numbers
-             this.doc.setFont('Helvetica', 'bold');
+             this.doc.setFont(FONT.family, 'bold');
              this.doc.setTextColor(...COLORS.primary.indigo);
              this.doc.text(bulletText, startX, this.currentY);
              // Restore text color to dark
@@ -451,7 +674,7 @@ class PDFGenerator {
         // Print text words
         let renderX = currentX;
         currentLine.forEach(span => {
-          this.doc.setFont('Helvetica', span.isBold ? 'bold' : 'normal');
+          this.doc.setFont(FONT.family, span.isBold ? 'bold' : 'normal');
           this.doc.text(span.text, renderX, this.currentY);
           renderX += this.doc.getTextWidth(span.text);
         });
@@ -472,7 +695,7 @@ class PDFGenerator {
 
         words.forEach(word => {
           if (!word) return;
-          this.doc.setFont('Helvetica', isBold ? 'bold' : 'normal');
+          this.doc.setFont(FONT.family, isBold ? 'bold' : 'normal');
           const wordWidth = this.doc.getTextWidth(word);
 
           if (currentLineWidth + wordWidth > safeMaxWidth && currentLine.length > 0 && word.trim() !== '') {
@@ -505,13 +728,13 @@ class PDFGenerator {
     // Add title if provided
     if (title) {
       this.doc.setFontSize(FONTS.h3.size);
-      this.doc.setFont('helvetica', FONTS.h3.weight);
+      this.doc.setFont(FONT.family, FONTS.h3.weight);
       this.doc.setTextColor(...COLORS.primary.blue);
       this.doc.text(title, LAYOUT.margin.left, this.currentY);
       this.currentY += 8;
     }
 
-    // Add image
+    // Add image — 'NONE' compression preserves full pixel fidelity
     const imgData = canvas.toDataURL('image/png');
     this.doc.addImage(
       imgData,
@@ -521,7 +744,7 @@ class PDFGenerator {
       imgWidth,
       imgHeight,
       undefined,
-      'FAST'
+      'NONE'
     );
 
     this.currentY += imgHeight + LAYOUT.spacing.section;
@@ -546,13 +769,13 @@ class PDFGenerator {
 
     // Add title
     this.doc.setFontSize(FONTS.h3.size);
-    this.doc.setFont('helvetica', FONTS.h3.weight);
+    this.doc.setFont(FONT.family, FONTS.h3.weight);
     this.doc.setTextColor(...COLORS.primary.blue);
     this.doc.text(title, x, y);
 
     // Add image
     const imgData = canvas.toDataURL('image/png');
-    this.doc.addImage(imgData, 'PNG', x, y + 8, width, imgHeight, undefined, 'FAST');
+    this.doc.addImage(imgData, 'PNG', x, y + 8, width, imgHeight, undefined, 'NONE');
   }
 
   /**
@@ -646,7 +869,7 @@ class PDFGenerator {
     // Commit info box
     this.checkPageBreak(15);
     this.doc.setFontSize(FONTS.small.size);
-    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFont(FONT.family, 'normal');
     this.doc.setTextColor(...COLORS.neutral.medium);
     this.doc.text(`Commit SHA: ${data.commitSha}`, LAYOUT.margin.left, this.currentY);
     this.currentY += LAYOUT.spacing.section;
@@ -682,28 +905,104 @@ class PDFGenerator {
  */
 
 /**
- * Capture all charts in the DOM as canvas elements
- * Uses html2canvas to convert chart components to images
+ * Prepare a Recharts SVG for pdf rendering via svg2pdf.
+ * Walks the element tree and resolves all `currentColor` references and CSS
+ * class-based colours into explicit fill/stroke attributes so the cloned SVG
+ * renders correctly when detached from the document stylesheet.
  */
-async function captureCharts(): Promise<Map<string, HTMLCanvasElement>> {
+function prepareRechartsForPDF(svgEl: SVGElement): SVGElement {
+  const clone = svgEl.cloneNode(true) as SVGElement;
+
+  function resolveNode(src: Element, dst: Element): void {
+    const computed = window.getComputedStyle(src);
+    const d = dst as SVGElement;
+
+    // Resolve `currentColor` on fill / stroke attributes
+    if (d.getAttribute('fill') === 'currentColor') {
+      d.setAttribute('fill', computed.color);
+    }
+    if (d.getAttribute('stroke') === 'currentColor') {
+      d.setAttribute('stroke', computed.color);
+    }
+
+    // For text / tspan elements Recharts sets colour via CSS class, not attribute.
+    // Inline the computed fill so the text stays visible in the standalone SVG.
+    if (src.tagName === 'text' || src.tagName === 'tspan') {
+      const computedFill = computed.fill;
+      const hasFill = d.hasAttribute('fill') && d.getAttribute('fill') !== 'none';
+      if (!hasFill) {
+        // Prefer computed fill; fall back to color (what currentColor resolves to)
+        d.setAttribute('fill', computedFill && computedFill !== 'rgba(0, 0, 0, 0)' ? computedFill : computed.color);
+      }
+    }
+
+    // Strip className — CSS classes are meaningless in a detached SVG
+    d.removeAttribute('class');
+
+    for (let i = 0; i < src.children.length; i++) {
+      if (dst.children[i]) resolveNode(src.children[i], dst.children[i]);
+    }
+  }
+
+  resolveNode(svgEl, clone);
+
+  const rect = svgEl.getBoundingClientRect();
+  const w = rect.width || svgEl.clientWidth || 400;
+  const h = rect.height || svgEl.clientHeight || 200;
+  clone.setAttribute('width', String(w));
+  clone.setAttribute('height', String(h));
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+  return clone;
+}
+
+/**
+ * Capture all charts in the DOM.
+ * - Recharts charts (has svg.recharts-surface): extract as vector SVG via svg2pdf.
+ * - HTML charts (WorkloadHeatmap, etc.): clean html2canvas capture, card stripped.
+ */
+async function captureCharts(): Promise<Map<string, HTMLCanvasElement | SVGElement>> {
   const chartElements = document.querySelectorAll('[data-chart-id]');
-  const capturedCharts = new Map<string, HTMLCanvasElement>();
+  const capturedCharts = new Map<string, HTMLCanvasElement | SVGElement>();
 
   for (const element of Array.from(chartElements)) {
     const chartId = element.getAttribute('data-chart-id');
     if (!chartId) continue;
 
     try {
-      // Capture with high quality settings
+      // ── SVG path: Recharts renders svg.recharts-surface ──────────────────────
+      // We target this specifically — NOT querySelector('svg') which would pick
+      // up Lucide icon SVGs (InfoTooltip, badges) before the chart surface.
+      const rechartsSVG = element.querySelector('svg.recharts-surface') as SVGElement | null;
+      if (rechartsSVG) {
+        const prepared = prepareRechartsForPDF(rechartsSVG);
+        capturedCharts.set(chartId, prepared);
+        console.log(`✓ Captured vector chart: ${chartId}`);
+        continue;
+      }
+
+      // ── Raster path: HTML-based charts (heatmap, distribution grid, etc.) ───
       const canvas = await html2canvas(element as HTMLElement, {
-        scale: 2, // High DPI for crisp charts
-        backgroundColor: '#ffffff', // White background for PDF
+        scale: 4,
+        backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
+        imageTimeout: 0,
+        onclone: (clonedDoc, clonedEl) => {
+          clonedDoc.documentElement.classList.remove('dark');
+          // Strip card wrapper styling so the chart renders clean (no rounded
+          // corners, shadows, backdrop-blur leaking into the PDF image)
+          clonedEl.style.borderRadius = '0';
+          clonedEl.style.boxShadow = 'none';
+          clonedEl.style.border = 'none';
+          clonedEl.style.backdropFilter = 'none';
+          clonedEl.style.background = '#ffffff';
+          clonedEl.style.padding = '12px';
+        },
       });
 
       capturedCharts.set(chartId, canvas);
-      console.log(`✓ Captured chart: ${chartId}`);
+      console.log(`✓ Captured raster chart: ${chartId}`);
     } catch (error) {
       console.warn(`Failed to capture chart ${chartId}:`, error);
     }
@@ -712,12 +1011,346 @@ async function captureCharts(): Promise<Map<string, HTMLCanvasElement>> {
   return capturedCharts;
 }
 
+// ── Helper: render one chart block (constrained height, centered) ─────────────
+async function addChartBlock(
+  generator: PDFGenerator,
+  chart: HTMLCanvasElement | SVGElement,
+  title: string,
+  maxHeight: number
+): Promise<void> {
+  // Pre-compute chart dimensions BEFORE drawing anything — this lets us call
+  // checkPageBreak for the entire block (band + chart) at once, preventing the
+  // "orphaned band title on one page, chart on the next" bug.
+  let drawW: number;
+  let drawH: number;
+  if (chart instanceof SVGElement) {
+    const svgW = parseFloat(chart.getAttribute('width') || '400');
+    const svgH = parseFloat(chart.getAttribute('height') || '200');
+    const aspect = svgH / svgW;
+    drawW = generator.contentWidth;
+    drawH = drawW * aspect;
+    if (drawH > maxHeight) { drawH = maxHeight; drawW = drawH / aspect; }
+  } else {
+    drawW = generator.contentWidth;
+    drawH = (chart.height * drawW) / chart.width;
+    if (drawH > maxHeight) { drawH = maxHeight; drawW = (chart.width * drawH) / chart.height; }
+  }
+
+  const labelBandH = 8;
+  // Ensure band + chart fit together — never split the title from its chart
+  generator.checkPageBreak(labelBandH + 4 + drawH + 10);
+
+  // Mini chapter-band: lighter variant of addSection() (8mm vs 11mm, 2mm bar vs 3mm)
+  generator.doc.setFillColor(245, 247, 255); // softer than indigo-50 — less boxy
+  generator.doc.rect(LAYOUT.margin.left, generator.currentY, generator.contentWidth, labelBandH, 'F');
+  generator.doc.setFillColor(99, 102, 241);
+  generator.doc.rect(LAYOUT.margin.left, generator.currentY, 2, labelBandH, 'F');
+  generator.doc.setFontSize(9);
+  generator.doc.setFont(FONT.family, 'bold');
+  generator.doc.setTextColor(17, 24, 39);
+  generator.doc.text(title, LAYOUT.margin.left + 6, generator.currentY + 5.5);
+  generator.currentY += labelBandH + 4;
+
+  const xOff = LAYOUT.margin.left + (generator.contentWidth - drawW) / 2;
+  if (chart instanceof SVGElement) {
+    await generator.doc.svg(chart, { x: xOff, y: generator.currentY, width: drawW, height: drawH });
+  } else {
+    generator.doc.addImage(chart.toDataURL('image/png'), 'PNG', xOff, generator.currentY, drawW, drawH, undefined, 'NONE');
+  }
+  generator.currentY += drawH + 10;
+}
+
+// ── Helper: draw a premium KPI card ───────────────────────────────────────────
+// Clean top-accent-bar design. No sparklines — value + label + subtitle only.
+function drawKpiCard(
+  doc: jsPDF,
+  x: number, y: number, w: number, h: number,
+  label: string, value: string, subtitle: string,
+  accent: [number, number, number],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _sparkline?: number[]  // kept for API compat, intentionally unused
+): void {
+  // ── White card with hairline border ──────────────────────────────────────
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(x, y, w, h, 1.5, 1.5, 'F');
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(x, y, w, h, 1.5, 1.5, 'S');
+
+  // ── Top accent bar (2.5mm, full width, rounded top corners only) ─────────
+  doc.setFillColor(accent[0], accent[1], accent[2]);
+  // Top rounded portion
+  doc.roundedRect(x, y, w, 2.5, 1.5, 0, 'F');
+  // Fill bottom 1mm of accent bar to make it flush (no gap from rounding)
+  doc.rect(x, y + 1.5, w, 1, 'F');
+
+  const padX = x + 5;
+
+  // ── Label — 6pt uppercase, muted, tracked ────────────────────────────────
+  doc.setFontSize(6);
+  doc.setFont(FONT.family, 'bold');
+  doc.setTextColor(156, 163, 175); // gray-400
+  doc.setCharSpace(0.8);
+  doc.text(label.toUpperCase(), padX, y + 8.5);
+  doc.setCharSpace(0); // reset
+
+  // ── Value — 18pt, near-black, anchored so it never overflows ─────────────
+  doc.setFontSize(18);
+  doc.setFont(FONT.family, 'bold');
+  doc.setTextColor(17, 24, 39);
+  doc.text(value, padX, y + 19, { maxWidth: w - 10 });
+
+  // ── Subtitle — 6.5pt, single line ────────────────────────────────────────
+  doc.setFontSize(6.5);
+  doc.setFont(FONT.family, 'normal');
+  doc.setTextColor(156, 163, 175);
+  doc.text(subtitle, padX, y + 25, { maxWidth: w - 10 });
+}
+
+function accentForVelocity(v: number): [number, number, number] {
+  return v > 0 ? [16, 185, 129] : v < 0 ? [245, 158, 11] : [59, 130, 246];
+}
+function accentForOnTime(v: number): [number, number, number] {
+  return v >= 80 ? [16, 185, 129] : v >= 60 ? [245, 158, 11] : [239, 68, 68];
+}
+function accentForCFR(v: number): [number, number, number] {
+  return v <= 10 ? [16, 185, 129] : v <= 25 ? [245, 158, 11] : [239, 68, 68];
+}
+function accentForRisk(v: number): [number, number, number] {
+  return v <= 30 ? [16, 185, 129] : v <= 60 ? [245, 158, 11] : [239, 68, 68];
+}
+
+// ── Native Heatmap Drawing ────────────────────────────────────────────────────
+
+function getHeatmapColorRGB(value: number): [number, number, number] {
+  if (value === 0) return [243, 244, 246]; // gray-100
+  if (value <= 3)  return [224, 231, 255]; // indigo-100
+  if (value <= 6)  return [165, 180, 252]; // indigo-300
+  if (value <= 9)  return [99, 102, 241];  // indigo-500
+  return [67, 56, 202];                    // indigo-700
+}
+
+/**
+ * Draw the team workload heatmap natively in jsPDF — no screenshot, vector sharp.
+ * Returns the total height consumed (mm) so the caller can advance currentY.
+ */
+function drawHeatmapNative(
+  doc: jsPDF,
+  x: number, y: number, w: number,
+  data: { users: string[]; days: string[]; data: number[][] }
+): number {
+  const nDays  = data.days.length;
+  const nUsers = data.users.length;
+  if (nDays === 0 || nUsers === 0) return 0;
+
+  // Layout constants
+  const userColW  = 33;   // left user-name column
+  const totalColW = 22;   // right totals column
+  const gapL      = 3;    // gap user col → cells
+  const gapR      = 3;    // gap cells → totals
+  const cellAreaW = w - userColW - gapL - gapR - totalColW;
+  const cellGap   = nDays > 14 ? 0.3 : 0.8;
+  const cellW     = Math.max(2, (cellAreaW - cellGap * (nDays - 1)) / nDays);
+  const cellH     = 6.5;
+  const rowGap    = 1;
+  const headerH   = 6;
+
+  const cellsX  = x + userColW + gapL;
+  const totalX  = x + w - totalColW;
+
+  // ── Day headers ─────────────────────────────────────────────────────────────
+  // Show every Nth label when cells are narrow
+  const labelEvery = cellW < 4 ? Math.ceil(7 / cellW) : 1;
+  doc.setFontSize(5.5);
+  doc.setFont(FONT.family, 'normal');
+  doc.setTextColor(150, 155, 163);
+  data.days.forEach((day, dayIdx) => {
+    if (dayIdx % labelEvery !== 0) return;
+    let label: string;
+    if (day.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      label = String(new Date(day + 'T00:00:00').getDate());
+    } else {
+      label = day.length > 3 ? day.slice(0, 3) : day;
+    }
+    const cx = cellsX + dayIdx * (cellW + cellGap) + cellW / 2;
+    doc.text(label, cx, y + headerH - 1, { align: 'center' });
+  });
+
+  // "Total" column header
+  doc.setFontSize(5.5);
+  doc.setFont(FONT.family, 'bold');
+  doc.setTextColor(150, 155, 163);
+  doc.text('Total', totalX + (totalColW - 10) / 2 + 2, y + headerH - 1, { align: 'center' });
+
+  // ── Per-user totals ──────────────────────────────────────────────────────────
+  const userTotals = data.users.map((_, i) =>
+    (data.data[i] ?? []).reduce((sum, v) => sum + v, 0)
+  );
+  const maxTotal = Math.max(...userTotals, 1);
+
+  // ── User rows ────────────────────────────────────────────────────────────────
+  data.users.forEach((user, userIdx) => {
+    const rowY = y + headerH + rowGap + userIdx * (cellH + rowGap);
+
+    // User name — truncate to fit column
+    doc.setFontSize(7);
+    doc.setFont(FONT.family, 'normal');
+    doc.setTextColor(55, 65, 81);
+    const maxChars = Math.floor(userColW / 1.85);
+    const label = user.length > maxChars ? user.slice(0, maxChars - 1) + '\u2026' : user;
+    doc.text(label, x, rowY + cellH / 2 + 2.2);
+
+    // Heatmap cells
+    (data.data[userIdx] ?? []).forEach((value, dayIdx) => {
+      const cx = cellsX + dayIdx * (cellW + cellGap);
+      const rgb = getHeatmapColorRGB(value);
+      doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+      const r = Math.min(0.8, cellW / 4);
+      doc.roundedRect(cx, rowY, cellW, cellH, r, r, 'F');
+    });
+
+    // Total bar
+    const total   = userTotals[userIdx];
+    const barMaxW = totalColW - 12;
+    const barFill = barMaxW * (total / maxTotal);
+    // Track
+    doc.setFillColor(237, 238, 242);
+    doc.roundedRect(totalX, rowY + 2, barMaxW, cellH - 4, 0.5, 0.5, 'F');
+    // Fill
+    if (barFill > 0) {
+      doc.setFillColor(99, 102, 241);
+      doc.roundedRect(totalX, rowY + 2, Math.max(0.8, barFill), cellH - 4, 0.5, 0.5, 'F');
+    }
+    // Number
+    doc.setFontSize(6.5);
+    doc.setFont(FONT.family, 'bold');
+    doc.setTextColor(55, 65, 81);
+    doc.text(String(total), totalX + totalColW - 2, rowY + cellH / 2 + 2.2, { align: 'right' });
+  });
+
+  // ── Legend ───────────────────────────────────────────────────────────────────
+  const legendY = y + headerH + rowGap + nUsers * (cellH + rowGap) + 2;
+  const legendSwatches: Array<[number, number, number]> = [
+    [243, 244, 246], [224, 231, 255], [165, 180, 252], [99, 102, 241], [67, 56, 202],
+  ];
+  doc.setFontSize(5.5);
+  doc.setFont(FONT.family, 'normal');
+  doc.setTextColor(150, 155, 163);
+  doc.text('Less', x, legendY + 3.2);
+  let lx = x + 8;
+  legendSwatches.forEach(rgb => {
+    doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+    doc.roundedRect(lx, legendY, 4, 4, 0.5, 0.5, 'F');
+    lx += 5;
+  });
+  doc.text('More', lx + 1, legendY + 3.2);
+
+  return headerH + rowGap + nUsers * (cellH + rowGap) + 9; // total height including legend
+}
+
+// ── Native Task Distribution Drawing ─────────────────────────────────────────
+
+const TASK_DIST_COLORS: Record<string, [number, number, number]> = {
+  Features:    [59, 130, 246],
+  Bugs:        [239, 68, 68],
+  Chores:      [245, 158, 11],
+  Maintenance: [139, 92, 246],
+  'Tech Debt': [99, 102, 241],
+  'New Value': [16, 185, 129],
+};
+const TASK_DIST_DEFAULT: [number, number, number] = [107, 114, 128];
+
+/**
+ * Draw the task distribution chart natively in jsPDF — stacked bar + legend.
+ * Returns total height consumed (mm).
+ */
+function drawTaskDistributionNative(
+  doc: jsPDF,
+  x: number, y: number, w: number,
+  data: { labels: string[]; datasets: Array<{ label: string; data: number[]; color: string }> }
+): number {
+  const segments = data.labels
+    .map((label, idx) => ({
+      name: label,
+      value: data.datasets[0]?.data[idx] ?? 0,
+      rgb: TASK_DIST_COLORS[label] ?? TASK_DIST_DEFAULT,
+    }))
+    .filter(s => s.value > 0);
+
+  if (segments.length === 0) return 0;
+
+  const total = segments.reduce((sum, s) => sum + s.value, 0);
+  let curY = y;
+
+  // ── Hero total ───────────────────────────────────────────────────────────
+  doc.setFontSize(18);
+  doc.setFont(FONT.family, 'bold');
+  doc.setTextColor(17, 24, 39);
+  doc.text(String(total), x, curY + 8);
+
+  doc.setFontSize(6.5);
+  doc.setFont(FONT.family, 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.text('Total Tasks', x, curY + 14);
+
+  curY += 18;
+
+  // ── Stacked horizontal bar — flat rects, zero rounding, zero artifacts ───
+  const barH = 4;
+  // Gray track underneath (gives visual base)
+  doc.setFillColor(237, 238, 242);
+  doc.rect(x, curY, w, barH, 'F');
+  // Segments — last one forced to exact right edge to prevent gap/overflow
+  let barX = x;
+  segments.forEach((seg, i) => {
+    const isLast = i === segments.length - 1;
+    const segW = isLast
+      ? Math.max(0.1, x + w - barX)        // fill exactly to right edge
+      : Math.max(0.1, (seg.value / total) * w);
+    doc.setFillColor(seg.rgb[0], seg.rgb[1], seg.rgb[2]);
+    doc.rect(barX, curY, segW, barH, 'F');
+    barX += isLast ? 0 : segW;
+  });
+
+  curY += barH + 6;
+
+  // ── Legend rows ───────────────────────────────────────────────────────────
+  segments.forEach(seg => {
+    const pct = ((seg.value / total) * 100).toFixed(1);
+
+    // Color dot
+    doc.setFillColor(seg.rgb[0], seg.rgb[1], seg.rgb[2]);
+    doc.circle(x + 2.5, curY + 2.5, 1.8, 'F');
+
+    // Category name
+    doc.setFontSize(8);
+    doc.setFont(FONT.family, 'normal');
+    doc.setTextColor(55, 65, 81);
+    doc.text(seg.name, x + 7, curY + 4.5);
+
+    // Count
+    doc.setFontSize(8);
+    doc.setFont(FONT.family, 'bold');
+    doc.setTextColor(17, 24, 39);
+    doc.text(String(seg.value), x + w * 0.66, curY + 4.5);
+
+    // Percentage
+    doc.setFontSize(7.5);
+    doc.setFont(FONT.family, 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(`${pct}%`, x + w, curY + 4.5, { align: 'right' });
+
+    curY += 7.5;
+  });
+
+  return curY - y;
+}
+
 /**
  * Enhanced Manager Report PDF with Charts
- * Implements 3-page enterprise layout:
- * - Page 1: Executive Summary + Key Metrics (Big Numbers)
- * - Page 2: Detailed Analysis + Charts (Investment & DORA)
- * - Page 3: Predictions + Charts (CFD & Bottlenecks)
+ * Implements enterprise layout optimized per report type.
+ * Org reports: KPI cards → CFD → WipTrend+TaskDist (2-col) → Heatmap → Text sections
+ * Other reports: legacy single-column chart sequence
  */
 export async function generateManagerReportPDF(
   report: {
@@ -726,18 +1359,67 @@ export async function generateManagerReportPDF(
     type: string;
     created_at?: string;
     cached?: boolean;
+    chartData?: {
+      pulse?: {
+        velocityRate: { value: number; sparkline: number[] };
+        cycleTime: { value: number; sparkline: number[] };
+        onTimeDelivery: { value: number; sparkline: number[] };
+        riskScore: { value: number; sparkline: number[] };
+        changeFailureRate?: { value: number; sparkline: number[] };
+      };
+      heatmap?: { users: string[]; days: string[]; data: number[][] };
+      investment?: {
+        labels: string[];
+        datasets: Array<{ label: string; data: number[]; color: string }>;
+      };
+    };
   },
   organizationName: string,
   period: string,
-  reportTypeName: string
+  reportTypeName: string,
+  periodType?: 'week' | 'month' | 'quarter'
 ): Promise<void> {
+  // Calculate partial period progress for visual indicators
+  const partialInfo = (() => {
+    if (!periodType) return null;
+    const now = new Date();
+    if (periodType === 'week') {
+      const dow = now.getDay();
+      const elapsed = dow === 0 ? 7 : dow;
+      return { elapsed, total: 7, isPartial: elapsed < 7 };
+    } else if (periodType === 'month') {
+      const elapsed = now.getDate();
+      const total = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      return { elapsed, total, isPartial: elapsed < total };
+    } else if (periodType === 'quarter') {
+      const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+      const qStart = new Date(now.getFullYear(), qStartMonth, 1);
+      const qEnd = new Date(now.getFullYear(), qStartMonth + 3, 0);
+      const total = Math.floor((qEnd.getTime() - qStart.getTime()) / 86400000) + 1;
+      const elapsed = Math.floor((now.getTime() - qStart.getTime()) / 86400000) + 1;
+      return { elapsed, total, isPartial: elapsed < total };
+    }
+    return null;
+  })();
+  // Step 0: Load Inter font (fetches once, cached for all subsequent PDFs)
+  const _tmpDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  await loadInterFont(_tmpDoc); // sets FONT.family = 'Inter' on success
+
   // Step 1: Capture all charts
   console.log('📊 Capturing charts for PDF...');
   const charts = await captureCharts();
   console.log(`✓ Captured ${charts.size} charts`);
 
-  // Step 2: Generate PDF with charts
+  // Step 2: Generate PDF
   const generator = new PDFGenerator();
+
+  // ========== COVER PAGE ==========
+  generator.addCoverPage(
+    reportTypeName || 'Management Intelligence Report',
+    organizationName,
+    period,
+    report.type
+  );
 
   const data: ManagerReportData = {
     type: 'manager',
@@ -751,81 +1433,289 @@ export async function generateManagerReportPDF(
     cached: report.cached,
   };
 
-  // Generate report with chart integration
+  const partialBadge = partialInfo?.isPartial ? '  [PARTIAL]' : '';
   const metadata: BaseReportMetadata = {
     title: data.title || 'Management Intelligence Report',
-    subtitle: `${data.organizationName} - ${data.period}`,
+    subtitle: `${data.organizationName} — ${data.period}${partialBadge}`,
     generatedAt: data.generatedAt,
     cached: data.cached,
   };
 
   generator.addHeader(metadata);
   generator.addFooter();
+  generator.setRunningHeader(data.title || 'Management Report', data.organizationName);
 
-  // ========== PAGE 1: EXECUTIVE SUMMARY & KEY METRICS ==========
+  // ========== EXECUTIVE SUMMARY ==========
   generator.addSummaryBox('Executive Summary', data.summary);
 
-
   // ========== CHART EXTRACTION ==========
-  // Get all available charts from html2canvas capture
+  const realCfdChart  = charts.get('real-cfd-area');
+  const wipTrendChart = charts.get('wip-trend-chart');
+  const taskDistChart = charts.get('task-distribution');
+  const heatmapChart  = charts.get('workload-heatmap');
+  // Legacy chart IDs (bottleneck / user performance reports)
   const investmentChart = charts.get('investment-profile');
   const throughputChart = charts.get('throughput-trend');
-  const radarChart = charts.get('radar-metrics');
-  const cfdChart = charts.get('cfd-area');
-  const cycleTimeChart = charts.get('scatter-cycle');
-  const burndownChart = charts.get('burndown-predictive');
-  const heatmapChart = charts.get('workload-heatmap');
-  const realCfdChart = charts.get('real-cfd-chart');
+  const radarChart      = charts.get('radar-metrics');
+  const cfdChart        = charts.get('cfd-area');
+  const cycleTimeChart  = charts.get('scatter-cycle');
+  const burndownChart   = charts.get('burndown-predictive');
 
-  // ========== SECTION: UNIFIED CONSTRAINED CHARTS ==========
-  // Single-Column Layout with Object-Fit Contain Logic
-  // Each chart respects its maxHeight constraint; if exceeded, width is recalculated
-  // proportionally and the image is centered horizontally for premium aesthetics
-  const isBottleneckReport = reportTypeName.toLowerCase().includes('bottleneck');
+  const reportNameLower = reportTypeName.toLowerCase();
+  const isOrgReport = reportNameLower.includes('weekly')
+                   || reportNameLower.includes('monthly')
+                   || reportNameLower.includes('quarterly');
+  const isBottleneckReport = reportNameLower.includes('bottleneck');
 
-  const chartSequence: Array<{ canvas: HTMLCanvasElement; title: string; maxHeight: number }> = [
-    investmentChart && { canvas: investmentChart, title: 'Investment Profile', maxHeight: 75 },
-    cycleTimeChart && { canvas: cycleTimeChart, title: 'Cycle Time Analysis', maxHeight: 90 },
-    radarChart && { canvas: radarChart, title: 'Code Review Metrics', maxHeight: 90 },
-    throughputChart && { canvas: throughputChart, title: 'Throughput Trend', maxHeight: 90 },
-    burndownChart && { canvas: burndownChart, title: 'Predictive Burndown', maxHeight: 100 },
-    !isBottleneckReport && heatmapChart && { canvas: heatmapChart, title: 'Workload Heatmap', maxHeight: 85 },
-    cfdChart && { canvas: cfdChart, title: 'Cumulative Flow Diagram', maxHeight: 110 },
-    realCfdChart && { canvas: realCfdChart, title: 'Real-Time Cumulative Flow', maxHeight: 110 },
-  ].filter((item): item is { canvas: HTMLCanvasElement; title: string; maxHeight: number } => Boolean(item));
+  if (isOrgReport) {
+    // ── 1. KPI Cards — 3+2 grid layout ───────────────────────────────────────
+    const pulse = report.chartData?.pulse;
+    if (pulse) {
+      const gap   = 4;
+      const cardH = 28;
 
-  for (const chart of chartSequence) {
-    let imgWidth = generator.contentWidth;
-    let imgHeight = (chart.canvas.height * imgWidth) / chart.canvas.width;
+      // Section label
+      generator.doc.setFontSize(8);
+      generator.doc.setFont(FONT.family, 'bold');
+      generator.doc.setTextColor(156, 163, 175); // muted gray, not blue
+      generator.doc.text('KEY METRICS', LAYOUT.margin.left, generator.currentY);
+      generator.currentY += 5;
 
-    // Object-Fit Contain Logic (Clamp Height & Recalculate Width)
-    if (imgHeight > chart.maxHeight) {
-      imgHeight = chart.maxHeight;
-      imgWidth = (chart.canvas.width * imgHeight) / chart.canvas.height;
+      // ── Row 1: 3 equal cards ─────────────────────────────────────────────
+      const row1W = (generator.contentWidth - gap * 2) / 3;
+      generator.checkPageBreak(cardH + gap + cardH + 12);
+      const row1Y = generator.currentY;
+      const startX = LAYOUT.margin.left;
+
+      drawKpiCard(generator.doc, startX,                    row1Y, row1W, cardH,
+        'Velocity Rate',
+        `${pulse.velocityRate.value > 0 ? '+' : ''}${pulse.velocityRate.value}%`,
+        'tasks / week delta',
+        accentForVelocity(pulse.velocityRate.value));
+
+      drawKpiCard(generator.doc, startX + row1W + gap,      row1Y, row1W, cardH,
+        'On-Time Delivery',
+        `${pulse.onTimeDelivery.value}%`,
+        '% tasks on schedule',
+        accentForOnTime(pulse.onTimeDelivery.value));
+
+      drawKpiCard(generator.doc, startX + (row1W + gap) * 2, row1Y, row1W, cardH,
+        'Cycle Time',
+        `${pulse.cycleTime.value}d`,
+        'avg days per task',
+        [59, 130, 246]);
+
+      generator.currentY += cardH + gap;
+
+      // ── Row 2: 2 wider cards ─────────────────────────────────────────────
+      const row2W = (generator.contentWidth - gap) / 2;
+      const row2Y = generator.currentY;
+
+      drawKpiCard(generator.doc, startX,            row2Y, row2W, cardH,
+        'Change Failure Rate',
+        `${pulse.changeFailureRate?.value ?? 0}%`,
+        'failed deployments',
+        accentForCFR(pulse.changeFailureRate?.value ?? 0));
+
+      drawKpiCard(generator.doc, startX + row2W + gap, row2Y, row2W, cardH,
+        'Risk Score',
+        `${pulse.riskScore.value}`,
+        'composite risk index',
+        accentForRisk(pulse.riskScore.value));
+
+      generator.currentY += cardH + 10;
+
+      // ── Period progress bar — slim, unobtrusive ───────────────────────────
+      // Reduced to 3mm so it doesn't push the CFD off-page.
+      if (partialInfo) {
+        const barW = generator.contentWidth;
+        const barH = 3;
+        const fillW = Math.max(3, Math.round(barW * (partialInfo.elapsed / partialInfo.total)));
+        const pct = Math.round((partialInfo.elapsed / partialInfo.total) * 100);
+
+        generator.checkPageBreak(12);
+
+        const fillColor: [number, number, number] = partialInfo.isPartial ? [99, 102, 241] : [16, 185, 129];
+        const trackColor: [number, number, number] = [229, 231, 235];
+
+        // Single-line label: "Day 1 / 7  ·  14% elapsed" — left to right
+        generator.doc.setFontSize(6.5);
+        generator.doc.setFont(FONT.family, 'bold');
+        generator.doc.setTextColor(...fillColor);
+        generator.doc.text(
+          `Day ${partialInfo.elapsed} / ${partialInfo.total}`,
+          LAYOUT.margin.left,
+          generator.currentY + 3.5
+        );
+        generator.doc.setFont(FONT.family, 'normal');
+        generator.doc.setTextColor(150, 155, 163);
+        generator.doc.text(
+          `${pct}% of period elapsed`,
+          LAYOUT.margin.left + barW,
+          generator.currentY + 3.5,
+          { align: 'right' }
+        );
+
+        generator.currentY += 6;
+
+        // Track + fill — slim pill
+        generator.doc.setFillColor(...trackColor);
+        generator.doc.roundedRect(LAYOUT.margin.left, generator.currentY, barW, barH, 1, 1, 'F');
+        generator.doc.setFillColor(...fillColor);
+        generator.doc.roundedRect(LAYOUT.margin.left, generator.currentY, fillW, barH, 1, 1, 'F');
+
+        generator.currentY += barH + 8;
+      } else {
+        generator.currentY += 4;
+      }
     }
 
-    // Check if chart fits on current page
-    generator.checkPageBreak(imgHeight + 15);
+    // ── 2. CFD — full width ───────────────────────────────────────────────────
+    if (realCfdChart) {
+      await addChartBlock(generator, realCfdChart, 'Cumulative Flow Diagram', 74);
+    }
 
-    // Print Title
-    generator.doc.setFontSize(FONTS.h3.size);
-    generator.doc.setFont('Helvetica', FONTS.h3.weight);
-    generator.doc.setTextColor(...COLORS.primary.blue);
-    generator.doc.text(chart.title, LAYOUT.margin.left, generator.currentY);
+    // ── 3. WipTrend (left) + TaskDistribution native (right) — 2 columns ────────
+    const taskDistData = report.chartData?.investment;
+    const hasLeft  = !!wipTrendChart;
+    const hasRight = !!taskDistData && taskDistData.labels.length > 0;
 
-    // Print Image Centered (Object-Fit Contain)
-    const xOffset = LAYOUT.margin.left + (generator.contentWidth - imgWidth) / 2;
-    const imgData = chart.canvas.toDataURL('image/png');
-    generator.doc.addImage(imgData, 'PNG', xOffset, generator.currentY + 8, imgWidth, imgHeight, undefined, 'FAST');
+    if (hasLeft || hasRight) {
+      const colW   = (generator.contentWidth - 8) / 2;
+      const leftX  = LAYOUT.margin.left;
+      const rightX = LAYOUT.margin.left + colW + 8;
 
-    generator.currentY += imgHeight + 14 + LAYOUT.spacing.section;
+      // Estimate right column height (native) for page break decision
+      const nRightSegments = hasRight
+        ? taskDistData!.labels.filter((_, i) => (taskDistData!.datasets[0]?.data[i] ?? 0) > 0).length
+        : 0;
+      const estRightH = hasRight ? 18 + 11 + nRightSegments * 7.5 : 0; // hero + bar + rows
+
+      // Estimate left column height from SVG dimensions
+      const maxColH = 78;
+      let leftDrawH = 0;
+      let leftDrawW = colW;
+      if (hasLeft && wipTrendChart) {
+        const svgW = parseFloat(wipTrendChart instanceof SVGElement
+          ? (wipTrendChart.getAttribute('width') || '400')
+          : String((wipTrendChart as HTMLCanvasElement).width));
+        const svgH = parseFloat(wipTrendChart instanceof SVGElement
+          ? (wipTrendChart.getAttribute('height') || '200')
+          : String((wipTrendChart as HTMLCanvasElement).height));
+        leftDrawH = Math.min((svgH / svgW) * colW, maxColH);
+        leftDrawW = leftDrawH < (svgH / svgW) * colW ? (svgW / svgH) * leftDrawH : colW;
+      }
+      const rowH = Math.max(leftDrawH, estRightH, 40);
+
+      generator.checkPageBreak(rowH + 22);
+
+      // Mini-band labels for each column — same system as addChartBlock
+      const colLabelH = 8;
+      generator.doc.setFontSize(9);
+      generator.doc.setFont(FONT.family, 'bold');
+      generator.doc.setTextColor(17, 24, 39);
+      if (hasLeft) {
+        generator.doc.setFillColor(245, 247, 255);
+        generator.doc.rect(leftX, generator.currentY, colW, colLabelH, 'F');
+        generator.doc.setFillColor(99, 102, 241);
+        generator.doc.rect(leftX, generator.currentY, 2, colLabelH, 'F');
+        generator.doc.text('Throughput Trend', leftX + 6, generator.currentY + 5.5);
+      }
+      if (hasRight) {
+        generator.doc.setFillColor(245, 247, 255);
+        generator.doc.rect(rightX, generator.currentY, colW, colLabelH, 'F');
+        generator.doc.setFillColor(99, 102, 241);
+        generator.doc.rect(rightX, generator.currentY, 2, colLabelH, 'F');
+        generator.doc.text('Task Distribution', rightX + 6, generator.currentY + 5.5);
+      }
+      generator.currentY += colLabelH + 4;
+
+      // Left: WipTrend chart (SVG or canvas)
+      if (hasLeft && wipTrendChart) {
+        if (wipTrendChart instanceof SVGElement) {
+          await generator.doc.svg(wipTrendChart, { x: leftX, y: generator.currentY, width: leftDrawW, height: leftDrawH });
+        } else {
+          generator.doc.addImage((wipTrendChart as HTMLCanvasElement).toDataURL('image/png'), 'PNG',
+            leftX, generator.currentY, leftDrawW, leftDrawH, undefined, 'NONE');
+        }
+      }
+
+      // Right: TaskDistribution — native vector, no screenshot
+      if (hasRight && taskDistData) {
+        drawTaskDistributionNative(generator.doc, rightX, generator.currentY, colW, taskDistData);
+      }
+
+      generator.currentY += rowH + 10;
+    }
+
+    // ── 4. Heatmap — native vector drawing (no screenshot) ───────────────────
+    const heatmapData = report.chartData?.heatmap;
+    if (heatmapData && heatmapData.users.length > 0) {
+      const cellH = 6.5, rowGap = 1, headerH = 6;
+      const estH = headerH + rowGap + heatmapData.users.length * (cellH + rowGap) + 25;
+      generator.checkPageBreak(estH);
+      // Mini-band label — consistent with addChartBlock style
+      const hmLabelH = 8;
+      generator.doc.setFillColor(245, 247, 255);
+      generator.doc.rect(LAYOUT.margin.left, generator.currentY, generator.contentWidth, hmLabelH, 'F');
+      generator.doc.setFillColor(99, 102, 241);
+      generator.doc.rect(LAYOUT.margin.left, generator.currentY, 2, hmLabelH, 'F');
+      generator.doc.setFontSize(9);
+      generator.doc.setFont(FONT.family, 'bold');
+      generator.doc.setTextColor(17, 24, 39);
+      generator.doc.text('Team Workload Heatmap', LAYOUT.margin.left + 6, generator.currentY + 5.5);
+      generator.currentY += hmLabelH + 4;
+      const drawn = drawHeatmapNative(
+        generator.doc,
+        LAYOUT.margin.left, generator.currentY, generator.contentWidth,
+        heatmapData
+      );
+      generator.currentY += drawn + 8;
+    } else if (heatmapChart) {
+      await addChartBlock(generator, heatmapChart, 'Team Workload Heatmap', 72);
+    }
+
+  } else {
+    // ── Legacy single-column sequence (bottleneck, user performance, etc.) ───
+    const chartSequence: Array<{ chart: HTMLCanvasElement | SVGElement; title: string; maxHeight: number }> = [
+      investmentChart && { chart: investmentChart, title: 'Investment Profile', maxHeight: 75 },
+      cycleTimeChart  && { chart: cycleTimeChart,  title: 'Cycle Time Analysis', maxHeight: 90 },
+      radarChart      && { chart: radarChart,      title: 'Code Review Metrics', maxHeight: 90 },
+      throughputChart && { chart: throughputChart, title: 'Throughput Trend', maxHeight: 90 },
+      burndownChart   && { chart: burndownChart,   title: 'Predictive Burndown', maxHeight: 100 },
+      !isBottleneckReport && heatmapChart && { chart: heatmapChart, title: 'Workload Heatmap', maxHeight: 85 },
+      cfdChart        && { chart: cfdChart,        title: 'Cumulative Flow Diagram', maxHeight: 110 },
+      realCfdChart    && { chart: realCfdChart,    title: 'Real-Time Cumulative Flow', maxHeight: 110 },
+    ].filter((item): item is { chart: HTMLCanvasElement | SVGElement; title: string; maxHeight: number } => Boolean(item));
+
+    for (const entry of chartSequence) {
+      await addChartBlock(generator, entry.chart, entry.title, entry.maxHeight);
+    }
   }
 
-  // ========== PAGE 3: TEXT SECTIONS ==========
-  // Add text sections after charts
+  // ========== TEXT SECTIONS ==========
   for (const section of data.sections) {
     generator.addSection(section.title, section.content);
   }
+
+  // ========== END OF REPORT MARKER ==========
+  generator.checkPageBreak(18);
+  generator.currentY += 10;
+  generator.doc.setDrawColor(220, 222, 228);
+  generator.doc.setLineWidth(0.3);
+  const endLineX1 = LAYOUT.margin.left + generator.contentWidth * 0.25;
+  const endLineX2 = LAYOUT.margin.left + generator.contentWidth * 0.75;
+  generator.doc.line(endLineX1, generator.currentY, endLineX2, generator.currentY);
+  generator.currentY += 4;
+  generator.doc.setFontSize(7.5);
+  generator.doc.setFont(FONT.family, 'normal');
+  generator.doc.setTextColor(180, 183, 190);
+  generator.doc.text(
+    'End of Report  ·  Generated by Aether AI',
+    LAYOUT.margin.left + generator.contentWidth / 2,
+    generator.currentY,
+    { align: 'center' }
+  );
 
   // Download
   const filename = `Aether_${reportTypeName.replace(/\s+/g, '_')}_${period}_${Date.now()}.pdf`;

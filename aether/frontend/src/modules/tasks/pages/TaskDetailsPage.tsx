@@ -27,6 +27,7 @@ import { CommentModal } from "../components/CommentModal";
 import { LinkCommitModal } from "../components/LinkCommitModal";
 import { CommitSelectionModal } from "../components/CommitSelectionModal";
 import { CommitCodeViewer } from "../components/CommitCodeViewer";
+
 import { AICommitExplanationCard } from "../components/AICommitExplanationCard";
 import { AICodeAnalysisCard } from "../components/AICodeAnalysisCard";
 import { AITaskReportCard } from "../components/AITaskReportCard";
@@ -51,6 +52,10 @@ export function TaskDetailsPage() {
     const [isArchiving, setIsArchiving] = useState(false);
     const [showArchiveDialog, setShowArchiveDialog] = useState(false);
     const [pinningCommentId, setPinningCommentId] = useState<string | null>(null);
+
+    // Code snippet editor state (lazy-loaded CodeMirror)
+    const [codeSnippet, setCodeSnippet] = useState('');
+    const [showCodeEditor, setShowCodeEditor] = useState(false);
 
     // Commit selection state
     const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
@@ -502,6 +507,8 @@ export function TaskDetailsPage() {
                                 className="flex-1 min-h-[300px]"
                             />
                         )}
+
+                     
                     </div>
                 </div>
 

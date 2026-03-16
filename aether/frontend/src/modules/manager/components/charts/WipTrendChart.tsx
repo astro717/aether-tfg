@@ -1,3 +1,4 @@
+import { useId, useRef, useState, useEffect } from 'react';
 import {
   ComposedChart,
   Bar,
@@ -6,7 +7,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   Cell,
   ReferenceLine,
 } from 'recharts';
@@ -24,16 +24,15 @@ interface WipTrendChartProps {
   className?: string;
 }
 
-function movingAvg(values: number[], window = 3): (number | null)[] {
+// Partial moving average — uses available data for first window-1 points so the
+// trend line starts from bar W1 rather than appearing mid-chart. W1 = 1-pt avg,
+// W2 = 2-pt avg, W3+ = full 3-pt avg. Honest enough, far better visually.
+function movingAvg(values: number[], window = 3): number[] {
   return values.map((_, i) => {
-    if (i < window - 1) return null;
-    const slice = values.slice(i - window + 1, i + 1);
-    return Math.round((slice.reduce((a, b) => a + b, 0) / window) * 10) / 10;
+    const slice = values.slice(Math.max(0, i - window + 1), i + 1);
+    return Math.round((slice.reduce((a, b) => a + b, 0) / slice.length) * 10) / 10;
   });
 }
-
-const GRADIENT_ID = 'throughputBarGradient';
-const GRADIENT_ID_PEAK = 'throughputBarGradientPeak';
 
 function getTrend(data: VelocityWeek[]): 'up' | 'down' | 'flat' {
   if (data.length < 2) return 'flat';
@@ -46,7 +45,7 @@ function getTrend(data: VelocityWeek[]): 'up' | 'down' | 'flat' {
 
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: Array<{ dataKey: string; value: number | null; name: string }>;
+  payload?: Array<{ dataKey: string; value: number; name: string }>;
   label?: string;
 }
 
@@ -68,7 +67,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
           <span className="text-sm font-bold text-white tabular-nums">{completed.value}</span>
         </div>
       )}
-      {avg && avg.value !== null && (
+      {avg && (
         <div className="flex items-center justify-between gap-6 pt-1 border-t border-white/10 mt-1">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-px bg-violet-400" />
@@ -81,7 +80,37 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   );
 }
 
+// px per bar when the chart overflows and becomes scrollable
+const BAR_PX = 52;
+// bar count threshold above which we enable horizontal scroll
+const SCROLL_AT = 14;
+
 export function WipTrendChart({ data, className = '' }: WipTrendChartProps) {
+  const uid = useId().replace(/:/g, '');
+  const gradientId = `throughputBarGradient-${uid}`;
+  const gradientIdPeak = `throughputBarGradientPeak-${uid}`;
+
+  // Measure the chart area so we can pass explicit dimensions to ComposedChart
+  // (required once we drop ResponsiveContainer for the scrollable case)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 200 });
+  const [atStart, setAtStart] = useState(false);
+  const [atEnd, setAtEnd] = useState(true);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setSize({
+        w: Math.round(entry.contentRect.width),
+        h: Math.round(entry.contentRect.height),
+      });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   if (data.length < 2) {
     return (
       <div className={`p-6 bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl border border-gray-100 dark:border-zinc-700/50 shadow-sm flex flex-col h-full ${className}`}>
@@ -106,32 +135,64 @@ export function WipTrendChart({ data, className = '' }: WipTrendChartProps) {
     );
   }
 
-  const avgs = movingAvg(data.map(d => d.completed));
-  const peakIdx = data.reduce((best, d, i) => d.completed > data[best].completed ? i : best, 0);
-  const chartData = data.map((d, i) => ({
+  // For long periods (quarter=24w, all=52w) the backend sends many weeks.
+  // Show ALL of them in a scrollable view — the full history is the point.
+  // For shorter periods (≤ SCROLL_AT weeks) trim leading zero-weeks so the
+  // chart doesn't open with a wall of empty bars.
+  const needsScroll = data.length > SCROLL_AT;
+
+  let displayData: VelocityWeek[];
+  if (needsScroll) {
+    displayData = data; // full history — scroll handles the density
+  } else {
+    const firstActiveIdx = data.findIndex(d => d.completed > 0);
+    const trimStart = firstActiveIdx > 1 ? firstActiveIdx - 1 : 0;
+    const trimmedData = firstActiveIdx === -1 ? data : data.slice(trimStart);
+    displayData = trimmedData.length >= 3 ? trimmedData : data.slice(-Math.max(3, trimmedData.length));
+  }
+
+  const avgs = movingAvg(displayData.map(d => d.completed));
+  const peakIdx = displayData.reduce((best, d, i) => d.completed > displayData[best].completed ? i : best, 0);
+  const chartData = displayData.map((d, i) => ({
     week: d.week,
     completed: d.completed,
     avg: avgs[i],
   }));
 
-  const trend = getTrend(data);
-  const avg = Math.round(data.reduce((s, d) => s + d.completed, 0) / data.length);
-  const last = data[data.length - 1].completed;
-  const lastAvg = avgs[avgs.length - 1];
+  const trend = getTrend(displayData);
+  const avg = Math.round(displayData.reduce((s, d) => s + d.completed, 0) / displayData.length);
+  const last = displayData[displayData.length - 1].completed;
+  // In scrollable mode expand the chart beyond the container; otherwise fill it
+  const chartW = needsScroll
+    ? Math.max(size.w, chartData.length * BAR_PX)
+    : (size.w || 400);
+  // Reserve ~8px for the scrollbar track so it doesn't clip the axis labels
+  const chartH = size.h > 8 ? (needsScroll ? size.h - 8 : size.h) : 200;
+
+  // On mount / when scroll kicks in: jump to the rightmost (most recent) bars
+  useEffect(() => {
+    if (!needsScroll || !scrollRef.current) return;
+    const el = scrollRef.current;
+    el.scrollLeft = el.scrollWidth;
+    setAtStart(el.scrollLeft > 8);
+    setAtEnd(true);
+  }, [needsScroll, chartData.length, size.w]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    setAtStart(el.scrollLeft > 8);
+    setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 8);
+  };
 
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
   const trendColor =
-    trend === 'up'
-      ? 'text-emerald-400'
-      : trend === 'down'
-        ? 'text-red-400'
-        : 'text-zinc-400';
+    trend === 'up' ? 'text-emerald-400' :
+    trend === 'down' ? 'text-red-400' :
+    'text-zinc-400';
   const trendBg =
-    trend === 'up'
-      ? 'bg-emerald-500/10 border-emerald-500/20'
-      : trend === 'down'
-        ? 'bg-red-500/10 border-red-500/20'
-        : 'bg-zinc-500/10 border-zinc-500/20';
+    trend === 'up' ? 'bg-emerald-500/10 border-emerald-500/20' :
+    trend === 'down' ? 'bg-red-500/10 border-red-500/20' :
+    'bg-zinc-500/10 border-zinc-500/20';
   const trendLabel = trend === 'up' ? 'Accelerating' : trend === 'down' ? 'Decelerating' : 'Steady';
 
   return (
@@ -150,16 +211,15 @@ export function WipTrendChart({ data, className = '' }: WipTrendChartProps) {
               content={{
                 title: 'Throughput Trend',
                 description: (
-                <>
-                  Tracks how many tasks your team completes each week. The{' '}
-                  <span className="text-violet-400 font-medium">violet line</span> is a 3-week moving average that smooths short-term noise.{' '}
-                  <span className="text-blue-400 font-medium">Bars above the average</span> signal acceleration; below it, investigate blockers before they compound.
-                </>
-              ),
+                  <>
+                    Tracks how many tasks your team completes each week. The{' '}
+                    <span className="text-violet-400 font-medium">violet line</span> is a 3-week moving average that smooths short-term noise.{' '}
+                    <span className="text-blue-400 font-medium">Bars above the average</span> signal acceleration; below it, investigate blockers before they compound.
+                  </>
+                ),
               }}
             />
           </div>
-          {/* Hero metric */}
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold text-gray-900 dark:text-white tabular-nums leading-none">
               {last}
@@ -168,86 +228,108 @@ export function WipTrendChart({ data, className = '' }: WipTrendChartProps) {
           </div>
         </div>
 
-        {/* Trend badge */}
         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold ${trendColor} ${trendBg} shrink-0`}>
           <TrendIcon className="w-3.5 h-3.5" />
           {trendLabel}
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="px-2 flex-1 min-h-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-            <defs>
-              <linearGradient id={GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.85} />
-                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.25} />
-              </linearGradient>
-              <linearGradient id={GRADIENT_ID_PEAK} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#60a5fa" stopOpacity={1} />
-                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.5} />
-              </linearGradient>
-            </defs>
+      {/* Chart area */}
+      <div className="px-2 flex-1 min-h-0 relative">
+        {/* Sizing anchor — ResizeObserver measures this div */}
+        <div ref={containerRef} className="w-full h-full">
+          {/* Scroll wrapper — overflow-x-auto only when needed */}
+          <div
+            ref={scrollRef}
+            onScroll={needsScroll ? handleScroll : undefined}
+            className={`w-full h-full${needsScroll
+              ? ' overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 dark:[&::-webkit-scrollbar-track]:bg-zinc-800/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-600'
+              : ''}`}
+          >
+            {size.w > 0 && (
+              <ComposedChart
+                width={chartW}
+                height={chartH}
+                data={chartData}
+                margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
+              >
+                <defs>
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.85} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.25} />
+                  </linearGradient>
+                  <linearGradient id={gradientIdPeak} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#60a5fa" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.5} />
+                  </linearGradient>
+                </defs>
 
-            <CartesianGrid
-              strokeDasharray="0"
-              stroke="currentColor"
-              className="text-gray-100 dark:text-white/[0.04]"
-              vertical={false}
-            />
-
-            <XAxis
-              dataKey="week"
-              tick={{ fill: 'currentColor', fontSize: 11, className: 'text-gray-400 dark:text-zinc-500' }}
-              tickLine={false}
-              axisLine={false}
-              tickMargin={10}
-            />
-            <YAxis
-              allowDecimals={false}
-              tick={{ fill: 'currentColor', fontSize: 11, className: 'text-gray-400 dark:text-zinc-500' }}
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              width={28}
-            />
-
-            <Tooltip
-              content={<CustomTooltip />}
-              cursor={{ fill: 'currentColor', className: 'text-gray-100/60 dark:text-white/[0.03]' }}
-            />
-
-            {/* Period average reference line */}
-            <ReferenceLine
-              y={avg}
-              stroke="#6366f1"
-              strokeOpacity={0.3}
-              strokeWidth={1}
-              strokeDasharray="4 4"
-            />
-
-            <Bar dataKey="completed" name="Completed" radius={[5, 5, 2, 2]} maxBarSize={40}>
-              {chartData.map((_, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={index === peakIdx ? `url(#${GRADIENT_ID_PEAK})` : `url(#${GRADIENT_ID})`}
+                <CartesianGrid
+                  strokeDasharray="0"
+                  stroke="currentColor"
+                  className="text-gray-100 dark:text-white/[0.04]"
+                  vertical={false}
                 />
-              ))}
-            </Bar>
 
-            <Line
-              type="monotone"
-              dataKey="avg"
-              name="3-wk avg"
-              stroke="#a78bfa"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, fill: '#a78bfa', stroke: '#fff', strokeWidth: 2 }}
-              connectNulls={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+                <XAxis
+                  dataKey="week"
+                  tick={{ fill: 'currentColor', fontSize: 11, className: 'text-gray-400 dark:text-zinc-500' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={10}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fill: 'currentColor', fontSize: 11, className: 'text-gray-400 dark:text-zinc-500' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={28}
+                />
+
+                <Tooltip
+                  content={<CustomTooltip />}
+                  cursor={{ fill: 'currentColor', className: 'text-gray-100/60 dark:text-white/[0.03]' }}
+                />
+
+                <ReferenceLine
+                  y={avg}
+                  stroke="#6366f1"
+                  strokeOpacity={0.3}
+                  strokeWidth={1}
+                  strokeDasharray="4 4"
+                />
+
+                <Bar dataKey="completed" name="Completed" radius={[5, 5, 2, 2]} maxBarSize={40}>
+                  {chartData.map((_, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={index === peakIdx ? `url(#${gradientIdPeak})` : `url(#${gradientId})`}
+                    />
+                  ))}
+                </Bar>
+
+                <Line
+                  type="monotone"
+                  dataKey="avg"
+                  name="3-wk avg"
+                  stroke="#a78bfa"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#a78bfa', stroke: '#fff', strokeWidth: 2 }}
+                />
+              </ComposedChart>
+            )}
+          </div>
+        </div>
+
+        {/* Scroll edge fades — indicate more content in that direction */}
+        {needsScroll && atStart && (
+          <div className="absolute left-2 inset-y-0 w-8 pointer-events-none bg-gradient-to-r from-white/90 dark:from-zinc-800/90 to-transparent z-10" />
+        )}
+        {needsScroll && !atEnd && (
+          <div className="absolute right-0 inset-y-0 w-8 pointer-events-none bg-gradient-to-l from-white/90 dark:from-zinc-800/90 to-transparent z-10" />
+        )}
       </div>
 
       {/* Footer legend */}

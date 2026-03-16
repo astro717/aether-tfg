@@ -76,6 +76,9 @@ export function useMessages(userId: string | null, organizationId: string | null
 
       setOtherUser(data.user);
       setError(null);
+
+      // Keep messages marked as read while conversation is active
+      await messagingApi.markAsRead(userId).catch(() => {});
     } catch (err) {
       // Only log, don't break UI on polling failure
       console.error('Error fetching messages:', err);

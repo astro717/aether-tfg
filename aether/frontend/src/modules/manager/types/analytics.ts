@@ -12,10 +12,10 @@ export interface DailyTaskHealth {
     username: string;
     avatarColor?: string;
   };
-  // AI-derived health status based on last activity
+  // Rule-derived health status based on last activity
   healthStatus: TaskHealthStatus;
   lastActivity: string; // ISO Date string
-  aiInsight: string; // e.g. "No activity in 4h despite being 'In Progress'"
+  statusHint: string; // e.g. "No activity in 4h despite being 'In Progress'"
   isUnplanned: boolean; // Added today (interrupt/unplanned work)
 }
 

@@ -1372,45 +1372,102 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
   }
 
   /**
-   * HELPER: Fetch real CFD data from daily_metrics table
-   * Falls back to empty array if no data available
+   * HELPER: Returns the start of the previous calendar period.
+   * Charts always show [previous full period + current partial period] so there is
+   * always enough data even on the first day of a new week/month/quarter.
+   *
+   * week    → last Monday (start of previous full week)
+   * month   → first of previous month
+   * quarter → first of previous quarter
+   * today   → 14 days ago (fallback for daily view)
+   */
+  private getChartStartDate(periodType: string, now: Date): Date {
+    const d = new Date(now);
+
+    switch (periodType) {
+      case 'week': {
+        const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon … 6=Sat
+        const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const thisMonday = new Date(d);
+        thisMonday.setDate(d.getDate() + daysToMonday);
+        thisMonday.setHours(0, 0, 0, 0);
+        const prevMonday = new Date(thisMonday);
+        prevMonday.setDate(thisMonday.getDate() - 7);
+        return prevMonday;
+      }
+      case 'month': {
+        const start = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+        start.setHours(0, 0, 0, 0);
+        return start;
+      }
+      case 'quarter': {
+        const currentQuarter = Math.floor(d.getMonth() / 3);
+        let year = d.getFullYear();
+        let month = (currentQuarter - 1) * 3;
+        if (month < 0) { month += 12; year -= 1; }
+        const start = new Date(year, month, 1);
+        start.setHours(0, 0, 0, 0);
+        return start;
+      }
+      default: {
+        const fallback = new Date(d);
+        fallback.setDate(d.getDate() - 14);
+        fallback.setHours(0, 0, 0, 0);
+        return fallback;
+      }
+    }
+  }
+
+  /**
+   * HELPER: Fetch real CFD data from task_history reconstruction.
    * @param organizationId - The organization ID
-   * @param periodType - The period type: 'today' | 'week' | 'month' | 'quarter' | 'all'
-   * @returns Array of CFD data points from real metrics
+   * @param chartStartDate - Explicit start date for the chart window (use getChartStartDate())
+   * @returns Array of CFD data points built from task_history
    */
   private async getRealCFDData(
     organizationId: string,
-    periodType: string,
+    chartStartDate: Date,
   ): Promise<Array<{ date: string; done: number; in_progress: number; todo: number }>> {
-    // Map period type to days ago
-    const daysMap: Record<string, number | null> = {
-      today: 1,
-      week: 7,
-      month: 30,
-      quarter: 90,
-      all: null,
-    };
-    const daysAgo = daysMap[periodType] ?? null;
+    // Reconstruct daily state from task_history — same approach as getDailyMetrics in tasks.service.ts.
+    // Immune to archiving inconsistencies: shows the actual status each task had ON each specific day.
+    const endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
 
-    const where: any = { organization_id: organizationId };
-    if (daysAgo !== null) {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - daysAgo);
-      cutoff.setHours(0, 0, 0, 0);
-      where.date = { gte: cutoff };
-    }
+    const startDate = new Date(chartStartDate);
+    startDate.setHours(0, 0, 0, 0);
 
-    const metrics = await this.prisma.daily_metrics.findMany({
-      where,
-      orderBy: { date: 'asc' },
-    });
+    const result = await this.prisma.$queryRaw<
+      Array<{ date: string; todo: number; in_progress: number; done: number }>
+    >`
+      WITH RECURSIVE date_series AS (
+        SELECT date_trunc('day', ${startDate}::timestamp) as date
+        UNION ALL
+        SELECT date + interval '1 day'
+        FROM date_series
+        WHERE date < date_trunc('day', ${endDate}::timestamp)
+      ),
+      daily_state AS (
+        SELECT
+          d.date,
+          th.task_id,
+          th.new_status,
+          ROW_NUMBER() OVER(PARTITION BY d.date, th.task_id ORDER BY th.changed_at DESC) as rn
+        FROM date_series d
+        JOIN task_history th ON date_trunc('day', th.changed_at) <= d.date
+        WHERE th.organization_id = ${organizationId}::uuid
+      )
+      SELECT
+        to_char(date, 'YYYY-MM-DD') as date,
+        COALESCE(SUM(CASE WHEN new_status IN ('todo', 'pending', 'pending_validation') THEN 1 ELSE 0 END)::int, 0) as todo,
+        COALESCE(SUM(CASE WHEN new_status = 'in_progress' THEN 1 ELSE 0 END)::int, 0) as in_progress,
+        COALESCE(SUM(CASE WHEN new_status = 'done' THEN 1 ELSE 0 END)::int, 0) as done
+      FROM daily_state
+      WHERE rn = 1
+      GROUP BY date
+      ORDER BY date ASC
+    `;
 
-    return metrics.map(m => ({
-      date: (m.date as Date).toISOString().split('T')[0],
-      done: m.done_count,
-      in_progress: m.in_progress_count,
-      todo: m.todo_count,
-    }));
+    return result;
   }
 
   /**
@@ -2516,9 +2573,9 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
     // Calculate only the charts needed for each report type
     switch (type) {
       case 'weekly_organization': {
-        // Weekly reports focus on team metrics and workflow
-        // Use real CFD data from daily_metrics, fall back to synthetic if insufficient
-        const realCFD = await this.getRealCFDData(organizationId, periodType);
+        // Weekly reports focus on team metrics and workflow.
+        // Chart window: previous full period + current partial period (always enough data).
+        const realCFD = await this.getRealCFDData(organizationId, this.getChartStartDate(periodType, now));
         chartData.cfd = realCFD.length >= 2 ? realCFD : this.generateSmoothCFD(tasks, periodType, periodStartDate);
         chartData.investment = this.calculateInvestmentProfile(investmentTasksRaw);
         chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, periodType);
@@ -2552,7 +2609,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       default: {
         this.logger.warn(`Unknown report type: ${type}, calculating all charts as fallback`);
         chartData.investment = this.calculateInvestmentProfile(investmentTasksRaw);
-        const realCFDDefault = await this.getRealCFDData(organizationId, periodType);
+        const realCFDDefault = await this.getRealCFDData(organizationId, this.getChartStartDate(periodType, now));
         chartData.cfd = realCFDDefault.length >= 2 ? realCFDDefault : this.generateSmoothCFD(tasks, periodType, periodStartDate);
         chartData.radar = await this.calculateRadarMetrics(organizationId);
         chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime);
@@ -2644,6 +2701,37 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         ).join('\n')}`
       : '';
 
+    // ============ TIMING CONTEXT (Partial Period Awareness) ============
+    // Tells the AI exactly where we are in the current period so it doesn't
+    // misread normal partial-period data as poor performance.
+    const dayOfWeekNum = now.getDay(); // 0=Sun, 1=Mon...6=Sat
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const todayStr = now.toISOString().split('T')[0];
+    let timingContext = `\nCURRENT DATE: ${todayStr} (${dayNames[dayOfWeekNum]})`;
+
+    if (periodType === 'week') {
+      const daysElapsed = dayOfWeekNum === 0 ? 7 : dayOfWeekNum;
+      const daysRemaining = 7 - daysElapsed;
+      timingContext += `\nPERIOD PROGRESS: Day ${daysElapsed} of 7 in the current week (${daysRemaining} day(s) remaining).`;
+      if (daysElapsed < 7) {
+        timingContext += ` This is a PARTIAL period — only ${daysElapsed} day(s) of data are available so far. Chart data includes the previous full week for context.`;
+      }
+    } else if (periodType === 'month') {
+      const dayOfMonth = now.getDate();
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const daysRemaining = daysInMonth - dayOfMonth;
+      const percentElapsed = Math.round((dayOfMonth / daysInMonth) * 100);
+      timingContext += `\nPERIOD PROGRESS: Day ${dayOfMonth} of ${daysInMonth} in this month (${percentElapsed}% elapsed, ${daysRemaining} day(s) remaining). This is a PARTIAL period — chart data includes the previous full month for context.`;
+    } else if (periodType === 'quarter') {
+      const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+      const qStart = new Date(now.getFullYear(), qStartMonth, 1);
+      const qEnd = new Date(now.getFullYear(), qStartMonth + 3, 0);
+      const totalDays = Math.floor((qEnd.getTime() - qStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const daysElapsedQ = Math.floor((now.getTime() - qStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const percentElapsed = Math.round((daysElapsedQ / totalDays) * 100);
+      timingContext += `\nPERIOD PROGRESS: Day ${daysElapsedQ} of ${totalDays} in this quarter (${percentElapsed}% elapsed). Partial period — chart data includes the previous full quarter for context.`;
+    }
+
     // Build the prompt based on report type
     let prompt: string;
     const baseContext = `
@@ -2655,6 +2743,7 @@ ORGANIZATION ANALYTICS (Period: ${periodType}):
 - Pending Validation: ${pendingValidation}
 - Overdue Tasks: ${overdueTasks.length}
 - Team Size: ${teamMembers.length}
+${timingContext}
 
 TEAM MEMBERS PERFORMANCE (this period):
 ${Array.from(userStats.values()).map(u => `- ${u.username}: ${u.completed} completed, ${u.inProgress} in progress, ${u.total} total`).join('\n')}
@@ -2675,15 +2764,23 @@ ${pinnedContextStr}`;
 
     switch (type) {
       case 'weekly_organization':
-        prompt = `You are a senior project manager writing a weekly organization report for an executive audience.
+        prompt = `You are a senior project manager writing a ${periodType} organization report for an executive audience.
 
 ${baseContext}
 
-Write a comprehensive weekly report that includes:
-1. Executive Summary (2-3 sentences highlighting key achievements and concerns)
-2. Productivity Analysis (team velocity, completion trends)
+⚠️ PARTIAL PERIOD INSTRUCTIONS (CRITICAL — read before writing):
+- The data above covers only what has happened SO FAR in this ${periodType}. The period is NOT over.
+- Always anchor your language to the current date (e.g., "As of ${dayNames[dayOfWeekNum]}", "Through day ${dayOfWeekNum === 0 ? 7 : dayOfWeekNum} of the week").
+- Use the PREVIOUS period data included in the charts for trend comparisons — do NOT compare against a theoretical full-period expectation.
+- DO NOT penalize the team for low completion counts when the period has just started or is only partially through.
+- If completion counts are low, contextualize them: "With ${dayOfWeekNum === 0 ? 7 : dayOfWeekNum} days elapsed, the current pace suggests X by end of period."
+- Focus on what IS done and what remains, projecting forward with current velocity.
+
+Write a comprehensive ${periodType} report that includes:
+1. Executive Summary (2-3 sentences highlighting key achievements and concerns — reference where we are in the period)
+2. Productivity Analysis (team velocity and completion trends vs. previous period)
 3. Current Workload Distribution (who's doing what, balance assessment)
-4. Upcoming Priorities (what should the team focus on next week)
+4. Upcoming Priorities (what should the team focus on for the remainder of this period)
 5. Recommendations (actionable suggestions for improvement)
 
 FORMATTING REQUIREMENTS (CRITICAL - follow these exactly):
@@ -2723,9 +2820,16 @@ Required JSON structure:
 ${baseContext}
 ${performanceContext}
 
+⚠️ PARTIAL PERIOD INSTRUCTIONS (CRITICAL — read before writing):
+- The data above covers only what has happened SO FAR in this ${periodType}. The period is NOT over.
+- Anchor observations to the current point in time (e.g., "As of ${dayNames[dayOfWeekNum]}").
+- Compare against the previous period's data for context — do NOT judge against a full-period benchmark.
+- DO NOT flag low completion counts as underperformance if the period has barely started.
+- If numbers appear low, contextualize them: mention where we are in the period and what the pace implies.
+
 Write a comprehensive performance analysis that includes:
-1. Executive Summary (key findings about ${targetUser ? targetUser.username : 'the team'})
-2. Productivity Metrics (task completion rates, efficiency)
+1. Executive Summary (key findings about ${targetUser ? targetUser.username : 'the team'} — reference the period progress)
+2. Productivity Metrics (task completion rates and efficiency vs. previous period)
 3. Strengths Identified (what's working well)
 4. Areas for Improvement (constructive feedback)
 5. Development Recommendations (actionable next steps)
@@ -2749,12 +2853,17 @@ Required JSON structure:
 
       case 'bottleneck_prediction': {
         // ============ PHASE 3: ANTI-HALLUCINATION & TIMING CONTEXT ============
-        // Detect "The Monday Problem": early in the week with no completed tasks is NORMAL
-        const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, 2 = Tuesday
-        const isEarlyWeek = (dayOfWeek === 1 || dayOfWeek === 2) && (periodType === 'week' || periodType === 'today');
+        // Detect periods where low completion is EXPECTED (early in any period)
+        const daysElapsedInPeriod = periodType === 'week'
+          ? (dayOfWeekNum === 0 ? 7 : dayOfWeekNum)
+          : periodType === 'month'
+            ? now.getDate()
+            : 999;
+        const isEarlyInPeriod = (periodType === 'week' && daysElapsedInPeriod <= 2) ||
+          (periodType === 'month' && daysElapsedInPeriod <= 5);
 
-        const mondayProblemContext = isEarlyWeek
-          ? `\n⚠️ CRITICAL TIMING CONTEXT: Today is the very beginning of the work week (${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek]}). It is completely normal mathematically that zero or very few tasks are marked as 'Done' right now. DO NOT alert on low completion velocity. INSTEAD, shift your analysis to 'Start of Week Planning': Focus on how the initial workload is distributed among team members and point out immediate risks (like overloaded individuals with too many in-progress tasks) to ensure a healthy upcoming week.\n`
+        const mondayProblemContext = isEarlyInPeriod
+          ? `\n⚠️ EARLY PERIOD CONTEXT: Only ${daysElapsedInPeriod} day(s) have elapsed in this ${periodType}. Zero or very few completed tasks is mathematically expected at this point. DO NOT flag low completion velocity as a bottleneck or risk. INSTEAD focus on workload distribution and in-progress task health to predict risks for the upcoming days.\n`
           : '';
 
         // Anti-SDLC rule: prevent flagging todo tasks as bottlenecks

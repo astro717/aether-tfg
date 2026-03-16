@@ -3,6 +3,7 @@ import { Search, PenSquare, Loader2 } from "lucide-react";
 import { type Conversation, type MessageUser } from "../api/messagingApi";
 import { formatTimestamp } from "../data/mockData";
 import { getAvatarColorClasses } from "../../../lib/avatarColors";
+import { getPresenceStatus, PRESENCE_COLORS } from "../../../lib/presence";
 
 interface ThreadsListProps {
   conversations: Conversation[];
@@ -207,6 +208,8 @@ function UserAvatar({ user }: UserAvatarProps) {
     .slice(0, 2) || user.username.slice(0, 2).toUpperCase();
 
   const colors = getAvatarColorClasses(user.avatar_color);
+  const status = getPresenceStatus(user.last_seen_at);
+  const dotColor = PRESENCE_COLORS[status];
 
   return (
     <div className="relative flex-shrink-0">
@@ -222,6 +225,11 @@ function UserAvatar({ user }: UserAvatarProps) {
       >
         {initials}
       </div>
+      {/* Presence dot */}
+      <span
+        className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-gray-900"
+        style={{ backgroundColor: dotColor }}
+      />
     </div>
   );
 }

@@ -62,12 +62,10 @@ export function UserAvatar({
             </div>
 
             {showStatus && (
-                <div className="absolute bottom-0 right-0 p-[2px] bg-white dark:bg-[#18181B] rounded-full">
-                    <div
-                        className="w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#18181B]"
-                        style={{ backgroundColor: statusColor }}
-                    />
-                </div>
+                <div
+                    className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#18181B]"
+                    style={{ backgroundColor: statusColor }}
+                />
             )}
         </div>
     );

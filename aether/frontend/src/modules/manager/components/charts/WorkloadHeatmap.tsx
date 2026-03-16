@@ -18,6 +18,7 @@ interface WorkloadHeatmapProps {
   userColors?: Record<string, string>;
   title?: string;
   subtitle?: string;
+  pdfMode?: boolean;
 }
 
 // Color intensity scale (indigo ramp — matches app accent)
@@ -49,6 +50,7 @@ export function WorkloadHeatmap({
   userColors = {},
   title = 'Team Workload',
   subtitle = 'Activity intensity per user per day',
+  pdfMode = false,
 }: WorkloadHeatmapProps) {
   // Per-user totals for the summary column
   const userTotals = data.users.map((_, i) =>
@@ -87,10 +89,12 @@ export function WorkloadHeatmap({
           </div>
         </div>
         {/* Activity badge */}
-        <span className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-          Live
-        </span>
+        {!pdfMode && (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+            Live
+          </span>
+        )}
       </div>
 
       {/* Grid area — three-column layout: left fixed | center scrollable | right fixed */}

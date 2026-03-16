@@ -79,6 +79,13 @@ export class UsersService {
     });
   }
 
+  async updateHeartbeat(userId: string): Promise<void> {
+    await this.prisma.users.update({
+      where: { id: userId },
+      data: { last_seen_at: new Date() },
+    });
+  }
+
   async updateProfile(userId: string, dto: any) {
     const user = await this.prisma.users.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');

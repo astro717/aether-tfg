@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Delete, Patch, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Param, Delete, Patch, Body, UseGuards, Request, HttpCode } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/roles.guard';
@@ -32,6 +32,13 @@ export class UsersController {
   @Patch('me/settings')
   updateMySettings(@Request() req: AuthenticatedRequest, @Body() dto: UpdateNotificationSettingsDto) {
     return this.usersService.updateNotificationSettings(req.user.id, dto);
+  }
+
+  // PATCH /users/me/heartbeat - Update presence timestamp
+  @Patch('me/heartbeat')
+  @HttpCode(204)
+  async heartbeat(@Request() req: AuthenticatedRequest) {
+    await this.usersService.updateHeartbeat(req.user.id);
   }
 
   // PATCH /users/me/profile - Update current user's profile

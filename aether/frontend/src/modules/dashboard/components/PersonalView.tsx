@@ -69,9 +69,14 @@ function getWeekDays(offset: number = 0, applyBaseOffset: boolean = true): Date[
 /**
  * Check if a date string falls within a specific week.
  */
+function parseDateLocal(dateStr: string): Date {
+    const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
 function isDateInWeek(dateStr: string | null, weekDays: Date[]): boolean {
     if (!dateStr || weekDays.length < 5) return false;
-    const date = new Date(dateStr);
+    const date = parseDateLocal(dateStr);
     const start = new Date(weekDays[0]);
     const end = new Date(weekDays[4]);
     start.setHours(0, 0, 0, 0);
@@ -103,10 +108,9 @@ function formatDate(dateStr: string | null): string {
     return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-function getTimelineColor(dateStr: string | null): string {
-    const priority = getTaskPriority(dateStr);
-    if (priority === 'urgent') return 'border-red-400';
-    if (priority === 'important') return 'border-yellow-400';
+function getTimelineColor(status: string): string {
+    if (status === 'done') return 'border-green-400';
+    if (status === 'in_progress') return 'border-blue-400';
     return 'border-gray-300';
 }
 
@@ -256,7 +260,7 @@ export function PersonalView() {
     const isCurrentWeek = weekOffset === 0;
 
     const timelineTasks = tasks
-        .filter(t => t.due_date && isDateInWeek(t.due_date, weekDays) && t.status !== 'done')
+        .filter(t => t.due_date && isDateInWeek(t.due_date, weekDays))
         .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime());
 
     const today = new Date();
@@ -421,16 +425,13 @@ export function PersonalView() {
                                 <p className="text-gray-400 dark:text-gray-500 text-sm pl-4 pt-4">No deadlines this week</p>
                             )}
                             {timelineTasks.map((task, index) => {
-                                const date = new Date(task.due_date!);
-                                const day = date.getDay();
-
-                                let style: React.CSSProperties = {};
-                                if (day <= 2) style = { left: '0' };
-                                else if (day === 3) style = { left: '38%' };
-                                else style = { right: '0', left: 'auto' };
+                                const date = parseDateLocal(task.due_date!);
+                                // getDay(): 1=Mon…5=Fri. Column index 0–4, each column = 20% of container.
+                                const colIndex = Math.max(0, Math.min(4, date.getDay() - 1));
+                                const style: React.CSSProperties = { left: `${colIndex * 20}%` };
 
                                 const topOffset = `${3 + (index * 5)}rem`;
-                                const colorClass = getTimelineColor(task.due_date);
+                                const colorClass = getTimelineColor(task.status);
 
                                 return (
                                     <DraggableTask key={task.id} id={task.id}>

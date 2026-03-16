@@ -102,10 +102,10 @@ const AETHER_ASSIGNEE_PALETTE = [
 
 // Status-based colors for Personal View
 const STATUS_COLORS: Record<string, { bg: string; shadow: string }> = {
-    todo: { bg: 'bg-gray-400 dark:bg-gray-500', shadow: 'shadow-gray-400/40' },
-    pending: { bg: 'bg-gray-400 dark:bg-gray-500', shadow: 'shadow-gray-400/40' },
-    in_progress: { bg: 'bg-blue-500', shadow: 'shadow-blue-500/60' },
-    done: { bg: 'bg-green-500 dark:bg-green-600/70', shadow: 'shadow-green-500/40' },
+    todo: { bg: 'bg-gray-400 dark:bg-gray-500', shadow: 'shadow-gray-400/70' },
+    pending: { bg: 'bg-gray-400 dark:bg-gray-500', shadow: 'shadow-gray-400/70' },
+    in_progress: { bg: 'bg-blue-500', shadow: 'shadow-blue-500/80' },
+    done: { bg: 'bg-green-500 dark:bg-green-600/70', shadow: 'shadow-green-500/60' },
 };
 
 // Hash a string to get a consistent index
@@ -477,19 +477,40 @@ export function PremiumCalendarModal({ isOpen, onClose, tasks, viewMode }: Premi
                                                     {dayTasks.slice(0, 3).map((task, i) => {
                                                         const dotColor = getTaskDotColor(task, viewMode);
                                                         const taskIsOverdue = isOverdue(task);
+                                                        const effectiveStatus = task.status === 'pending_validation' ? 'todo' : task.status;
+                                                        const shouldPulse = effectiveStatus !== 'done';
+                                                        const isGrayStatus = effectiveStatus === 'todo' || effectiveStatus === 'pending';
 
                                                         return (
                                                             <motion.div
                                                                 key={task.id}
-                                                                className={`
-                                                                    w-2.5 h-2.5 rounded-full
-                                                                    ${dotColor.bg} shadow-md ${dotColor.shadow}
-                                                                    ${taskIsOverdue ? 'ring-2 ring-red-500/60' : ''}
-                                                                `}
+                                                                className="relative flex-shrink-0"
                                                                 initial={{ scale: 0 }}
                                                                 animate={{ scale: 1 }}
                                                                 transition={{ delay: i * 0.05 }}
-                                                            />
+                                                            >
+                                                                {/* Ping ring for active tasks (todo + in_progress) */}
+                                                                {shouldPulse && (
+                                                                    <motion.div
+                                                                        className={`absolute inset-0 rounded-full ${dotColor.bg}`}
+                                                                        animate={{ scale: [1, 1, 2.4], opacity: [0, 0.5, 0] }}
+                                                                        transition={{ duration: 2.5, times: [0, 0.08, 1], repeat: Infinity, ease: 'easeOut', repeatDelay: 0.8, delay: i * 0.5 }}
+                                                                    />
+                                                                )}
+                                                                {/* The dot itself */}
+                                                                <div
+                                                                    className={`
+                                                                        relative w-3 h-3 rounded-full
+                                                                        ${dotColor.bg} shadow-lg ${dotColor.shadow}
+                                                                        ${taskIsOverdue
+                                                                            ? 'ring-2 ring-red-500/60'
+                                                                            : isGrayStatus
+                                                                                ? 'ring-1 ring-white dark:ring-zinc-900'
+                                                                                : ''
+                                                                        }
+                                                                    `}
+                                                                />
+                                                            </motion.div>
                                                         );
                                                     })}
                                                     {dayTasks.length > 3 && (

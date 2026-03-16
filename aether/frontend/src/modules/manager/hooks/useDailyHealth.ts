@@ -61,8 +61,9 @@ const computeHealthStatus = (task: {
   return 'healthy';
 };
 
-// ── AI insight generator ─────────────────────────────────────────────────────
-const generateAiInsight = (
+// ── Status hint generator ────────────────────────────────────────────────────
+// Rule-based: computes a contextual hint from task data. Not AI.
+const generateStatusHint = (
   healthStatus: TaskHealthStatus,
   task: {
     updated_at?: string;
@@ -155,7 +156,7 @@ export const useDailyHealth = (organizationId: string): UseDailyHealthResult => 
               lastActivity: lastActivity.getTime() > 0
                 ? lastActivity.toISOString()
                 : task.created_at,
-              aiInsight: generateAiInsight(healthStatus, normalizedTask),
+              statusHint: generateStatusHint(healthStatus, normalizedTask),
               isUnplanned,
             };
           });

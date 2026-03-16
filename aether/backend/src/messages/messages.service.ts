@@ -44,6 +44,7 @@ export class MessagesService {
             username: true,
             email: true,
             avatar_color: true,
+            last_seen_at: true,
           },
         },
         receiver: {
@@ -52,6 +53,7 @@ export class MessagesService {
             username: true,
             email: true,
             avatar_color: true,
+            last_seen_at: true,
           },
         },
         attachments: true,
@@ -111,7 +113,7 @@ export class MessagesService {
     // Verify the other user exists
     const otherUser = await this.prisma.users.findUnique({
       where: { id: otherUserId },
-      select: { id: true, username: true, email: true, avatar_color: true },
+      select: { id: true, username: true, email: true, avatar_color: true, last_seen_at: true },
     });
 
     if (!otherUser) {
@@ -132,6 +134,7 @@ export class MessagesService {
             username: true,
             email: true,
             avatar_color: true,
+            last_seen_at: true,
           },
         },
         attachments: true,
@@ -195,6 +198,7 @@ export class MessagesService {
             username: true,
             email: true,
             avatar_color: true,
+            last_seen_at: true,
           },
         },
         receiver: {
@@ -203,6 +207,7 @@ export class MessagesService {
             username: true,
             email: true,
             avatar_color: true,
+            last_seen_at: true,
           },
         },
         attachments: true,

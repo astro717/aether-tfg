@@ -5,6 +5,7 @@
  *  - Shows an informative empty state when < 2 data points are available.
  */
 
+import { useId } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DatabaseZap } from 'lucide-react';
 import { InfoTooltip } from './InfoTooltip';
@@ -54,6 +55,8 @@ export function RealCFDChart({
   title = 'Cumulative Flow Diagram',
   subtitle,
 }: RealCFDChartProps) {
+  const uid = useId().replace(/:/g, '');
+  const layers = CFD_LAYERS.map(l => ({ ...l, gradientId: `${l.gradientId}-${uid}` }));
   // ── Empty state ──────────────────────────────────────────────────────────────
   if (data.length < 2) {
     return (
@@ -142,7 +145,7 @@ export function RealCFDChart({
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data}>
             <defs>
-              {CFD_LAYERS.map((layer) => (
+              {layers.map((layer) => (
                 <linearGradient key={layer.gradientId} id={layer.gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor={layer.color} stopOpacity={layer.opacity} />
                   <stop offset="95%" stopColor={layer.color} stopOpacity={layer.opacity * 0.3} />
@@ -180,7 +183,7 @@ export function RealCFDChart({
               labelFormatter={(value) => formatTooltipLabel(String(value))}
             />
 
-            {CFD_LAYERS.map((layer) => (
+            {layers.map((layer) => (
               <Area
                 key={layer.dataKey}
                 type="monotone"
@@ -198,7 +201,7 @@ export function RealCFDChart({
 
       {/* Legend */}
       <div className="flex flex-wrap items-center justify-center gap-4 mt-4">
-        {CFD_LAYERS.map((layer) => (
+        {layers.map((layer) => (
           <div key={layer.dataKey} className="flex items-center gap-2">
             <div
               className="w-3 h-3 rounded"

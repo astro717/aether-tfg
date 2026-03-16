@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import { usePresenceHeartbeat } from "../hooks/usePresenceHeartbeat";
 import { ThreadsList } from "./ThreadsList";
 import { ChatView } from "./ChatView";
 import { UserSearchModal } from "./UserSearchModal";
@@ -18,6 +19,7 @@ interface DraftRecipient {
 }
 
 export function MessagingLayout() {
+  usePresenceHeartbeat();
   const { user } = useAuth();
   const { currentOrganization } = useOrganization();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);

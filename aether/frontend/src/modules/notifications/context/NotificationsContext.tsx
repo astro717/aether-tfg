@@ -107,18 +107,26 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       // If count increased, show toast and play sound
       // (Only if we have initialized, to avoid spam on load)
       if (hasInitialized.current && count > unreadCount) {
-        playNotificationSound();
-
-        // Fetch the latest to show in toast
+        // Fetch latest notification first to decide how to handle it
         const response = await notificationsApi.getNotifications(1, 1);
-        if (response.items.length > 0) {
-          const latest = response.items[0];
+        const latest = response.items[0];
+
+        // Suppress toast+sound if user is already reading this message
+        if (latest?.type === 'MESSAGE' && window.location.pathname === '/messages') {
+          notificationsApi.markAsRead(latest.id).catch(() => {});
+          setUnreadCount(count - 1); // compensate: we just marked one as read
+          return;
+        }
+
+        // Regular notification: play sound and show toast
+        playNotificationSound();
+        if (latest) {
           showToast({
             type: 'info',
             title: latest.title,
             message: latest.content || 'New notification',
             onClick: () => {
-              // Navigation handled by Toast onClick or manual logic? 
+              // Navigation handled by Toast onClick or manual logic?
             }
           });
         }
