@@ -22,7 +22,6 @@ import {
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { useOrganization } from '../../organization/context/OrganizationContext';
 import { managerApi, type AIReport, type AIReportRequest, type ReportAvailability } from '../api/managerApi';
-import { generateManagerReportPDF } from '../../../utils/pdfGenerator';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -293,7 +292,6 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
   const [availableReports, setAvailableReports] = useState<ReportAvailability[]>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   // Animation state
   useEffect(() => {
@@ -387,7 +385,6 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
     if (!report || !selectedType || !currentOrganization) return;
 
     setDownloadingPdf(true);
-    setIsExportingPDF(true);
 
     const reportOption = reportOptions.find(o => o.type === selectedType);
     const reportTypeName = reportOption?.title || 'Report';
@@ -395,24 +392,38 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
     const dateRange = getDateRangeString(selectedPeriod);
     const richPeriodLabel = dateRange ? `${periodLabel} • ${dateRange}` : periodLabel;
 
-    // Delay to allow Recharts to re-render with PDF-optimized layout
-    setTimeout(async () => {
-      try {
-        await generateManagerReportPDF(
-          report,
-          currentOrganization.name,
-          richPeriodLabel,
-          reportTypeName,
-          selectedPeriod
-        );
-      } catch (error) {
-        console.error('Failed to generate PDF:', error);
-        setError('Failed to generate PDF. Please try again.');
-      } finally {
-        setDownloadingPdf(false);
-        setIsExportingPDF(false);
-      }
-    }, 600);
+    try {
+      // 1. Store report data on backend and get a short-lived token
+      const { previewToken } = await managerApi.storePreview({
+        report,
+        organizationName: currentOrganization.name,
+        period: richPeriodLabel,
+        reportTypeName,
+        periodType: selectedPeriod,
+        generatedAt: new Date().toLocaleDateString('en-US', {
+          year: 'numeric', month: 'short', day: 'numeric',
+        }),
+      });
+
+      // 2. Ask backend to render PDF via Puppeteer
+      const blob = await managerApi.exportPdf({
+        previewToken,
+        filename: `aether-${selectedPeriod}-report.pdf`,
+      });
+
+      // 3. Trigger browser download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `aether-${selectedPeriod}-report.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+      setError('Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
 
@@ -802,7 +813,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             <div
                               className="rounded-2xl bg-white/50 dark:bg-zinc-800/50 border border-gray-100/50 dark:border-zinc-700/30 overflow-hidden"
                               data-chart-id="wip-trend-chart"
-                              style={isExportingPDF ? { minHeight: '320px' } : undefined}
+                              style={undefined}
                             >
                               <WipTrendChart data={deriveVelocityWeeks(report.chartData.cfd)} />
                             </div>
@@ -813,7 +824,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                                 data={report.chartData.investment}
                                 title="Task Distribution"
                                 subtitle="Work allocation by category"
-                                pdfMode={isExportingPDF}
+                                pdfMode={false}
                               />
                             </div>
                           )}
@@ -828,7 +839,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                             userColors={Object.fromEntries(teamMembers.map(m => [m.username, m.avatar_color]))}
                             title="Team Workload"
                             subtitle="Activity intensity per member"
-                            pdfMode={isExportingPDF}
+                            pdfMode={false}
                           />
                         </div>
                       )}
@@ -865,7 +876,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                           data={report.chartData.investment}
                           title="Task Distribution"
                           subtitle="Individual work allocation"
-                          pdfMode={isExportingPDF}
+                          pdfMode={false}
                         />
                       )}
                     </>
@@ -944,7 +955,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
                           data={report.chartData.investment}
                           title="Work Distribution"
                           subtitle="Identify imbalances"
-                          pdfMode={isExportingPDF}
+                          pdfMode={false}
                         />
                       )}
 

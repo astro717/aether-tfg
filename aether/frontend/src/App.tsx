@@ -20,6 +20,7 @@ import { AnalyticsDashboardV2Page } from "./modules/manager/pages/AnalyticsDashb
 import { AnalyticsDashboardV4 } from "./modules/manager/pages/AnalyticsDashboardV4";
 import { AnalyticsDashboardV3Page } from "./modules/manager/pages/AnalyticsDashboardV3Page";
 import { ProtectedManagerRoute } from "./components/auth/ProtectedManagerRoute";
+import { PrintPreviewPage } from "./modules/reports/pages/PrintPreviewPage";
 import { OrganizationProvider } from "./modules/organization/context/OrganizationContext";
 import { AuthProvider } from "./modules/auth/context/AuthContext";
 import { ThemeProvider } from "./modules/settings/context/ThemeContext";
@@ -48,6 +49,9 @@ function App() {
                 <OrganizationProvider>
                   <BrowserRouter>
                     <Routes>
+                      {/* Print Preview — no layout, accessed by Puppeteer for PDF export */}
+                      <Route path="/reports/print-preview" element={<PrintPreviewPage />} />
+
                       <Route path="/" element={<HomePage />} />
                       <Route path="/signup" element={<SignupPage />} />
                       <Route path="/login" element={<LoginPage />} />

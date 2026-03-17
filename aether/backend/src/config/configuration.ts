@@ -6,6 +6,7 @@ export const configurationSchema = Joi.object({
 
   // Server
   PORT: Joi.number().default(3000),
+  FRONTEND_URL: Joi.string().optional().default('http://localhost:5173').description('Frontend URL used by Puppeteer for print-preview navigation'),
 
   // JWT Authentication
   JWT_SECRET: Joi.string().required().description('Secret key for JWT tokens'),

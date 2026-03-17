@@ -370,6 +370,47 @@ class ManagerApi {
     return response.json();
   }
 
+  /**
+   * Store report data on the backend and get a short-lived preview token.
+   * The token is then passed to exportPdf so Puppeteer can fetch the data.
+   */
+  async storePreview(payload: {
+    report: AIReport;
+    organizationName: string;
+    period: string;
+    reportTypeName: string;
+    periodType: 'week' | 'month' | 'quarter';
+    generatedAt: string;
+  }): Promise<{ previewToken: string }> {
+    const response = await fetch(`${API_BASE_URL}/reports/store-preview`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to store preview data');
+    }
+    return response.json();
+  }
+
+  /**
+   * Ask the backend to generate a PDF via Puppeteer.
+   * Returns a Blob so the caller can trigger a browser download.
+   */
+  async exportPdf(payload: { previewToken: string; filename?: string }): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/reports/export-pdf`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to generate PDF');
+    }
+    return response.blob();
+  }
+
   async getUserPulse(organizationId: string, userId: string): Promise<UserPulseData> {
     const response = await fetch(
       `${API_BASE_URL}/tasks/organization/${organizationId}/users/${userId}/pulse`,

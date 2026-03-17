@@ -16,6 +16,7 @@ import { SupabaseModule } from './supabase/supabase.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EmailModule } from './email/email.module';
 import { KanbanHeartbeatModule } from './kanban-heartbeat/kanban-heartbeat.module';
+import { ReportsModule } from './reports/reports.module';
 
 import { HealthController } from './health.controller';
 import configuration, { configurationSchema } from './config/configuration';
@@ -49,6 +50,7 @@ import configuration, { configurationSchema } from './config/configuration';
     NotificationsModule,
     EmailModule,
     KanbanHeartbeatModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
 })

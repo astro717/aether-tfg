@@ -17,6 +17,20 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
+# Install Chromium and its dependencies for Puppeteer on Alpine
+RUN apk add --no-cache \
+  chromium \
+  nss \
+  freetype \
+  harfbuzz \
+  ca-certificates \
+  ttf-freefont \
+  font-noto
+
+# Tell Puppeteer to use the system Chromium and skip bundled download
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Copy package files and install production deps only
 COPY package*.json ./
 RUN npm ci --only=production
