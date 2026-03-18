@@ -1884,25 +1884,24 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
     }
 
     // On-Time Delivery Rate: % of completed tasks delivered before/on due_date
+    // Tasks without due_date are considered on-time by default
     let onTimeCount = 0;
-    let tasksWithDueDate = 0;
 
     for (const t of completedTasks) {
-      if (t.due_date) {
-        tasksWithDueDate++;
-        if (t.updated_at) {
-          const completedAt = new Date(t.updated_at).getTime();
-          const dueAt = new Date(t.due_date).getTime();
-          if (completedAt <= dueAt) {
-            onTimeCount++;
-          }
+      if (!t.due_date) {
+        onTimeCount++; // No deadline = on-time by default
+      } else if (t.updated_at) {
+        const completedAt = new Date(t.updated_at).getTime();
+        const dueAt = new Date(t.due_date).getTime();
+        if (completedAt <= dueAt) {
+          onTimeCount++;
         }
       }
     }
 
-    const onTimeDeliveryRate = tasksWithDueDate > 0
-      ? Math.round((onTimeCount / tasksWithDueDate) * 100)
-      : 100; // No tasks with deadlines = 100% on-time
+    const onTimeDeliveryRate = completedTasks.length > 0
+      ? Math.round((onTimeCount / completedTasks.length) * 100)
+      : 100; // No completed tasks = 100% on-time
 
     // Sparklines for velocity (weekly completion counts for last 8 weeks)
     const weeklyCounts: number[] = [];
@@ -1940,10 +1939,10 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
       });
 
       let weekOnTime = 0;
-      let weekWithDueDate = 0;
       for (const t of weekCompleted) {
-        if (t.due_date) {
-          weekWithDueDate++;
+        if (!t.due_date) {
+          weekOnTime++; // No deadline = on-time by default
+        } else if (t.updated_at) {
           const completedAt = new Date(t.updated_at).getTime();
           const dueAt = new Date(t.due_date).getTime();
           if (completedAt <= dueAt) {
@@ -1952,7 +1951,7 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         }
       }
 
-      const weekRate = weekWithDueDate > 0 ? Math.round((weekOnTime / weekWithDueDate) * 100) : 100;
+      const weekRate = weekCompleted.length > 0 ? Math.round((weekOnTime / weekCompleted.length) * 100) : 100;
       onTimeSparkline.push(weekRate);
     }
 
@@ -2326,29 +2325,38 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
    * @param tasks - Array of tasks to analyze
    * @param userId - Optional user ID to filter tasks for individual analysis
    */
-  private calculateCycleTime(tasks: any[], userId?: string): Array<{ date: string; days: number; taskTitle: string }> {
+  private calculateCycleTime(
+    tasks: any[],
+    userId?: string,
+    periodStartDate?: Date,
+  ): Array<{ date: string; days: number; taskTitle: string }> {
     // Filter tasks by user if userId is provided
     const filteredTasks = userId
       ? tasks.filter(t => t.assignee_id === userId)
       : tasks;
 
     return filteredTasks
-      .filter(t => t.status === 'done' && t.created_at && t.updated_at)
+      .filter(t => {
+        if (t.status !== 'done' || !t.created_at || !t.updated_at) return false;
+        // When a period is specified, only show tasks completed within that period
+        if (periodStartDate) {
+          return new Date(t.updated_at) >= periodStartDate;
+        }
+        return true;
+      })
       .map(t => {
         const created = new Date(t.created_at).getTime();
-        const completed = new Date(t.updated_at).getTime(); // Use actual completion time
+        const completed = new Date(t.updated_at).getTime();
         const days = Math.max(0, Math.round((completed - created) / (1000 * 60 * 60 * 24)));
         return {
-          date: new Date(t.updated_at).toISOString().split('T')[0], // X-axis: completion date
+          date: new Date(t.updated_at).toISOString().split('T')[0],
           days,
           taskTitle: t.title,
-          completedAt: completed, // Keep for sorting
+          completedAt: completed,
         };
       })
-      // Sort by completion date ASC (chronological order)
       .sort((a, b) => a.completedAt - b.completedAt)
-      .slice(-50) // Last 50 completed tasks
-      .map(({ date, days, taskTitle }) => ({ date, days, taskTitle })); // Remove helper field
+      .map(({ date, days, taskTitle }) => ({ date, days, taskTitle }));
   }
 
   /**
@@ -2371,19 +2379,38 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
     const weeks: string[] = [];
     const completed: number[] = [];
 
-    // Generate last 8 weeks
+    // Anchor to the start of the current ISO calendar week (Monday at midnight).
+    // This ensures the current week = Mon→today, previous weeks = full Mon–Sun.
+    const currentWeekStart = new Date(now);
+    const dayOfWeek = currentWeekStart.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    currentWeekStart.setDate(currentWeekStart.getDate() - daysToMonday);
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    // ISO week number helper (W1–W52/53 per ISO 8601)
+    const getISOWeek = (date: Date): number => {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7; // treat Sunday as 7
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum); // nearest Thursday
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      return Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+    };
+
+    // Generate 8 calendar weeks (oldest first, most recent last)
     for (let i = 7; i >= 0; i--) {
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - (i * 7));
+      const weekStart = new Date(currentWeekStart);
+      weekStart.setDate(weekStart.getDate() - i * 7);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 7);
+      // For the current (partial) week cap at now — future hours must not count
+      const effectiveEnd = i === 0 ? now : weekEnd;
 
-      weeks.push(`Week ${8 - i}`);
+      weeks.push(`W${getISOWeek(weekStart)}`);
 
       const weekTasks = filteredTasks.filter(t => {
-        if (t.status !== 'done' || !t.created_at) return false;
-        const taskDate = new Date(t.created_at);
-        return taskDate >= weekStart && taskDate < weekEnd;
+        if (t.status !== 'done' || !t.updated_at) return false;
+        const taskDate = new Date(t.updated_at);
+        return taskDate >= weekStart && taskDate < effectiveEnd;
       });
 
       completed.push(weekTasks.length);
@@ -2512,15 +2539,16 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         },
       },
       orderBy: { updated_at: 'desc' },
-      take: 100, // Fetch more than 50 to allow for filtering
+      take: 500, // Enough for 8-week throughput history + 50-task cycle time view
     });
-    this.logger.log(`Fetched ${allTasksForCycleTime.length} completed tasks for cycle time chart`);
+    this.logger.log(`Fetched ${allTasksForCycleTime.length} completed tasks for cycle time + throughput charts`);
 
     // Investment profile: dedicated query — same semantics as Manager Zone
     // in_progress (ongoing) OR done within the period (completed during window)
+    // Note: is_archived is intentionally NOT filtered — archived tasks that were
+    // completed during the period must be counted (archiving updates updated_at).
     const investmentWhere: any = {
       organization_id: organizationId,
-      is_archived: false,
     };
     if (periodType !== 'all') {
       investmentWhere.OR = [
@@ -2584,21 +2612,27 @@ CRITICAL: Return ONLY raw JSON starting with { and ending with }.
         break;
       }
 
-      case 'user_performance':
+      case 'user_performance': {
         // Performance reports focus on individual metrics
+        const perfCFD = await this.getRealCFDData(organizationId, this.getChartStartDate(periodType, now));
+        chartData.cfd = perfCFD.length >= 2 ? perfCFD : this.generateSmoothCFD(tasks, periodType, periodStartDate);
         chartData.radar = await this.calculateRadarMetrics(organizationId, userId);
-        chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime, userId);
-        chartData.throughput = this.calculateThroughput(tasks, userId);
+        // Cycle time: period-filtered so the scatter reflects THIS period, not historical mix
+        chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime, userId, periodStartDate);
+        // Throughput: unfiltered (needs 8 weeks of history for the trend)
+        chartData.throughput = this.calculateThroughput(allTasksForCycleTime, userId);
         chartData.investment = this.calculateInvestmentProfile(investmentTasksRaw, userId);
-        this.logger.log('User performance charts: Radar, CycleTime, Throughput, Investment');
+        this.logger.log(`User performance charts: CFD (${perfCFD.length >= 2 ? 'real' : 'synthetic'}), CycleTime, Throughput, Investment`);
         break;
+      }
 
       case 'bottleneck_prediction': {
         // Bottleneck reports focus on risk indicators
         // Build CFD from task_history for accurate daily progression (not cumulative totals)
         const historicalCFD = await this.buildCFDFromTaskHistory(organizationId, periodStartDate, now);
         chartData.cfd = historicalCFD.length >= 2 ? historicalCFD : this.generateSmoothCFD(tasks, periodType, periodStartDate);
-        chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime);
+        // Cycle time: period-filtered — bottleneck analysis is about THIS period
+        chartData.cycleTime = this.calculateCycleTime(allTasksForCycleTime, undefined, periodStartDate);
         chartData.investment = this.calculateInvestmentProfile(investmentTasksRaw);
         chartData.heatmap = await this.analyzeWorkloadHeatmap(organizationId, tasks, periodType);
         chartData.burndown = this.projectBurndownCone(tasks, periodType);

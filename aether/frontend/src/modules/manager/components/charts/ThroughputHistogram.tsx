@@ -93,7 +93,11 @@ const GRADIENT_ID = 'histBarGradient';
 const GRADIENT_ID_PEAK = 'histBarGradientPeak';
 
 export function ThroughputHistogram({ data, className = '' }: ThroughputHistogramProps) {
-  if (data.length < 4) {
+  // Exclude the last element (current partial week) so the frequency distribution
+  // only reflects complete weeks — a partial week would skew percentiles downward.
+  const completeWeeks = data.slice(0, -1);
+
+  if (completeWeeks.length < 4) {
     return (
       <div
         className={`bg-white/70 dark:bg-zinc-800/70 backdrop-blur-xl rounded-2xl border border-gray-100 dark:border-zinc-700/50 shadow-sm flex flex-col h-full ${className}`}
@@ -117,17 +121,17 @@ export function ThroughputHistogram({ data, className = '' }: ThroughputHistogra
             />
           </div>
           <p className="text-xs text-gray-500 dark:text-zinc-400">
-            Need at least 4 weeks of data. Currently have {data.length} week{data.length !== 1 ? 's' : ''}.
+            Need at least 4 weeks of data. Currently have {completeWeeks.length} week{completeWeeks.length !== 1 ? 's' : ''}.
           </p>
         </div>
       </div>
     );
   }
 
-  const counts = data.map(d => d.completed);
+  const counts = completeWeeks.map(d => d.completed);
   const p15 = percentile(counts, 15);
   const p85 = percentile(counts, 85);
-  const histogram = toHistogram(data);
+  const histogram = toHistogram(completeWeeks);
   const peakIdx = histogram.reduce((best, b, i) => b.weeks > histogram[best].weeks ? i : best, 0);
 
   return (
@@ -166,7 +170,7 @@ export function ThroughputHistogram({ data, className = '' }: ThroughputHistogra
             <div className="bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-3 shadow-2xl shadow-black/40">
               <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">85% confidence interval</p>
               <p className="text-xs text-white/80 leading-relaxed">
-                Based on {data.length} weeks of history, your team completes between{' '}
+                Based on {completeWeeks.length} weeks of history, your team completes between{' '}
                 <span className="font-semibold text-blue-300">{p15}</span> and{' '}
                 <span className="font-semibold text-blue-300">{p85}</span> tasks per week 85% of the time.
               </p>

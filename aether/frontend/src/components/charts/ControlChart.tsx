@@ -124,49 +124,52 @@ export function ControlChart({ data, className = '' }: ControlChartProps) {
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="px-4">
-        <ResponsiveContainer width="100%" height={320}>
-          <ScatterChart margin={{ top: 8, right: 24, bottom: 8, left: 0 }}>
-            <CartesianGrid
-              strokeDasharray="0"
-              stroke="currentColor"
-              className="text-gray-100 dark:text-white/[0.04]"
-              vertical={false}
-            />
-            <XAxis
-              type="number"
-              dataKey="x"
-              name="Task Index"
-              tick={{ fill: 'currentColor', fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              tickMargin={10}
-            />
-            <YAxis
-              type="number"
-              dataKey="y"
-              name="Days"
-              tick={{ fill: 'currentColor', fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              width={28}
-            />
-            <Tooltip
-              cursor={{ strokeDasharray: '3 3', stroke: 'rgba(148,163,184,0.2)' }}
-              content={<CustomTooltip />}
-            />
-            <ReferenceLine y={p50} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
-            <ReferenceLine y={p85} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
-            <ReferenceLine y={p95} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
-            <Scatter name="Tasks" data={chartData} shape={(props) => <GlowDot {...(props as Parameters<typeof GlowDot>[0])} onNavigate={(id) => navigate(`/tasks/${id}`)} />} />
-          </ScatterChart>
-        </ResponsiveContainer>
-      </div>
+      {/* Chart + Footer — grouped and centered so chart sits balanced in variable-height containers */}
+      <div className="flex-1 flex flex-col justify-center">
+        <div className="px-4">
+          <ResponsiveContainer width="100%" height={320}>
+            <ScatterChart margin={{ top: 8, right: 24, bottom: 20, left: 0 }}>
+              <CartesianGrid
+                strokeDasharray="0"
+                stroke="currentColor"
+                className="text-gray-100 dark:text-white/[0.04]"
+                vertical={false}
+              />
+              <XAxis
+                type="number"
+                dataKey="x"
+                name="Task Index"
+                tick={{ fill: 'currentColor', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={10}
+                label={{ value: 'tasks →', position: 'insideBottomRight', offset: 0, fontSize: 9, fill: 'currentColor', className: 'text-zinc-400 dark:text-zinc-600' }}
+              />
+              <YAxis
+                type="number"
+                dataKey="y"
+                name="Days"
+                unit="d"
+                tick={{ fill: 'currentColor', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                width={36}
+              />
+              <Tooltip
+                cursor={{ strokeDasharray: '3 3', stroke: 'rgba(148,163,184,0.2)' }}
+                content={<CustomTooltip />}
+              />
+              <ReferenceLine y={p50} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+              <ReferenceLine y={p85} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+              <ReferenceLine y={p95} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+              <Scatter name="Tasks" data={chartData} shape={(props) => <GlowDot {...(props as Parameters<typeof GlowDot>[0])} onNavigate={(id) => navigate(`/tasks/${id}`)} />} />
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
 
-      {/* Footer legend */}
-      <div className="px-8 pb-7 pt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-gray-400 dark:text-zinc-500 shrink-0">
+        {/* Footer legend */}
+        <div className="px-8 pb-7 pt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-gray-400 dark:text-zinc-500 shrink-0">
         <div className="flex items-center gap-1.5">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
           <span>≤ 3 days</span>
@@ -192,6 +195,7 @@ export function ControlChart({ data, className = '' }: ControlChartProps) {
           <span>p95 · {p95}d</span>
         </div>
       </div>
+      </div>{/* end flex-1 justify-end wrapper */}
     </div>
   );
 }

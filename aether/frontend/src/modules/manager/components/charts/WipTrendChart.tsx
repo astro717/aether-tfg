@@ -284,7 +284,7 @@ export function WipTrendChart({ data, className = '' }: WipTrendChartProps) {
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
-                  width={28}
+                  width={34}
                 />
 
                 <Tooltip

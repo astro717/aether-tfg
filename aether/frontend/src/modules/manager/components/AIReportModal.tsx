@@ -26,8 +26,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   RadarMetricChart,
-  ScatterCycleChart,
-  ThroughputChart,
+  ControlChart,
 } from '../../../components/charts';
 import {
   SparklineCard,
@@ -848,38 +847,117 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
 
                   {/* User Performance Report Charts */}
                   {selectedType === 'user_performance' && (
-                    <>
-                      {/* Radar Metrics */}
-                      {report.chartData.radar && (
-                        <div data-chart-id="radar-metrics">
-                          <RadarMetricChart data={report.chartData.radar} />
+                    <div className="space-y-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-700">
+                      {/* 1. KPI Cards */}
+                      {report.chartData.pulse && (() => {
+                        const p = report.chartData.pulse;
+                        const velocity = p.velocityRate?.value ?? 0;
+                        const cfr = p.changeFailureRate?.value ?? 0;
+                        const risk = p.riskScore?.value ?? 0;
+                        const onTime = p.onTimeDelivery?.value ?? 100;
+                        return (
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" data-chart-id="pulse-metrics">
+                            <ReportKpiCard
+                              label="Velocity"
+                              value={velocity > 0 ? `↑ ${velocity}` : velocity < 0 ? `↓ ${Math.abs(velocity)}` : `— ${velocity}`}
+                              unit="%"
+                              subtitle="vs previous 7 days"
+                              accentHex={velocity > 0 ? '#10b981' : velocity < 0 ? '#f59e0b' : '#3b82f6'}
+                              sparklineData={p.velocityRate?.sparkline ?? []}
+                              trend={velocity > 0 ? 'up' : velocity < 0 ? 'down' : 'neutral'}
+                            />
+                            <ReportKpiCard
+                              label="Cycle Time"
+                              value={p.cycleTime?.value ?? 0}
+                              unit="d"
+                              subtitle="Avg In Progress → Done"
+                              accentHex="#f59e0b"
+                              sparklineData={p.cycleTime?.sparkline ?? []}
+                            />
+                            <ReportKpiCard
+                              label="On-Time Delivery"
+                              value={onTime}
+                              unit="%"
+                              subtitle="Met deadlines"
+                              accentHex={onTime >= 80 ? '#10b981' : onTime >= 60 ? '#f59e0b' : '#ef4444'}
+                              sparklineData={p.onTimeDelivery?.sparkline ?? []}
+                              trend={onTime >= 80 ? 'up' : onTime >= 60 ? 'neutral' : 'down'}
+                            />
+                            <ReportKpiCard
+                              label="Failure Rate"
+                              value={cfr}
+                              unit="%"
+                              subtitle="Tasks requiring fixes"
+                              accentHex={cfr <= 10 ? '#10b981' : cfr <= 25 ? '#f59e0b' : '#ef4444'}
+                              sparklineData={p.changeFailureRate?.sparkline ?? []}
+                              trend={cfr <= 10 ? 'up' : cfr <= 25 ? 'neutral' : 'down'}
+                            />
+                            <ReportKpiCard
+                              label="AI Risk Score"
+                              value={risk}
+                              unit="/100"
+                              subtitle="Delay probability"
+                              accentHex={risk <= 30 ? '#10b981' : risk <= 60 ? '#f59e0b' : '#ef4444'}
+                              trend={risk <= 30 ? 'up' : risk <= 60 ? 'neutral' : 'down'}
+                            />
+                          </div>
+                        );
+                      })()}
+
+                      {/* 2. CFD — full width */}
+                      {report.chartData.cfd && report.chartData.cfd.length >= 2 && (
+                        <div
+                          className="rounded-2xl bg-white/50 dark:bg-zinc-800/50 border border-gray-100/50 dark:border-zinc-700/30 overflow-hidden"
+                          data-chart-id="cfd-performance"
+                        >
+                          <RealCFDChart
+                            data={relativizeCFD(report.chartData.cfd)}
+                            title="Cumulative Flow"
+                            subtitle="Work items by status over time"
+                          />
                         </div>
                       )}
 
-                      {/* Two-column layout for Cycle Time & Throughput */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
-                          <div data-chart-id="scatter-cycle">
-                            <ScatterCycleChart data={report.chartData.cycleTime} />
-                          </div>
-                        )}
-                        {report.chartData.throughput && (
-                          <div data-chart-id="throughput-trend">
-                            <ThroughputChart data={report.chartData.throughput} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Investment Profile */}
-                      {report.chartData.investment && (
-                        <TaskDistributionChart
-                          data={report.chartData.investment}
-                          title="Task Distribution"
-                          subtitle="Individual work allocation"
-                          pdfMode={false}
-                        />
+                      {/* 3. Throughput + Cycle Time Scatter — 2 cols */}
+                      {(report.chartData.throughput || (report.chartData.cycleTime && report.chartData.cycleTime.length > 0)) && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {report.chartData.throughput && (
+                            <div
+                              className="rounded-2xl bg-white/50 dark:bg-zinc-800/50 border border-gray-100/50 dark:border-zinc-700/30 overflow-hidden"
+                              data-chart-id="throughput-trend"
+                            >
+                              <WipTrendChart
+                                data={report.chartData.throughput.weeks.map((week, i) => ({
+                                  week,
+                                  completed: report.chartData!.throughput!.completed[i] ?? 0,
+                                  weekStart: week,
+                                }))}
+                              />
+                            </div>
+                          )}
+                          {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
+                            <div
+                              className="rounded-2xl bg-white/50 dark:bg-zinc-800/50 border border-gray-100/50 dark:border-zinc-700/30 overflow-hidden"
+                              data-chart-id="scatter-cycle"
+                            >
+                              <ControlChart data={report.chartData.cycleTime} />
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </>
+
+                      {/* 4. Task Distribution — full width */}
+                      {report.chartData.investment && (
+                        <div className="rounded-2xl bg-white/50 dark:bg-zinc-800/50 border border-gray-100/50 dark:border-zinc-700/30 overflow-hidden">
+                          <TaskDistributionChart
+                            data={report.chartData.investment}
+                            title="Task Distribution"
+                            subtitle="Work allocation by category"
+                            pdfMode={false}
+                          />
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {/* Bottleneck Prediction Report Charts */}
@@ -971,7 +1049,7 @@ export function AIReportModal({ isOpen, onClose }: AIReportModalProps) {
 
                       {/* Cycle Time Scatterplot - Full Width */}
                       {report.chartData.cycleTime && report.chartData.cycleTime.length > 0 && (
-                        <ScatterCycleChart data={report.chartData.cycleTime} />
+                        <ControlChart data={report.chartData.cycleTime} />
                       )}
                     </>
                   )}

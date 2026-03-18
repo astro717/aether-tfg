@@ -23,6 +23,9 @@ import {
   CartesianGrid,
   Cell,
   Legend,
+  ReferenceLine,
+  Scatter,
+  ScatterChart,
 } from 'recharts';
 import type { AIReport } from '../../manager/api/managerApi';
 
@@ -184,9 +187,9 @@ function PrintCFDChart({ data }: { data: Array<{ date: string; done: number; in_
         width={30}
         allowDecimals={false}
       />
-      <Area type="monotone" dataKey="todo" stackId="1" stroke="#d1d5db" fill="url(#gradTodo)" isAnimationActive={false} />
-      <Area type="monotone" dataKey="in_progress" stackId="1" stroke="#14b8a6" fill="url(#gradIP)" isAnimationActive={false} />
       <Area type="monotone" dataKey="done" stackId="1" stroke="#6366f1" fill="url(#gradDone)" isAnimationActive={false} />
+      <Area type="monotone" dataKey="in_progress" stackId="1" stroke="#14b8a6" fill="url(#gradIP)" isAnimationActive={false} />
+      <Area type="monotone" dataKey="todo" stackId="1" stroke="#d1d5db" fill="url(#gradTodo)" isAnimationActive={false} />
       <Legend
         iconType="square"
         iconSize={8}
@@ -373,6 +376,186 @@ function PrintHeatmap({ data }: { data: { users: string[]; days: string[]; data:
   );
 }
 
+// ── Cycle Time helpers ────────────────────────────────────────────────────────
+
+function ctPercentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = (p / 100) * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return Math.round((sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)) * 10) / 10;
+}
+
+const ctColor = (days: number) => days <= 3 ? '#10b981' : days <= 7 ? '#f59e0b' : '#ef4444';
+
+function PrintGlowDot(props: { cx?: number; cy?: number; payload?: { y: number } }) {
+  const { cx, cy, payload } = props;
+  if (cx === undefined || cy === undefined || !payload) return null;
+  const color = ctColor(payload.y);
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={7} fill={color} fillOpacity={0.15} />
+      <circle cx={cx} cy={cy} r={3.5} fill={color} fillOpacity={0.9} />
+    </g>
+  );
+}
+
+// Cycle time scatter — full-width (bottleneck reports)
+function PrintCycleTimeScatter({ data }: { data: Array<{ date: string; days: number; taskTitle: string }> }) {
+  const chartData = data.map((item, idx) => ({ x: idx, y: item.days }));
+  const values = data.map(d => d.days);
+  const p50 = ctPercentile(values, 50);
+  const p85 = ctPercentile(values, 85);
+  const p95 = ctPercentile(values, 95);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '6px 4px 4px' }}>
+      <ScatterChart width={660} height={165} margin={{ top: 6, right: 10, bottom: 4, left: 0 }}>
+        <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+        <XAxis type="number" dataKey="x" name="Task" tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+        <YAxis type="number" dataKey="y" name="Days" tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={24} allowDecimals={false} />
+        <ReferenceLine y={p50} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+        <ReferenceLine y={p85} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+        <ReferenceLine y={p95} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+        <Scatter data={chartData} isAnimationActive={false} shape={(props: Parameters<typeof PrintGlowDot>[0]) => <PrintGlowDot {...props} />} />
+      </ScatterChart>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', justifyContent: 'center', padding: '2px 0 4px' }}>
+        {[['#10b981', '≤ 3d'], ['#f59e0b', '4–7d'], ['#ef4444', '> 7d']] .map(([c, l]) => (
+          <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: '#6b7280' }}>
+            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: c }} />{l}
+          </span>
+        ))}
+        {[['#3b82f6', `p50 · ${p50}d`], ['#f59e0b', `p85 · ${p85}d`], ['#ef4444', `p95 · ${p95}d`]] .map(([c, l]) => (
+          <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: '#6b7280' }}>
+            <span style={{ display: 'inline-block', width: 14, height: 0, borderTop: `1.5px dashed ${c}` }} />{l}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Cycle time scatter — compact half-width for 2-col layout in performance reports
+function PrintCycleTimeScatterHalf({ data }: { data: Array<{ date: string; days: number; taskTitle: string }> }) {
+  const chartData = data.map((item, idx) => ({ x: idx, y: item.days }));
+  const values = data.map(d => d.days);
+  const p50 = ctPercentile(values, 50);
+  const p85 = ctPercentile(values, 85);
+  const p95 = ctPercentile(values, 95);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'flex-end', padding: '6px 4px 4px' }}>
+      <ScatterChart width={310} height={145} margin={{ top: 6, right: 10, bottom: 4, left: 0 }}>
+        <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+        <XAxis type="number" dataKey="x" name="Task" tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+        <YAxis type="number" dataKey="y" name="Days" tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={24} allowDecimals={false} />
+        <ReferenceLine y={p50} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+        <ReferenceLine y={p85} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+        <ReferenceLine y={p95} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
+        <Scatter data={chartData} isAnimationActive={false} shape={(props: Parameters<typeof PrintGlowDot>[0]) => <PrintGlowDot {...props} />} />
+      </ScatterChart>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px', justifyContent: 'center', padding: '2px 0 4px' }}>
+        {[['#10b981', '≤ 3d'], ['#f59e0b', '4–7d'], ['#ef4444', '> 7d']] .map(([c, l]) => (
+          <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: '#6b7280' }}>
+            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: c }} />{l}
+          </span>
+        ))}
+        {[['#3b82f6', `p50 · ${p50}d`], ['#f59e0b', `p85 · ${p85}d`], ['#ef4444', `p95 · ${p95}d`]] .map(([c, l]) => (
+          <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: '#6b7280' }}>
+            <span style={{ display: 'inline-block', width: 14, height: 0, borderTop: `1.5px dashed ${c}` }} />{l}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Throughput — print version matching WipTrendChart design (blue gradient bars, violet avg line, dashed period avg)
+function PrintThroughputFromData({ data }: { data: { weeks: string[]; completed: number[]; movingAverage: number[] } }) {
+  const chartData = data.weeks.map((week, i) => ({
+    week,
+    completed: data.completed[i] ?? 0,
+    avg: data.movingAverage[i] ?? 0,
+  }));
+  const peakIdx = chartData.reduce((best, d, i) => d.completed > chartData[best].completed ? i : best, 0);
+  const periodAvg = chartData.length
+    ? Math.round(chartData.reduce((s, d) => s + d.completed, 0) / chartData.length)
+    : 0;
+  const last = chartData[chartData.length - 1]?.completed ?? 0;
+  const prevLast = chartData[chartData.length - 2]?.completed ?? last;
+  const trend = last > prevLast ? 'up' : last < prevLast ? 'down' : 'flat';
+  const trendLabel = trend === 'up' ? 'Accelerating' : trend === 'down' ? 'Decelerating' : 'Steady';
+  const trendColor = trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#6b7280';
+  const trendBg = trend === 'up' ? '#ecfdf5' : trend === 'down' ? '#fef2f2' : '#f9fafb';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Header */}
+      <div style={{ padding: '10px 14px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
+        <div>
+          <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9ca3af', marginBottom: 3 }}>
+            Throughput Trend
+          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+            <span style={{ fontSize: 22, fontWeight: 700, color: '#111827', lineHeight: 1 }}>{last}</span>
+            <span style={{ fontSize: 10, color: '#9ca3af' }}>tasks this week</span>
+          </div>
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          padding: '3px 9px', borderRadius: 999,
+          background: trendBg, border: `1px solid ${trendColor}40`,
+          fontSize: 9, fontWeight: 700, color: trendColor, flexShrink: 0,
+        }}>
+          {trendLabel}
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div style={{ flex: 1, padding: '0 4px', minHeight: 0 }}>
+        <ComposedChart width={302} height={120} data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+          <defs>
+            <linearGradient id="printBarGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.85} />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.25} />
+            </linearGradient>
+            <linearGradient id="printBarGradPeak" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#60a5fa" stopOpacity={1} />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.5} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+          <XAxis dataKey="week" tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={24} />
+          <ReferenceLine y={periodAvg} stroke="#6366f1" strokeOpacity={0.35} strokeWidth={1} strokeDasharray="4 4" />
+          <Bar dataKey="completed" radius={[4, 4, 2, 2]} maxBarSize={36} isAnimationActive={false}>
+            {chartData.map((_, i) => (
+              <Cell key={i} fill={i === peakIdx ? 'url(#printBarGradPeak)' : 'url(#printBarGrad)'} />
+            ))}
+          </Bar>
+          <Line type="monotone" dataKey="avg" stroke="#a78bfa" strokeWidth={2} dot={false} isAnimationActive={false} />
+        </ComposedChart>
+      </div>
+
+      {/* Footer legend */}
+      <div style={{ padding: '4px 14px 10px', display: 'flex', gap: 14, justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 9, height: 9, borderRadius: 2, background: '#60a5fa' }} />
+          <span style={{ fontSize: 8.5, color: '#9ca3af' }}>Weekly completed</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 14, height: 2, background: '#a78bfa', borderRadius: 2 }} />
+          <span style={{ fontSize: 8.5, color: '#9ca3af' }}>3-wk avg</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 14, height: 0, borderTop: '1px dashed #818cf8' }} />
+          <span style={{ fontSize: 8.5, color: '#9ca3af' }}>Period avg</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Section header ─────────────────────────────────────────────────────────────
 
 function SectionHeader({ title }: { title: string }) {
@@ -509,7 +692,13 @@ export function PrintPreviewPage() {
   const cfrVal = pulse?.changeFailureRate?.value ?? 0;
   const ctVal = pulse?.cycleTime?.value ?? 0;
 
-  const PAGE_PADDING = '18mm';
+  // Detect report type by chart data presence
+  const isPerformanceReport = !!report.chartData?.radar;
+  const radarUser = report.chartData?.radar?.user;
+  const hasPerformanceThroughput = isPerformanceReport && !!report.chartData?.throughput;
+  const hasCycleTime = isPerformanceReport && !!(report.chartData?.cycleTime?.length);
+
+  const PAGE_PADDING = '0 18mm'; // @page handles top/bottom margins on all physical pages
   const PAGE_BG = '#fff';
 
   return (
@@ -526,7 +715,8 @@ export function PrintPreviewPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        @page { size: A4 portrait; margin: 0; }
+        @page { size: A4 portrait; margin-top: 18mm; margin-bottom: 18mm; margin-left: 0; margin-right: 0; }
+        @page :first { margin: 0; }
         @media print {
           body { margin: 0; background: white; }
           .page-break { break-after: page; }
@@ -584,10 +774,23 @@ export function PrintPreviewPage() {
           color: 'rgba(255,255,255,0.45)',
           letterSpacing: '0.2em',
           textTransform: 'uppercase',
-          marginBottom: 12,
+          marginBottom: isPerformanceReport && radarUser ? 6 : 12,
         }}>
           {organizationName}
         </p>
+
+        {/* User name — only for performance reports */}
+        {isPerformanceReport && radarUser && (
+          <p style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'rgba(255,255,255,0.85)',
+            letterSpacing: '0.04em',
+            marginBottom: 14,
+          }}>
+            {radarUser}
+          </p>
+        )}
 
         {/* Divider */}
         <div style={{ width: 32, height: 1, background: 'rgba(255,255,255,0.18)', marginBottom: 20 }} />
@@ -671,7 +874,7 @@ export function PrintPreviewPage() {
       <div
         style={{
           width: '210mm',
-          minHeight: '297mm',
+          minHeight: '261mm',
           background: PAGE_BG,
           padding: PAGE_PADDING,
           breakBefore: 'page',
@@ -681,7 +884,7 @@ export function PrintPreviewPage() {
 
         {/* Executive Summary */}
         {report.summary && (
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 16 }}>
             <SectionHeader title="Executive Summary" />
             <div
               style={{
@@ -714,7 +917,7 @@ export function PrintPreviewPage() {
 
         {/* KPI Metrics */}
         {pulse && (
-          <div style={{ marginBottom: 24, breakInside: 'avoid' }}>
+          <div style={{ marginBottom: 16, breakInside: 'avoid' }}>
             <SectionHeader title="Key Performance Indicators" />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
               <KpiCard
@@ -758,17 +961,17 @@ export function PrintPreviewPage() {
           </div>
         )}
 
-        {/* CFD Chart */}
-        {cfd && cfd.length >= 2 && (
-          <ChartBlock title="Cumulative Flow Diagram — Relative View">
+        {/* CFD Chart — org/bottleneck reports only */}
+        {!isPerformanceReport && cfd && cfd.length >= 2 && (
+          <ChartBlock title="Cumulative Flow Diagram">
             <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff', padding: '4px 4px 4px' }}>
               <PrintCFDChart data={cfd} />
             </div>
           </ChartBlock>
         )}
 
-        {/* Throughput + Distribution (2 cols, equal height) */}
-        {(hasVelocityChart || report.chartData?.investment) && (
+        {/* Throughput (from CFD) + Distribution — org/bottleneck reports only */}
+        {!isPerformanceReport && (hasVelocityChart || report.chartData?.investment) && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20, alignItems: 'start' }}>
             {hasVelocityChart && (
               <ChartBlock title="Throughput Trend">
@@ -797,14 +1000,115 @@ export function PrintPreviewPage() {
           </div>
         )}
 
+        {/* Performance report: CFD — full width */}
+        {isPerformanceReport && cfd && cfd.length >= 2 && (
+          <ChartBlock title="Cumulative Flow Diagram">
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff', padding: '4px 4px 4px' }}>
+              <PrintCFDChart data={cfd} />
+            </div>
+          </ChartBlock>
+        )}
+
+        {/* Performance report: Throughput + Cycle Time — 2-col, fixed equal height */}
+        {isPerformanceReport && (hasPerformanceThroughput || hasCycleTime) && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20, alignItems: 'stretch', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+            {hasPerformanceThroughput && (
+              <ChartBlock title="Throughput Trend">
+                <div style={{
+                  border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff',
+                  height: 210, display: 'flex', flexDirection: 'column',
+                }}>
+                  <PrintThroughputFromData data={report.chartData!.throughput!} />
+                </div>
+              </ChartBlock>
+            )}
+            {hasCycleTime && (
+              <ChartBlock title="Cycle Time Distribution">
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', height: 210, overflow: 'hidden' }}>
+                  <PrintCycleTimeScatterHalf data={report.chartData!.cycleTime!} />
+                </div>
+              </ChartBlock>
+            )}
+          </div>
+        )}
+        {/* Task Distribution intentionally NOT here — moved to page 3 so it never overflows this page */}
+
       </div>
 
-      {/* ── HEATMAP + TEXT SECTIONS (new page, flows continuously) ───────────── */}
-      {(report.chartData?.heatmap || (report.sections && report.sections.length > 0)) && (
+      {/* ── TASK DISTRIBUTION + ANALYSIS SECTIONS (performance reports, page 3+) ── */}
+      {isPerformanceReport && (report.chartData?.investment || (report.sections && report.sections.length > 0)) && (
         <div
           style={{
             width: '210mm',
-            minHeight: '297mm',
+            minHeight: '261mm',
+            background: PAGE_BG,
+            padding: PAGE_PADDING,
+            breakBefore: 'page',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <PageHeader title={reportTypeName} orgName={organizationName} generatedAt={generatedAt} />
+
+          {/* Task Distribution — first element on this page, full top padding from page */}
+          {report.chartData?.investment && (
+            <div style={{ marginBottom: 28 }}>
+              <ChartBlock title="Task Distribution">
+                <div style={{
+                  border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff',
+                  display: 'flex', alignItems: 'center', padding: '16px 0 14px',
+                }}>
+                  <div style={{ width: '100%' }}>
+                    <PrintTaskDistChart data={report.chartData.investment} />
+                  </div>
+                </div>
+              </ChartBlock>
+            </div>
+          )}
+
+          {/* All sections — flow naturally across pages, no artificial split */}
+          {report.sections.map((section, idx) => (
+            <div key={idx} style={{ marginBottom: 24 }}>
+              <SectionHeader title={section.title} />
+              <div style={{ fontSize: 10.5, lineHeight: 1.65, color: '#374151' }}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ ...props }) => <p style={{ marginBottom: 8 }} {...props} />,
+                    ul: ({ ...props }) => <ul style={{ paddingLeft: 16, marginBottom: 8 }} {...props} />,
+                    ol: ({ ...props }) => <ol style={{ paddingLeft: 16, marginBottom: 8 }} {...props} />,
+                    li: ({ ...props }) => <li style={{ marginBottom: 4 }} {...props} />,
+                    strong: ({ ...props }) => <strong style={{ color: '#111827', fontWeight: 600 }} {...props} />,
+                    h2: ({ ...props }) => <h2 style={{ fontSize: 12, fontWeight: 700, marginBottom: 4, marginTop: 8 }} {...props} />,
+                    h3: ({ ...props }) => <h3 style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, marginTop: 6 }} {...props} />,
+                    blockquote: ({ ...props }) => (
+                      <blockquote style={{ borderLeft: '2px solid #8b5cf6', paddingLeft: 10, color: '#6b7280', fontStyle: 'italic', margin: '8px 0' }} {...props} />
+                    ),
+                  }}
+                >
+                  {section.content}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ))}
+
+          {/* END OF REPORT — inline after last section */}
+          <div style={{ marginTop: 'auto', paddingTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+            <span style={{ fontSize: 8, color: '#9ca3af', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              End of Report · Confidential · Aether AI
+            </span>
+            <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+          </div>
+        </div>
+      )}
+
+      {/* ── HEATMAP + TEXT SECTIONS (org/bottleneck reports only) ────────────── */}
+      {!isPerformanceReport && (report.chartData?.heatmap || (report.sections && report.sections.length > 0)) && (
+        <div
+          style={{
+            width: '210mm',
+            minHeight: '261mm',
             background: PAGE_BG,
             padding: PAGE_PADDING,
             breakBefore: 'page',
@@ -852,17 +1156,19 @@ export function PrintPreviewPage() {
         </div>
       )}
 
-      {/* ── LAST SECTION (own page — same pattern as heatmap) ────────────── */}
-      {report.sections && report.sections.length > 0 && (() => {
+      {/* ── LAST SECTION (own page — org/bottleneck reports only) ── */}
+      {!isPerformanceReport && report.sections && report.sections.length > 0 && (() => {
         const last = report.sections[report.sections.length - 1];
         return (
           <div
             style={{
               width: '210mm',
-              minHeight: '297mm',
+              minHeight: '261mm',
               background: PAGE_BG,
               padding: PAGE_PADDING,
               breakBefore: 'page',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             <PageHeader title={reportTypeName} orgName={organizationName} generatedAt={generatedAt} />
@@ -889,27 +1195,17 @@ export function PrintPreviewPage() {
                 </ReactMarkdown>
               </div>
             </div>
+            {/* END OF REPORT — anchored to bottom of this page via flex */}
+            <div style={{ marginTop: 'auto', paddingTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+              <span style={{ fontSize: 8, color: '#9ca3af', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                End of Report · Confidential · Aether AI
+              </span>
+              <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+            </div>
           </div>
         );
       })()}
-
-      {/* ── END OF REPORT MARKER ─────────────────────────────────────────── */}
-      <div
-        style={{
-          width: '210mm',
-          background: PAGE_BG,
-          padding: `8mm ${PAGE_PADDING}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-        <span style={{ fontSize: 8, color: '#9ca3af', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-          End of Report · Confidential · Aether AI
-        </span>
-        <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-      </div>
     </div>
   );
 }

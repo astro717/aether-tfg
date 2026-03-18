@@ -534,7 +534,6 @@ export function TaskDetailsPage() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto space-y-3 px-1 -mx-1">
-                            <CommentCardStyles />
                             {comments.length > 0 ? (
                                 comments.map((comment) => (
                                     <CommentCard
@@ -702,6 +701,7 @@ function CommentCard({
 }) {
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
 
     const formatTime = (dateString?: string) => {
         if (!dateString) return "";
@@ -725,9 +725,13 @@ function CommentCard({
 
     return (
         <>
-        <div className={`comment-card relative bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm transition-all ${
-            isPinned ? 'ring-2 ring-[#C15F3C]/40 dark:ring-[#C15F3C]/30 bg-[#C15F3C]/5 dark:bg-[#C15F3C]/5' : ''
-        }`}>
+        <div
+            className={`relative bg-[#FCFCFD] dark:bg-white/5 rounded-[24px] p-5 shadow-sm transition-all ${
+                isPinned ? 'ring-2 ring-[#C15F3C]/40 dark:ring-[#C15F3C]/30 bg-[#C15F3C]/5 dark:bg-[#C15F3C]/5' : ''
+            }`}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => { setIsHovered(false); setConfirmingDelete(false); }}
+        >
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                     <UserAvatar
@@ -750,11 +754,11 @@ function CommentCard({
                         <button
                             onClick={onTogglePin}
                             disabled={isPinning}
-                            className={`comment-action-btn p-1.5 rounded-full transition-opacity duration-150 disabled:opacity-50 ${
+                            className={`p-1.5 rounded-full transition-opacity duration-150 disabled:opacity-50 ${
                                 isPinned
                                     ? 'bg-[#C15F3C]/10 dark:bg-[#C15F3C]/20 hover:bg-[#C15F3C]/20'
                                     : 'hover:bg-[#C15F3C]/10 dark:hover:bg-[#C15F3C]/20'
-                            }`}
+                            } ${isHovered ? 'opacity-100' : 'opacity-0'}`}
                             style={{ color: isPinned ? '#C15F3C' : undefined }}
                             title={isPinned ? 'Unpin from AI context' : 'Pin for AI context'}
                         >
@@ -770,7 +774,7 @@ function CommentCard({
                     {onDelete && !confirmingDelete && (
                         <button
                             onClick={() => setConfirmingDelete(true)}
-                            className="comment-action-btn p-1.5 rounded-full transition-opacity duration-150 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className={`p-1.5 rounded-full transition-opacity duration-150 text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
                             title="Delete comment"
                         >
                             <Trash2 size={14} />
@@ -863,12 +867,4 @@ function CommentCard({
     );
 }
 
-const commentCardStyles = `
-  .comment-action-btn { opacity: 0; }
-  .comment-card:hover .comment-action-btn { opacity: 1; }
-`;
-
-function CommentCardStyles() {
-    return <style>{commentCardStyles}</style>;
-}
 
