@@ -6,6 +6,8 @@
 
 import jsPDF, { GState } from 'jspdf';
 import html2canvas from 'html2canvas';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — svg2pdf.js augments jsPDF with .svg() method; no bundled types
 import 'svg2pdf.js';
 
 // ── Font family ─────────────────────────────────────────────────────────────
@@ -1123,7 +1125,7 @@ async function addChartBlock(
 
   const xOff = LAYOUT.margin.left + (generator.contentWidth - drawW) / 2;
   if (chart instanceof SVGElement) {
-    await generator.doc.svg(chart, { x: xOff, y: generator.currentY, width: drawW, height: drawH });
+    await (generator.doc as any).svg(chart, { x: xOff, y: generator.currentY, width: drawW, height: drawH });
   } else {
     generator.doc.addImage(chart.toDataURL('image/png'), 'PNG', xOff, generator.currentY, drawW, drawH, undefined, 'NONE');
   }
@@ -1558,7 +1560,7 @@ export async function generateManagerReportPDF(
   // ========== CHART EXTRACTION ==========
   const realCfdChart  = charts.get('real-cfd-area');
   const wipTrendChart = charts.get('wip-trend-chart');
-  const taskDistChart = charts.get('task-distribution');
+  charts.get('task-distribution'); // extracted but not rendered in current layout
   const heatmapChart  = charts.get('workload-heatmap');
   // Legacy chart IDs (bottleneck / user performance reports)
   const investmentChart = charts.get('investment-profile');
@@ -1745,7 +1747,7 @@ export async function generateManagerReportPDF(
       // Left: WipTrend chart (SVG or canvas)
       if (hasLeft && wipTrendChart) {
         if (wipTrendChart instanceof SVGElement) {
-          await generator.doc.svg(wipTrendChart, { x: leftX, y: generator.currentY, width: leftDrawW, height: leftDrawH });
+          await (generator.doc as any).svg(wipTrendChart, { x: leftX, y: generator.currentY, width: leftDrawW, height: leftDrawH });
         } else {
           generator.doc.addImage((wipTrendChart as HTMLCanvasElement).toDataURL('image/png'), 'PNG',
             leftX, generator.currentY, leftDrawW, leftDrawH, undefined, 'NONE');

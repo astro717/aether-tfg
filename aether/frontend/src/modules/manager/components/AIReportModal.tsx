@@ -25,7 +25,6 @@ import { managerApi, type AIReport, type AIReportRequest, type ReportAvailabilit
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  RadarMetricChart,
   ControlChart,
 } from '../../../components/charts';
 import {

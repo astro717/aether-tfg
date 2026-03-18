@@ -53,10 +53,6 @@ export function TaskDetailsPage() {
     const [showArchiveDialog, setShowArchiveDialog] = useState(false);
     const [pinningCommentId, setPinningCommentId] = useState<string | null>(null);
 
-    // Code snippet editor state (lazy-loaded CodeMirror)
-    const [codeSnippet, setCodeSnippet] = useState('');
-    const [showCodeEditor, setShowCodeEditor] = useState(false);
-
     // Commit selection state
     const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
     const [isCommitSelectionModalOpen, setIsCommitSelectionModalOpen] = useState(false);

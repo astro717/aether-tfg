@@ -53,7 +53,7 @@ export function RealCFDChart({
   data,
   period: _period = 'month',
   title = 'Cumulative Flow Diagram',
-  subtitle,
+  subtitle: _subtitle,
 }: RealCFDChartProps) {
   const uid = useId().replace(/:/g, '');
   const layers = CFD_LAYERS.map(l => ({ ...l, gradientId: `${l.gradientId}-${uid}` }));

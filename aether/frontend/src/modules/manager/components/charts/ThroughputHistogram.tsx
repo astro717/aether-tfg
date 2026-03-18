@@ -7,7 +7,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  ReferenceLine,
 } from 'recharts';
 import { InfoTooltip } from './InfoTooltip';
 

@@ -300,7 +300,7 @@ function PerfBar({ username, completed, inProgress, maxCompleted }: {
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.8, delay: 0.1, ease: [0.34, 1.56, 0.64, 1] }}
+            transition={{ duration: 0.8, delay: 0.1, ease: [0.34, 1.56, 0.64, 1] as any }}
             style={{ height: '100%', background: '#4ECDC4', borderRadius: '2px' }}
           />
         </div>
@@ -355,7 +355,7 @@ export function AnalyticsDashboardV4() {
     try {
       const [data, cfd] = await Promise.all([
         managerApi.getAnalytics(currentOrganization.id, period),
-        managerApi.getCFD(currentOrganization.id, CFD_RANGE_MAP[period] ?? '30d'),
+        managerApi.getCFD(currentOrganization.id, (CFD_RANGE_MAP[period] ?? '30d') as '7d' | '30d' | '90d' | 'all'),
       ]);
       setAnalytics(data as AnalyticsData);
       setCfdData(Array.isArray(cfd) ? cfd : (cfd as { data?: typeof cfdData })?.data ?? []);
@@ -377,7 +377,7 @@ export function AnalyticsDashboardV4() {
   const recent = analytics?.recentTasks ?? [];
   const maxCompleted = Math.max(...perf.map(p => p.completed), 1);
 
-  const stagger = (i: number) => ({ initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.45, delay: i * 0.07, ease: [0.25, 0.46, 0.45, 0.94] } });
+  const stagger = (i: number) => ({ initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.45, delay: i * 0.07, ease: [0.25, 0.46, 0.45, 0.94] as any } } as any);
 
   return (
     <div
@@ -662,7 +662,7 @@ export function AnalyticsDashboardV4() {
                       Latest task movements
                     </p>
                     <div className="space-y-3">
-                      {recent.slice(0, 8).map((task, i) => {
+                      {recent.slice(0, 8).map((task) => {
                         const meta = STATUS_META[task.status] ?? { label: task.status, color: 'rgba(255,255,255,0.4)' };
                         return (
                           <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>

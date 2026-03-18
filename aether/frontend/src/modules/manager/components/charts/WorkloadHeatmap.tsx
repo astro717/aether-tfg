@@ -49,7 +49,7 @@ export function WorkloadHeatmap({
   data,
   userColors = {},
   title = 'Team Workload',
-  subtitle = 'Activity intensity per user per day',
+  subtitle: _subtitle = 'Activity intensity per user per day',
   pdfMode = false,
 }: WorkloadHeatmapProps) {
   // Per-user totals for the summary column
@@ -157,7 +157,7 @@ export function WorkloadHeatmap({
             </div>
 
             {/* Cell rows */}
-            {data.users.map((user, userIdx) => {
+            {data.users.map((_user, userIdx) => {
               const peakDay = (data.data[userIdx] ?? []).indexOf(
                 Math.max(...(data.data[userIdx] ?? [0]))
               );

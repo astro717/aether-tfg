@@ -194,7 +194,7 @@ function PrintCFDChart({ data }: { data: Array<{ date: string; done: number; in_
         iconType="square"
         iconSize={8}
         wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
-        formatter={(value) => ({ done: 'Done', in_progress: 'In Progress', todo: 'Todo' }[value] ?? value)}
+        formatter={(value) => ({ done: 'Done', in_progress: 'In Progress', todo: 'Todo' }[value as string] ?? value)}
       />
     </AreaChart>
   );
@@ -399,40 +399,6 @@ function PrintGlowDot(props: { cx?: number; cy?: number; payload?: { y: number }
       <circle cx={cx} cy={cy} r={7} fill={color} fillOpacity={0.15} />
       <circle cx={cx} cy={cy} r={3.5} fill={color} fillOpacity={0.9} />
     </g>
-  );
-}
-
-// Cycle time scatter — full-width (bottleneck reports)
-function PrintCycleTimeScatter({ data }: { data: Array<{ date: string; days: number; taskTitle: string }> }) {
-  const chartData = data.map((item, idx) => ({ x: idx, y: item.days }));
-  const values = data.map(d => d.days);
-  const p50 = ctPercentile(values, 50);
-  const p85 = ctPercentile(values, 85);
-  const p95 = ctPercentile(values, 95);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', padding: '6px 4px 4px' }}>
-      <ScatterChart width={660} height={165} margin={{ top: 6, right: 10, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
-        <XAxis type="number" dataKey="x" name="Task" tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-        <YAxis type="number" dataKey="y" name="Days" tick={{ fontSize: 9, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={24} allowDecimals={false} />
-        <ReferenceLine y={p50} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
-        <ReferenceLine y={p85} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
-        <ReferenceLine y={p95} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} />
-        <Scatter data={chartData} isAnimationActive={false} shape={(props: Parameters<typeof PrintGlowDot>[0]) => <PrintGlowDot {...props} />} />
-      </ScatterChart>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', justifyContent: 'center', padding: '2px 0 4px' }}>
-        {[['#10b981', '≤ 3d'], ['#f59e0b', '4–7d'], ['#ef4444', '> 7d']] .map(([c, l]) => (
-          <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: '#6b7280' }}>
-            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: c }} />{l}
-          </span>
-        ))}
-        {[['#3b82f6', `p50 · ${p50}d`], ['#f59e0b', `p85 · ${p85}d`], ['#ef4444', `p95 · ${p95}d`]] .map(([c, l]) => (
-          <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: '#6b7280' }}>
-            <span style={{ display: 'inline-block', width: 14, height: 0, borderTop: `1.5px dashed ${c}` }} />{l}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -708,7 +674,6 @@ export function PrintPreviewPage() {
         background: '#e5e7eb',
         minHeight: '100vh',
         WebkitPrintColorAdjust: 'exact',
-        // @ts-expect-error non-standard
         printColorAdjust: 'exact',
       }}
     >

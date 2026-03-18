@@ -67,14 +67,6 @@ const PULSE_VALUE_CLS: Record<PulseColor, string> = {
   violet: 'text-violet-500 dark:text-violet-400',
 };
 
-const PULSE_DOT_CLS: Record<PulseColor, string> = {
-  blue:   'bg-blue-500',
-  amber:  'bg-amber-500',
-  red:    'bg-red-500',
-  green:  'bg-emerald-500',
-  violet: 'bg-violet-500',
-};
-
 // Signal severity → Tailwind-only tokens (no hex)
 const SIG = {
   critical: {

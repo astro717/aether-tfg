@@ -7,7 +7,6 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  Legend,
 } from 'recharts';
 import {
   AlertTriangle,
